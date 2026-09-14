@@ -46,7 +46,13 @@ function DisposalDetail({ record, onUpdate }: { record: DisposalRecord; onUpdate
       <p>검수 결과 확인은 폐기 또는 비용 청구에 대한 동의가 아닙니다.</p>
       <div className="inspection-actions"><button className="sa-button" disabled={!!record.acknowledgedAt} onClick={() => { onUpdate({ type: 'acknowledge', at: now() }); setMessage('검수 결과 확인을 기록했습니다.') }}><Check size={16} />검수 결과 확인</button><button className="sa-button" onClick={() => setInquiryOpen(true)}><MessageSquare size={16} />문의하기</button></div>
       {record.acknowledgedAt && <p className="inspection-muted">결과 확인 완료 · {record.acknowledgedAt}</p>}
-      <div className="inspection-notice"><p>검수 결과에 의견 및 이의사항이 있는 경우, 검수 완료 후 2일 이내에 문의내역을 남겨 주세요.</p><p>폐기 처리 비용이 별도로 청구될 수 있습니다.</p></div>
+      <div className="inspection-notice">
+        <ul>
+          <li><p><strong>자동 완료 안내:</strong> 입고 완료일 기준 3일이 경과하면 자동으로 '처리 완료' 상태로 변경됩니다.</p></li>
+          <li><p><strong>의견 및 이의 접수:</strong> 검수 내역에 대해 이의사항이 있으실 경우, 3일 이내에 [문의하기]를 통해 남겨주시면 신속히 확인해 드리겠습니다.</p></li>
+          <li><p><strong>폐기 비용 청구:</strong> 안내된 폐기 대상 물품 내역에 따라 추후 별도의 폐기 처리 비용이 청구될 수 있습니다.</p></li>
+        </ul>
+      </div>
     </section>
     {message && <p className="inspection-feedback" role="status">{message}</p>}
     {inquiryOpen && <InspectionInquiry record={record} comment={comment} onComment={setComment} onClose={() => setInquiryOpen(false)} onSubmit={() => { if (!comment.trim() || comment.trim().length > 2000) return; onUpdate({ type: 'comment', at: now(), text: comment }); setComment(''); setInquiryOpen(false); setMessage('문의내역을 시제품에 기록했습니다. 운영팀에 전송되지 않습니다.') }} />}

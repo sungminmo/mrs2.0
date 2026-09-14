@@ -5,6 +5,7 @@ import AdminAssets, { type AssetValueSnapshot } from './AdminAssets'
 import { prepareAssets } from './assetPhotos'
 import AdminShell from './AdminShell'
 import { NotificationNavigation } from './notificationNavigation'
+import { ReceivingRequestProvider } from './ReceivingRequest'
 import Notifications, { type NotificationItem } from './Notifications'
 import ShopifyMarket from './ShopifyMarket'
 import { Faq } from './Faq'
@@ -43,7 +44,7 @@ export default function App() {
     return previous
   }, [])
   const [marketBasket, setMarketBasket] = useState<Record<string, number>>({})
-  const [contact, setContact] = useState({ name: '', email: '', phone: '' })
+  const [contact, setContact] = useState({ name: '홍길동', email: 'hong@hyundai.co.kr', phone: '010-1234-5678' })
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([])
   const [disposals, setDisposals] = useState(demoDisposals)
   const [inspectionActive, setInspectionActive] = useState(false)
@@ -94,7 +95,7 @@ export default function App() {
     : tab === 'faq' ? <Faq navigation={navigation} />
     : tab === 'notifications' ? <Notifications navigation={navigation} items={notifications} onRead={markRead} onAssets={() => { setInspectionActive(false); setTab('assets') }} onSales={() => setTab('profile')} onSettlements={() => setTab('settlements')} onInspection={openInspection} />
     : <Profile navigation={navigation} contact={contact} onContactChange={setContact} />
-  return <NotificationNavigation value={{ unread, active: tab === 'notifications', onOpen: () => setTab('notifications') }}>{page}</NotificationNavigation>
+  return <ReceivingRequestProvider contact={contact}><NotificationNavigation value={{ unread, active: tab === 'notifications', onOpen: () => setTab('notifications') }}>{page}</NotificationNavigation></ReceivingRequestProvider>
 }
 
 function Nav({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {

@@ -1,6 +1,7 @@
 import { useContext, useState, type ReactNode } from 'react'
 import { Bell, CircleHelp, Leaf, Menu, Warehouse } from 'lucide-react'
 import { NotificationNavigation } from './notificationNavigation'
+import { ReceivingRequestButton } from './ReceivingRequest'
 import './AdminAssets.css'
 
 export default function AdminShell({ navigation, search, children, className = '', isGuest = false }: { navigation: ReactNode; search?: ReactNode; children: ReactNode; className?: string; isGuest?: boolean }) {
@@ -13,6 +14,7 @@ export default function AdminShell({ navigation, search, children, className = '
       <div className="sa-brand"><Leaf size={25} /><span>EcoMat<span>X</span></span></div>
       {search}
       <div className="sa-topbar-actions">
+        {!isGuest && <ReceivingRequestButton />}
         {!isGuest && notifications && <button type="button" className="sa-icon sa-notification-button" title="알림" aria-label={`알림${notifications.unread ? `, 읽지 않은 알림 ${notifications.unread}건` : ''}`} aria-current={notifications.active ? 'page' : undefined} onClick={() => { setMenuOpen(false); notifications.onOpen() }}><Bell size={20} />{notifications.unread > 0 && <span className="sa-notification-count" aria-hidden="true">{notifications.unread > 99 ? '99+' : notifications.unread}</span>}</button>}
         <div className="sa-account"><span className="sa-avatar">{isGuest ? 'G' : 'HC'}</span><b>{isGuest ? '비회원' : '현대건설(주)'}</b></div>
       </div>
