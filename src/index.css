@@ -1,0 +1,2 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap');
+* { box-sizing: border-box; } html { background: #f1f1f1; } body { min-width: 360px; margin: 0; color: #303030; font-family: 'Noto Sans KR', sans-serif; } button, input, select, textarea { font: inherit; letter-spacing: 0; } button { cursor: pointer; } h1, h2, h3, p { margin-top: 0; }

@@ -1,0 +1,44 @@
+.settlements-page { max-width: 1320px; }
+.op-period { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+.op-period label { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.op-period select { padding: 7px 10px; min-height: 36px; border: 1px solid #b5b5b5; border-radius: 5px; background: #fdfdfd; }
+.op-period > span { color: #707070; font-size: 10px; }
+.op-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 22px 0; border-block: 1px solid #dcdcdc; }
+.op-totals > div { display: grid; gap: 10px; min-width: 0; padding: 0 24px; border-right: 1px solid #dcdcdc; }
+.op-totals > div:first-child { padding-left: 0; }
+.op-totals > div:last-child { border: 0; }
+.op-totals span { font-size: 12px; font-weight: 600; }
+.op-totals strong { font-size: 26px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.op-totals small, .op-note { color: #707070; font-size: 11px; line-height: 1.8; }
+.op-income { color: #21613d !important; }
+.op-expense { color: #86561b !important; }
+.op-note { margin: 16px 0 30px; }
+.op-ledger > .sa-tabs { margin-bottom: 14px; }
+.op-ledger .sa-table { background: #fdfdfd; min-width: 730px; }
+.op-occupancy { display: flex; align-items: center; gap: 12px; padding: 18px 0; border-bottom: 1px solid #dcdcdc; }
+.op-occupancy > svg { flex-shrink: 0; color: #616161; }
+.op-occupancy h2 { margin: 0; font-size: 13px; }
+.op-occupancy h2 strong { margin-left: 8px; }
+.op-occupancy p { margin: 5px 0 0; font-size: 11px; color: #707070; }
+.op-occupancy > button { margin-left: auto; flex-shrink: 0; }
+.op-location-label { display: block; margin-top: 5px; color: #707070; }
+.op-location-dialog { width: min(720px, calc(100vw - 32px)); }
+.op-location-summary { display: flex; flex-wrap: wrap; gap: 12px 28px; padding: 14px 0; border-block: 1px solid #dcdcdc; font-size: 12px; }
+.op-location-summary strong { margin-left: 6px; }
+.op-location-section { padding: 20px 0; border-bottom: 1px solid #e3e3e3; }
+.op-location-heading { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: 8px; }
+.op-location-heading h3 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; }
+.op-location-heading > span { color: #707070; font-size: 11px; }
+.op-location-section ul { padding: 0; margin: 12px 0 0; list-style: none; }
+.op-location-section li { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; font-size: 12px; }
+.op-location-section li > div { min-width: 0; overflow-wrap: anywhere; }
+.op-location-section li > span { flex-shrink: 0; }
+.op-location-section small { display: block; margin-top: 4px; color: #707070; font-size: 10px; }
+.op-location-total { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; font-size: 14px; }
+@media (max-width: 1000px) { .op-totals > div { padding-inline: 16px; } .op-totals strong { font-size: 21px; } }
+@media (max-width: 640px) {
+  .op-period { flex-wrap: wrap; }
+  .op-totals { grid-template-columns: minmax(0, 1fr); padding: 0; }
+  .op-totals > div { padding: 18px 0; border-right: 0; border-bottom: 1px solid #dcdcdc; gap: 6px; }
+  .op-totals strong { font-size: 25px; }
+}

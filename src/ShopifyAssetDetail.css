@@ -1,0 +1,69 @@
+.shopify-detail { max-width: 1120px; margin: 0 auto; color: #303030; font-size: 12px; letter-spacing: 0; }
+.shopify-detail button, .shopify-detail input, .shopify-detail select, .shopify-detail textarea { font: inherit; letter-spacing: 0; }
+.shopify-detail button:focus-visible, .shopify-detail select:focus-visible, .shopify-detail textarea:focus-visible { outline: 2px solid #005bd3; outline-offset: 3px; }
+.shopify-detail button:disabled { opacity: .45; cursor: not-allowed; }
+.sd-breadcrumb { display: flex; gap: 8px; align-items: center; margin-bottom: 17px; color: #707070; font-size: 11px; }
+.sd-breadcrumb button { padding: 0; border: 0; background: none; color: #616161; }
+.sd-breadcrumb button:hover { text-decoration: underline; }
+.sd-heading { display: flex; align-items: flex-start; gap: 12px; }
+.sd-title { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; min-width: 0; }
+.sd-title h2 { margin: 0; font-size: 23px; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; outline: none; }
+.sd-icon { display: inline-grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; padding: 0; color: #4a4a4a; background: #fafafa; border: 1px solid #d4d4d4; border-radius: 5px; }
+.sd-icon:hover { background: #e6e6e6; }
+.sd-heading > .sd-icon { background: transparent; border-color: transparent; }
+.sd-paging { display: flex; gap: 5px; margin-left: auto; flex-shrink: 0; }
+.sd-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 13px 0 25px; padding-left: 44px; }
+.sd-actions > span { font-size: 11px; color: #707070; }
+.sd-actions i { margin: 0 7px; font-style: normal; color: #999; }
+.sd-actions > div, .sd-savebar > div { display: flex; gap: 7px; }
+.sd-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 33px; padding: 6px 10px; border: 1px solid #c9c9c9; border-radius: 6px; color: #303030; background: #fdfdfd; font-size: 11px !important; font-weight: 600 !important; white-space: nowrap; box-shadow: 0 1px 0 #0000000a; }
+.sd-button:hover { background: #f5f5f5; }
+.sd-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border-radius: 5px; font-size: 10px; white-space: nowrap; }
+.sd-badge i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.sd-badge.selling { background: #d9f1e3; color: #21613d; }
+.sd-badge.stored { background: #e2eaf4; color: #486488; }
+.sd-badge.pending { background: #fff0c2; color: #785b15; }
+.sd-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
+.sd-primary-column { min-width: 0; padding: 0 22px; background: #fdfdfd; border-block: 1px solid #dedede; }
+.sd-section { padding: 21px 0; border-bottom: 1px solid #e3e3e3; }
+.sd-section:last-child { border-bottom: 0; }
+.sd-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 19px; }
+.sd-section-heading h3 { margin: 0; font-size: 13px; font-weight: 700; }
+.sd-section-heading > span:not(.sd-badge) { display: inline-flex; align-items: center; gap: 4px; color: #707070; font-size: 10px; }
+.sd-section-heading > svg { color: #707070; }
+.sd-grade { display: inline-flex; padding: 3px 7px; color: #4b6656; background: #e6ede8; border-radius: 4px; font-size: 10px; }
+.sd-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 25px; margin: 0; }
+.sd-fields > div { min-width: 0; }
+.sd-fields dt, .sd-stock dt { margin-bottom: 6px; color: #707070; font-size: 11px; }
+.sd-fields dd { margin: 0; overflow-wrap: anywhere; font-size: 12px; }
+.sd-wide { grid-column: 1 / -1; }
+.sd-media { margin: 0; }
+.sd-media > div { display: grid; place-items: center; height: 265px; border: 1px solid #e5e5e5; background: #f5f5f5; border-radius: 5px; overflow: hidden; }
+.sd-media img { display: block; width: 100%; height: 100%; max-height: 265px; object-fit: contain; }
+.sd-media figcaption { margin-top: 9px; color: #707070; font-size: 10px; }
+.sd-no-image { display: grid; justify-items: center; gap: 12px; color: #707070; font-size: 11px; }
+.sd-prices dd { font-size: 23px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.sd-price-summary { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #ededed; font-size: 11px; color: #707070; }
+.sd-price-summary b { color: #454545; font-weight: 600; }
+.sd-stock { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.sd-stock > div > span { color: #707070; font-size: 11px; }
+.sd-stock strong { display: block; margin-top: 7px; font-size: 26px; font-weight: 650; }
+.sd-stock small { margin-left: 6px; font-size: 12px; color: #707070; font-weight: 400; }
+.sd-stock dl { display: grid; gap: 15px; margin: 0; }
+.sd-stock dd { margin: 0; font-size: 12px; }
+.sd-secondary-column { min-width: 0; padding-left: 22px; border-left: 1px solid #dcdcdc; }
+.sd-secondary-column .sd-section:first-child { padding-top: 3px; }
+.sd-field-label { display: block; margin-bottom: 7px; font-size: 11px; }
+.sd-secondary-column select { width: 100%; min-height: 36px; padding: 7px 10px; background: #fdfdfd; color: #303030; border: 1px solid #b5b5b5; border-radius: 5px; }
+.sd-status-caption { margin: 10px 0 0; font-size: 10px; color: #707070; }
+.sd-side-fields { display: grid; gap: 16px; margin: 0; }
+.sd-side-fields > div { display: flex; justify-content: space-between; gap: 15px; }
+.sd-side-fields dt { color: #707070; font-size: 11px; flex-shrink: 0; }
+.sd-side-fields dd { margin: 0; text-align: right; font-size: 11px; overflow-wrap: anywhere; }
+.sd-secondary-column textarea { display: block; width: 100%; min-height: 155px; max-height: 400px; padding: 11px; color: #454545; background: #fdfdfd; border: 1px solid #b5b5b5; border-radius: 5px; resize: vertical; font-size: 11px; line-height: 1.8; }
+.sd-disclaimer { margin: 13px 0 0; font-size: 10px; color: #707070; line-height: 1.8; }
+.sd-savebar { display: flex; align-items: center; justify-content: space-between; gap: 15px; position: sticky; z-index: 2; bottom: 12px; padding: 12px 16px; margin-top: 25px; color: #616161; background: #fafafa; border: 1px solid #d4d4d4; border-radius: 6px; box-shadow: 0 2px 8px #00000008; font-size: 11px; }
+.sd-savebar .sd-save { background: #303030; border-color: #252525; color: #fafafa; }
+@media (max-width: 1100px) { .sd-layout { grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; } .sd-secondary-column { padding-left: 18px; } .sd-title h2 { font-size: 20px; } .sd-actions { flex-wrap: wrap; padding-left: 0; } .sd-prices dd { font-size: 20px; } }
+@media (max-width: 850px) { .sd-layout { grid-template-columns: minmax(0, 1fr); } .sd-secondary-column { padding: 0 22px; border-left: 0; background: #fdfdfd; } .sd-secondary-column .sd-section:first-child { padding-top: 21px; } .sd-paging { align-self: flex-start; } }
+@media (max-width: 640px) { .sd-heading { flex-wrap: wrap; gap: 8px; } .sd-title { flex: 1; } .sd-title h2 { font-size: 19px; } .sd-paging { margin-left: 40px; } .sd-primary-column, .sd-secondary-column { padding-inline: 17px; } .sd-media > div { height: 230px; } .sd-media img { max-height: 230px; } .sd-savebar { padding: 10px; flex-wrap: wrap; } .sd-savebar > div { margin-left: auto; } .sd-fields { column-gap: 15px; } .sd-prices dd { font-size: 19px; } }

@@ -1,0 +1,21 @@
+.sa-notifications-page { max-width: 1120px; }
+.sa-notifications-page h1:focus { outline: none; }
+.sa-notifications-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--sa-border); }
+.sa-notifications-toolbar > span { font-size: 11px; color: var(--sa-muted); }
+.sa-notification-list { margin: 0; padding: 0; list-style: none; }
+.sa-notification-list > li { display: flex; align-items: flex-start; gap: 16px; padding: 24px 16px; border-bottom: 1px solid var(--sa-border); }
+.sa-notification-list .is-unread { background: #f8fcf9; }
+.sa-notification-category { flex-shrink: 0; color: #397150; margin-top: 3px; }
+.sa-notification-category.inspection { color: #89651c; }
+.sa-notification-category.settlement { color: #436a7a; }
+.sa-notification-category.receipt { color: #536a93; }
+.sa-notification-date { margin-top: 6px; font-size: 10px; color: #707070; }
+.sa-notification-content { min-width: 0; flex: 1; }
+.sa-notification-meta { display: flex; justify-content: space-between; gap: 12px; color: #616b64; font-size: 11px; }
+.is-unread .sa-notification-meta > span:last-child { color: #245c39; font-weight: 600; }
+.sa-notification-content h2 { font-size: 15px; line-height: 1.6; margin: 8px 0; overflow-wrap: anywhere; }
+.sa-notification-content p { margin: 0 0 8px; color: #616161; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.sa-notification-content small { font-size: 10px; color: #707070; overflow-wrap: anywhere; }
+.sa-notification-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.sa-notifications-footer { margin-top: 24px; }
+@media (max-width: 640px) { .sa-notification-list > li { gap: 12px; padding: 20px 12px; } .sa-notifications-toolbar > span { width: 100%; padding-left: 8px; } }
