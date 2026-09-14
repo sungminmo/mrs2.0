@@ -1,0 +1,40 @@
+.inspection-tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid #d7ddd8; padding-bottom: 12px; }
+.inspection-tabs button { min-height: 40px; }
+.inspection-tabs button[aria-pressed="true"] { background: #e0ebe3; color: #254c33; }
+.inspection-disclaimer { padding: 14px 16px; border-left: 3px solid #879c8b; background: #eaf0eb; color: #4f6054; font-size: 12px; line-height: 1.8; }
+.inspection-page h2 { font-size: 20px; margin: 24px 0; }
+.inspection-page h3 { font-size: 15px; margin: 0 0 16px; }
+.inspection-page p { font-size: 12px; line-height: 1.8; }
+.inspection-section { padding: 24px 0; border-bottom: 1px solid #d9dfda; }
+.inspection-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 32px; font-size: 12px; }
+.inspection-fields > div { min-width: 0; }
+.inspection-fields dt { color: #647168; margin-bottom: 6px; }
+.inspection-fields dd { margin: 0; overflow-wrap: anywhere; }
+.inspection-subtext { display: block; font-size: 10px; color: #6b716e; margin-top: 6px; }
+.inspection-muted { color: #647168; }
+.inspection-actions { display: flex; align-items: center; gap: 8px; }
+.inspection-actions .sa-button { min-height: 44px; }
+.inspection-notice { margin-top: 20px; padding: 12px 16px; background: #eef0ed; color: #4f6054; }
+.inspection-notice p { margin: 4px 0; }
+.inspection-inquiry-dialog { width: min(600px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overflow-wrap: anywhere; }
+.inspection-inquiry-dialog h2 { margin: 0; font-size: 18px; }
+.inspection-inquiry-dialog .sa-section-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.inspection-inquiry-dialog .sa-section-title button { width: 44px; height: 44px; flex-shrink: 0; }
+.inspection-inquiry-dialog p { font-size: 12px; line-height: 1.8; }
+.inspection-comment { margin-top: 24px; font-size: 12px; }
+.inspection-comment textarea { display: block; width: 100%; margin: 8px 0 12px; padding: 12px; font: inherit; border: 1px solid #aebcb2; border-radius: 5px; resize: vertical; }
+.inspection-feedback { padding: 12px; background: #e0ebe3; }
+.inspection-list-table { min-width: 1000px; }
+.inspection-result-group { margin-top: 28px; }
+.inspection-result-group h4 { margin: 0 0 12px; font-size: 13px; }
+.inspection-result-group h4 span { margin-left: 8px; color: #647168; font-weight: 400; }
+.inspection-photo-dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overflow-wrap: anywhere; }
+.inspection-photo-dialog h2 { margin: 0; font-size: 18px; }
+.inspection-photo-dialog .sa-section-title { display: flex; justify-content: space-between; gap: 12px; }
+.inspection-photo-dialog .sa-section-title button { width: 44px; height: 44px; flex-shrink: 0; }
+.inspection-photo-dialog p { font-size: 12px; line-height: 1.8; }
+.inspection-photo-list figure { margin: 20px 0 0; }
+.inspection-photo-list img { display: block; width: 100%; height: auto; max-height: 60dvh; object-fit: contain; background: #eef0ed; }
+.inspection-photo-list figcaption { margin-top: 8px; font-size: 12px; }
+.inspection-photo-empty { padding: 36px 16px; text-align: center; background: #eef0ed; color: #647168; }
+@media (max-width: 640px) { .inspection-fields { grid-template-columns: minmax(0, 1fr); } .inspection-page .sa-section-title { flex-wrap: wrap; } }

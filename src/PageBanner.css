@@ -1,0 +1,21 @@
+.page-banner { display: flex; align-items: stretch; gap: 24px; padding: 24px; margin: 0 0 24px; border-block: 1px solid #cadbce; background: #e6eee8; color: #263c2e; }
+.page-banner-blue { background: #e7edf2; border-color: #ccd8e1; color: #314b5d; }
+.page-banner-copy { flex: 1; min-width: 0; align-self: center; }
+.page-banner-label { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; }
+.page-banner h2 { margin: 12px 0 8px; font-size: 22px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+.page-banner p { margin: 0 0 16px; font-size: 12px; line-height: 1.8; max-width: 580px; }
+.page-banner .sa-button { min-height: 40px; text-decoration: none; color: inherit; }
+.page-banner-image { flex: 0 0 28%; min-width: 0; height: 184px; overflow: hidden; display: grid; place-items: center; background: #d5dfd9; }
+.page-banner-image img { width: 100%; height: 100%; object-fit: cover; }
+.market-campaigns { margin-bottom: 24px; }
+.market-campaigns .page-banner { margin-bottom: 0; min-height: 282px; }
+.market-campaigns .page-banner-image { align-self: center; }
+.market-campaign-controls { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding-top: 12px; }
+.market-campaign-controls .sa-icon { width: 44px; height: 44px; background: transparent; border-color: transparent; }
+.market-campaign-controls .sa-icon:hover { background: #d5e3d9; }
+.market-campaign-dots { display: flex; flex-wrap: wrap; }
+.market-campaign-dots button { display: grid; place-items: center; width: 32px; height: 44px; padding: 0; border: 0; background: transparent; }
+.market-campaign-dots button span { width: 7px; height: 7px; border-radius: 50%; background: #8b9e91; }
+.market-campaign-dots button[aria-pressed="true"] span { width: 18px; border-radius: 4px; background: #245b40; }
+.market-campaign-controls > span { margin-left: 8px; font-size: 11px; color: #526259; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .page-banner { padding: 20px; gap: 16px; flex-direction: column; } .page-banner h2 { font-size: 19px; } .page-banner-image { flex: none; width: 100%; height: 140px; } .market-campaigns .page-banner { min-height: 420px; } }

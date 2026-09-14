@@ -10,6 +10,8 @@ import ShopifyMarket from './ShopifyMarket'
 import { Faq } from './Faq'
 import { Settlements } from './Settlements'
 import LoginPage from './LoginPage'
+import InspectionDisposals from './InspectionDisposals'
+import { demoDisposals, updateDisposal, type DisposalAction } from './disposals'
 
 type Tab = 'assets' | 'market' | 'settlements' | 'faq' | 'profile' | 'notifications'
 
@@ -43,16 +45,27 @@ export default function App() {
   const [marketBasket, setMarketBasket] = useState<Record<string, number>>({})
   const [contact, setContact] = useState({ name: '', email: '', phone: '' })
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([])
+  const [disposals, setDisposals] = useState(demoDisposals)
+  const [inspectionActive, setInspectionActive] = useState(false)
+  const [inspectionId, setInspectionId] = useState<string | null>(null)
+  const [settlementKind, setSettlementKind] = useState('전체')
+  const openInspection = (id: string) => { setInspectionId(id); setInspectionActive(true); setTab('assets') }
+  const changeDisposal = (id: string, action: DisposalAction) => setDisposals((current) => current.map((record) => record.id === id ? updateDisposal(record, action) : record))
   if (access === 'login') return <LoginPage onLogin={() => { setAccess('member'); setTab('assets') }} onBrowse={() => { setAccess('guest'); setTab('market') }} />
   if (access === 'guest') return <ShopifyMarket products={products} navigation={<><Nav active icon={<ShoppingCart />} label="마켓" onClick={() => setTab('market')} /><Nav active={false} icon={<UserRound />} label="로그인" onClick={() => setAccess('login')} /></>} basket={{}} onBasketChange={setMarketBasket} isGuest onLogin={() => setAccess('login')} />
   const navigation = <>
     <Nav active={tab === 'assets'} icon={<Archive />} label="내 자산" onClick={() => setTab('assets')} />
     <Nav active={tab === 'market'} icon={<ShoppingCart />} label="마켓" onClick={() => setTab('market')} />
-    <Nav active={tab === 'settlements'} icon={<ReceiptText />} label="정산 관리" onClick={() => setTab('settlements')} />
+    <Nav active={tab === 'settlements'} icon={<ReceiptText />} label="정산 관리" onClick={() => { setSettlementKind('전체'); setTab('settlements') }} />
     <Nav active={tab === 'faq'} icon={<CircleHelp />} label="F&Q" onClick={() => setTab('faq')} />
     <Nav active={tab === 'profile'} icon={<UserRound />} label="마이페이지" onClick={() => setTab('profile')} />
   </>
   const notificationRecords: Omit<NotificationItem, 'read'>[] = [
+    ...disposals.flatMap((record): Omit<NotificationItem, 'read'>[] => [
+      { id: `result:${record.id}`, title: '1차 검수 결과 도착 · 폐기 대상 포함', description: `${record.id} 입고 건의 폐기 대상 수량과 사유를 확인해 주세요. 결과 확인과 폐기 동의는 별도입니다. (예시)`, code: record.id, category: '검수 결과', date: record.notifiedAt, dateLabel: '안내일', inspectionId: record.id },
+      ...(record.status === '처리 완료' ? [{ id: `disposed:${record.id}`, title: '폐기 처리 완료', description: `${record.id} 처리 수량과 증빙을 확인하세요. (예시)`, code: record.id, category: '폐기 완료' as const, date: record.completedAt!, dateLabel: '처리일', inspectionId: record.id }] : []),
+      ...(record.cost.status === '청구 완료' ? [{ id: `disposal-bill:${record.id}`, title: '폐기 비용 청구', description: `${record.cost.invoice} · ${record.cost.amount.toLocaleString('ko-KR')}원 청구 명세가 등록되었습니다. (예시)`, code: record.id, category: '폐기 비용' as const, date: record.cost.billedAt, dateLabel: '청구일', inspectionId: record.id }] : []),
+    ]),
     ...inventory.filter((asset) => asset.status === '대기 중').map((asset) => ({
     id: `inspection:${asset.code}`, title: `${asset.name} 검수 대기`,
     description: '검수 및 관리자 승인을 기다리고 있습니다. 내 자산에서 등록 정보와 진행 상태를 확인하세요.',
@@ -75,11 +88,11 @@ export default function App() {
   const notifications = notificationRecords.sort((first, second) => second.date.localeCompare(first.date)).map((item) => ({ ...item, read: readNotificationIds.includes(item.id) }))
   const unread = notifications.filter((item) => !item.read).length
   const markRead = (ids: string[]) => setReadNotificationIds((current) => [...new Set([...current, ...ids])])
-  const page = tab === 'assets' ? <AdminAssets assets={inventory} onAssetsChange={setInventory} navigation={navigation} onValuesObserved={observeAssetValues} />
+  const page = tab === 'assets' ? <AdminAssets assets={inventory} onAssetsChange={setInventory} navigation={navigation} onValuesObserved={observeAssetValues} inspectionActive={inspectionActive} onInspectionView={(active) => { setInspectionActive(active); setInspectionId(null) }} inspectionCount={disposals.filter((record) => record.status === '고객 확인 대기').length} inspectionContent={<InspectionDisposals records={disposals} selectedId={inspectionId} onSelect={setInspectionId} onUpdate={changeDisposal} />} />
     : tab === 'market' ? <ShopifyMarket products={products} navigation={navigation} basket={marketBasket} onBasketChange={setMarketBasket} />
-    : tab === 'settlements' ? <Settlements navigation={navigation} transactions={transactions} assets={inventory} />
+    : tab === 'settlements' ? <Settlements key={settlementKind} navigation={navigation} transactions={transactions} assets={inventory} disposals={disposals} onInspection={openInspection} initialKind={settlementKind} />
     : tab === 'faq' ? <Faq navigation={navigation} />
-    : tab === 'notifications' ? <Notifications navigation={navigation} items={notifications} onRead={markRead} onAssets={() => setTab('assets')} onSales={() => setTab('profile')} onSettlements={() => setTab('settlements')} />
+    : tab === 'notifications' ? <Notifications navigation={navigation} items={notifications} onRead={markRead} onAssets={() => { setInspectionActive(false); setTab('assets') }} onSales={() => setTab('profile')} onSettlements={() => setTab('settlements')} onInspection={openInspection} />
     : <Profile navigation={navigation} contact={contact} onContactChange={setContact} />
   return <NotificationNavigation value={{ unread, active: tab === 'notifications', onOpen: () => setTab('notifications') }}>{page}</NotificationNavigation>
 }

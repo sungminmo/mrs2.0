@@ -7,6 +7,7 @@ import AdminShell from './AdminShell'
 import ShopifyAssetDetail from './ShopifyAssetDetail'
 import MarketRegistrationConfirm from './MarketRegistrationConfirm'
 import { materialPhotos } from './assetPhotos'
+import PageBanner from './PageBanner'
 
 const amount = (value: string) => Number(value.replaceAll(',', ''))
 const number = (value: number) => value.toLocaleString('ko-KR')
@@ -80,7 +81,7 @@ function AssetImage({ asset }: { asset: Asset }) {
   return asset.image && !failed ? <img src={asset.image} alt={asset.name} loading="lazy" onError={() => setFailed(true)} /> : <Box size={24} aria-label="이미지 없음" />
 }
 
-export default function AdminAssets({ assets: inventory, onAssetsChange: setInventory, navigation, onValuesObserved }: { assets: Asset[]; onAssetsChange: Dispatch<SetStateAction<Asset[]>>; navigation: ReactNode; onValuesObserved: ObserveAssetValues }) {
+export default function AdminAssets({ assets: inventory, onAssetsChange: setInventory, navigation, onValuesObserved, inspectionActive, onInspectionView, inspectionContent, inspectionCount }: { assets: Asset[]; onAssetsChange: Dispatch<SetStateAction<Asset[]>>; navigation: ReactNode; onValuesObserved: ObserveAssetValues; inspectionActive: boolean; onInspectionView: (active: boolean) => void; inspectionContent: ReactNode; inspectionCount: number }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<string>('전체')
   const [location, setLocation] = useState('전체 위치')
@@ -88,7 +89,7 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
   const [showFilters, setShowFilters] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
   const [detail, setDetail] = useState<Asset | null>(null)
-  const overview = useAssetValueMotion(inventory, detail !== null, onValuesObserved)
+  const overview = useAssetValueMotion(inventory, detail !== null || inspectionActive, onValuesObserved)
   const [message, setMessage] = useState('')
   const [marketConfirmOpen, setMarketConfirmOpen] = useState(false)
   const addDialog = useRef<HTMLDialogElement>(null)
@@ -165,11 +166,13 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
 
   const detailIndex = inventory.findIndex((asset) => asset.code === detail?.code)
   const search = <label className="sa-global-search"><Search size={18} /><input aria-label="자산 검색" placeholder="자산명, 코드, 브랜드 검색" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button className="sa-icon" aria-label="검색 지우기" onClick={() => setQuery('')}><X size={15} /></button>}</label>
-  return <AdminShell navigation={navigation} search={detail ? undefined : search}>
+  return <AdminShell navigation={navigation} search={detail || inspectionActive ? undefined : search}>
     {marketConfirmOpen && <MarketRegistrationConfirm subject={`선택한 자산 ${selectedVisible.length}건`} onCancel={() => setMarketConfirmOpen(false)} onConfirm={confirmSelectedMarket} />}
     <main ref={overview} className="sa-main sa-assets-main">
       {detail ? <ShopifyAssetDetail key={detail.code} asset={inventory[detailIndex]} previous={inventory[detailIndex - 1]} next={inventory[detailIndex + 1]} onBack={() => setDetail(null)} onNavigate={setDetail} onSave={(updated) => setInventory((current) => current.map((asset) => asset.code === updated.code ? updated : asset))} /> : <>
-      <div className="sa-heading"><div><div className="sa-breadcrumb">워크스페이스 <span>/</span> 자산</div><h1>내 자산 <span>{inventory.length}</span></h1></div><div className="sa-heading-actions"><button className="sa-button" onClick={exportAssets} disabled={!visible.length}><ArrowDownToLine size={15} />내보내기</button><button className="sa-button sa-primary" onClick={() => addDialog.current?.showModal()}><PackagePlus size={16} />자산 등록</button></div></div>
+      <div className="sa-heading"><div><div className="sa-breadcrumb">워크스페이스 <span>/</span> 자산</div><h1>내 자산 <span>{inventory.length}</span></h1></div>{!inspectionActive && <div className="sa-heading-actions"><button className="sa-button" onClick={exportAssets} disabled={!visible.length}><ArrowDownToLine size={15} />내보내기</button><button className="sa-button sa-primary" onClick={() => addDialog.current?.showModal()}><PackagePlus size={16} />자산 등록</button></div>}</div>
+      <div className="inspection-tabs" role="group" aria-label="내 자산 보기"><button className="sa-button" aria-pressed={!inspectionActive} onClick={() => onInspectionView(false)}>자산 현황</button><button className="sa-button" aria-pressed={inspectionActive} onClick={() => onInspectionView(true)}>검수·폐기 내역</button></div>
+      {inspectionActive ? inspectionContent : <>
       <div className="sa-overview-heading"><span><span className="sa-live-dot" />전체 자산 현황</span><span>입고 자산 기준 · KRW</span></div>
       <section className="sa-metrics" aria-label="자산 요약">
         {statuses.map((item) => {
@@ -183,6 +186,8 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
         <section className="sa-recent"><div className="sa-section-title"><h2>최근 입고</h2><span>최근 3건</span></div>{[...inventory].sort((first, second) => second.receivedAt.localeCompare(first.receivedAt)).slice(0, 3).map((asset) => <button key={asset.code} onClick={() => openDetail(asset)}><span className="sa-recent-icon"><PackagePlus size={16} /></span><span><b>{asset.name}</b><small>{asset.location} · {asset.quantity} {asset.unit}</small></span><time>{asset.receivedAt.slice(5)}</time></button>)}</section>
       </div>
       {pending.length > 0 && <div className="sa-attention" aria-label="검수 알림"><span className="sa-attention-icon"><ClipboardCheck size={19} /></span><div><b>검수 대기 자산 {pending.length}건</b><span>입고 정보를 확인하고 다음 단계를 진행해 주세요.</span></div><button onClick={() => { clearFilters(); setStatus('대기 중') }}>자산 확인<ArrowRight size={15} /></button></div>}
+      {inspectionCount > 0 && <div className="sa-attention" aria-label="1차 검수 결과 알림"><ClipboardCheck size={19} /><div><b>1차 검수 결과 도착 · 폐기 대상 포함</b><span>고객 확인 대기 {inspectionCount}건 · 예시</span></div><button onClick={() => onInspectionView(true)}>검수 결과 보기<ArrowRight size={15} /></button></div>}
+      <PageBanner label="MRS · Material Recycling Service" title="남은 자재의 가치, MRS에서 이어집니다" description="보관에서 재유통까지. MRS는 현장의 잉여 자재를 관리하고 필요한 수요처와 연결하는 건설자재 보관·거래 플랫폼입니다." action="MRS소개서 다운받기" href="/MRS-service-guide.txt" download="MRS-서비스소개서.txt" icon={<Leaf size={17} />} />
       <section className="sa-inventory" aria-label="자산 목록">
         <div className="sa-table-toolbar"><div className="sa-tabs" aria-label="자산 상태">{statuses.map((item) => <button key={item} aria-pressed={status === item} onClick={() => setStatus(item)}>{item}<span>{item === '전체' ? inventory.length : inventory.filter((asset) => asset.status === item).length}</span></button>)}</div><div className="sa-table-controls"><button className={`sa-icon ${showFilters ? 'is-active' : ''}`} title="보관 위치 필터" aria-label="보관 위치 필터" aria-expanded={showFilters} onClick={() => setShowFilters(!showFilters)}><SlidersHorizontal size={16} /></button><label className="sa-sort"><ArrowUpDown size={14} /><select aria-label="자산 정렬" value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">최근 입고순</option><option value="value">평가 가치순</option><option value="name">자산명순</option></select></label></div></div>
         {showFilters && <div className="sa-filter-row"><MapPin size={15} /><label>보관 위치<select aria-label="보관 위치 필터 선택" value={location} onChange={(event) => setLocation(event.target.value)}>{['전체 위치', ...new Set(inventory.map((asset) => asset.location))].map((item) => <option key={item}>{item}</option>)}</select></label><button className="sa-text-button" onClick={clearFilters}>필터 초기화</button></div>}
@@ -191,6 +196,7 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
         {visible.length === 0 && <div className="sa-empty"><Search size={26} /><h2>일치하는 자산이 없습니다</h2><button className="sa-button" onClick={clearFilters}>필터 초기화</button></div>}
         <div className="sa-table-footer"><span>총 {inventory.length}건 중 {visible.length}건 표시</span><span>평가 가치 합계 <b>{money(visible.reduce((sum, asset) => sum + amount(asset.appraisalValue), 0))}</b></span></div>
       </section>
+      </>}
       </>}
       <footer className="sa-page-footer"><span><Leaf size={15} />자재의 다음 가치를 연결합니다.</span></footer>
       <details className="sa-photo-credits"><summary>참고 이미지 출처</summary><p>사진은 자재 종류를 보여주는 참고 이미지이며 실제 등록 자산 사진이 아닙니다.</p>{materialPhotos.map(([code, , author, license, file]) => <a key={code} href={`https://commons.wikimedia.org/wiki/File:${file}`} target="_blank" rel="noreferrer">{inventory.find((asset) => asset.code === code)?.name} · {author} · {license} (화면에 맞게 자름)</a>)}</details>
