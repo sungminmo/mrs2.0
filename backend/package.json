@@ -9,17 +9,32 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
-    "build": "node --input-type=module -e \"import { rmSync, mkdirSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true }); mkdirSync('dist/migrations', { recursive: true })\" && tsc",
+    "build": "npm run db:generate && node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true })\" && tsc",
     "start": "node dist/src/index.js",
     "test": "tsx --test test/*.test.ts",
-    "db:migrate": "knex --knexfile dist/knexfile.js --env production migrate:latest",
-    "db:make": "node --env-file-if-exists=../.env --import tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts --env production migrate:make -x ts"
+    "db:generate": "prisma generate",
+    "db:validate": "prisma validate",
+    "db:migrate": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
+    "db:dev": "prisma migrate dev"
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",
+    "@prisma/adapter-mariadb": "7.10.0",
+    "@prisma/client": "7.10.0",
     "hono": "4.13.7",
-    "knex": "3.3.0",
-    "mysql2": "3.24.4"
+    "prisma": "7.10.0"
+  },
+  "overrides": {
+    "@prisma/adapter-mariadb": {
+      "mariadb": "3.5.4"
+    },
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2"
+    },
+    "prisma": {
+      "mysql2": "3.24.4"
+    }
   },
   "devDependencies": {
     "@types/node": "24.13.4",

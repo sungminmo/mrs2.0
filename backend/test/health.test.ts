@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createApp } from '../src/app.js'
-import { readConfig } from '../src/config.js'
+import { databaseUrl, readConfig } from '../src/config.js'
 import { createDatabase, databaseOptions } from '../src/database.js'
 
 const environment = {
@@ -73,9 +73,19 @@ test('configuration rejects invalid numeric values', () => {
 test('database module loads in ESM and creates a lazy bounded pool', async () => {
   const config = readConfig(environment).database
   const options = databaseOptions(config)
-  assert.equal(options.client, 'mysql2')
-  assert.deepEqual(options.pool, { min: 0, max: 5 })
-  assert.equal(options.acquireConnectionTimeout, 2000)
+  assert.equal(options.connectionLimit, 5)
+  assert.equal(options.minimumIdle, 0)
+  assert.equal(options.acquireTimeout, 2000)
+  assert.equal(options.queryTimeout, 2000)
   const database = createDatabase(config)
+  assert.equal(typeof database.client.$queryRaw, 'function')
   await database.close()
+})
+
+test('Prisma CLI URL escapes special characters in credentials', () => {
+  const password = 'p@ss:/?#% word'
+  const url = new URL(databaseUrl(readConfig({ ...environment, DB_PASSWORD: password }).database))
+  assert.equal(decodeURIComponent(url.password), password)
+  assert.equal(url.hostname, 'db')
+  assert.equal(url.pathname, '/b2b_mall')
 })

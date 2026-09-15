@@ -10,7 +10,7 @@ Mac에서 수정한 소스를 Git으로 전달하고 서버에서 이미지를 �
 | 구성 | 역할 | 호스트 공개 포트 |
 | --- | --- | --- |
 | Nginx | `/mrs2.0/` 화면과 `/api/` 프록시 | `127.0.0.1:8080`만 |
-| Hono / Node.js 24 | 상태 API, Knex/mysql2 연결 풀 | 없음 |
+| Hono / Node.js 24 | 상태 API, Prisma ORM 7 + MariaDB 어댑터 | 없음 |
 | MariaDB 11.8 | `b2b_mall`, `b2b_app` 전용 계정 | 없음 |
 
 DB는 별도의 내부 네트워크에 있으며 Nginx에서 직접 접근할 수 없습니다.
@@ -56,7 +56,8 @@ docker compose ps
 curl --fail http://127.0.0.1:8080/api/health/ready
 ```
 
-최초 마이그레이션은 Knex 이력 테이블만 초기화하며 업무 테이블이나 샘플 데이터를 만들지 않습니다.
+최초 Prisma 마이그레이션 `0_init`은 `SELECT 1`만 실행하며 업무 테이블이나 샘플 데이터를 만들지 않습니다.
+Prisma는 적용 이력을 `_prisma_migrations`에 관리합니다. 기존 Knex 환경은 아래 전환 절차를 먼저 확인하세요.
 상태 API는 `/api/health/live`가 프로세스 생존을, `/api/health/ready`가 실제 `SELECT 1`
 성공 여부를 확인합니다. DB 장애나 제한 시간 초과 시 readiness는 `503`을 반환합니다.
 DB 복구 후에는 같은 연결 풀에서 자동으로 재연결합니다. Docker의 unhealthy 상태 자체는
@@ -87,11 +88,12 @@ Node.js 24 LTS를 권장합니다. 프론트엔드와 백엔드 의존성은 별
 ```sh
 npm ci
 npm --prefix backend ci
+npm --prefix backend run db:generate
 npm --prefix backend run typecheck
 npm --prefix backend test
 npm --prefix backend run build
 npx tsc -b
-npx oxlint src backend/src backend/test backend/knexfile.ts
+npx oxlint src backend/src/*.ts backend/test backend/prisma.config.ts
 ```
 
 상태 API 단위 테스트는 DB 없이 실행됩니다. 전체 환경은 Mac에서도 Docker와 루트 `.env`를
@@ -99,13 +101,66 @@ npx oxlint src backend/src backend/test backend/knexfile.ts
 호스트에서 실행하는 `npm --prefix backend run dev`는 별도로 접근 가능한 DB 환경변수를
 주입해야 합니다. 기본 구성은 DB를 호스트에 공개하지 않으므로 컨테이너 빌드로 통합 검증합니다.
 
-새 마이그레이션은 루트 `.env`에 앱 비밀번호를 설정한 뒤 아래처럼 생성합니다.
-생성 시 DB 연결은 하지 않습니다. 생성된 TypeScript의 `up`/`down`을 작성한 후 빌드해야 합니다.
+### Prisma 사용
+
+모델은 [backend/prisma/schema.prisma](backend/prisma/schema.prisma)에 작성합니다.
+MariaDB도 Prisma의 `mysql` provider를 사용합니다. 빌드 시 Client를 생성하며,
+생성된 `backend/src/generated/`는 Git 및 Docker 입력에서 제외합니다.
+런타임에는 컴파일된 Client, Prisma CLI, 스키마와 마이그레이션이 포함됩니다.
+`prisma` CLI는 배포 컨테이너에서 사용하므로 production 의존성으로 설치합니다.
+보안 수정된 MariaDB/MySQL 드라이버와 deepmerge-ts를 `overrides`로 고정했으며,
+Prisma 업데이트 시 호환성과 `npm audit` 결과를 함께 확인하세요.
+
+기존 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`를 그대로 사용합니다.
+[backend/prisma.config.ts](backend/prisma.config.ts)가 CLI 연결 URL을 만들므로
+별도의 `DATABASE_URL` 비밀번호를 중복 관리할 필요가 없습니다. 루트 `.env`는
+로컬 CLI에서만 자동으로 읽고, 컨테이너는 Compose가 주입하는 환경변수를 사용합니다.
+
+Hono 서버는 [backend/src/database.ts](backend/src/database.ts)의 `createDatabase()`를
+한 번 생성해 공유합니다. 반환 객체의 `client`가 Prisma Client입니다.
+기존 `check()`와 `close()`는 각각 실제 쿼리와 `$disconnect()`를 수행합니다.
+모델을 추가한 뒤 이 공유 Client를 업무 라우트에 전달해 사용하세요.
 
 ```sh
-DB_HOST=db DB_NAME=b2b_mall DB_USER=b2b_app \
-  npm --prefix backend run db:make -- 변경_설명
+docker compose exec backend npm run db:validate
+docker compose exec backend npm run db:status
+docker compose run --rm --no-deps backend npm run db:migrate
 ```
+
+모델 변경 후 `npm --prefix backend run db:generate`로 타입을 갱신합니다.
+새 마이그레이션을 만들 때는 **서버 데이터가 아닌, 별도의 폐기 가능한 개발 DB**와
+호스트에서 접속 가능한 DB 환경변수를 준비하고 다음을 실행합니다.
+
+```sh
+npm --prefix backend run db:dev -- --name 변경_설명
+npm --prefix backend run db:generate
+```
+
+`migrate dev`는 실제 개발 DB와 shadow DB가 필요합니다. 기본 `b2b_app`은 다른 DB를
+생성할 권한이 없으므로 별도로 만든 개발용 shadow DB의 URL을 `SHADOW_DATABASE_URL`로
+지정하거나 개발 전용 계정에 필요한 권한을 설정해야 합니다. shadow DB에는 데이터가
+삭제될 수 있으므로 서버 DB나 보존할 DB를 지정하지 마세요. 기본 Compose는 DB 포트를
+호스트에 공개하지 않으며, 배포 컨테이너에서는 `migrate dev`를 실행하지 않습니다.
+생성된 SQL을 검토하고 `prisma/migrations/`를 커밋한 뒤 서버에서 `db:migrate`로 적용합니다.
+
+### 기존 Knex 환경 전환
+
+Knex 관리 테이블이 있는 DB에 Prisma를 처음 적용하면 `P3005`가 발생할 수 있습니다.
+백업과 스키마 확인 후, **업무 테이블이 없고 `knex_migrations`가 비어 있는 기존 초기 설정에만**
+다음 명령으로 빈 기준 상태를 한 번 등록합니다. 기존 테이블과 데이터는 삭제하지 않습니다.
+
+```sh
+docker compose build backend
+docker compose run --rm --no-deps backend npx prisma migrate resolve --applied 0_init
+docker compose run --rm --no-deps backend npm run db:migrate
+docker compose up -d --wait backend
+```
+
+이미 업무 테이블이나 적용된 Knex 마이그레이션이 있다면 위 명령을 실행하지 마세요.
+현재 스키마를 반영한 별도 baseline이 필요합니다. `migrate reset`, `db push --force-reset`,
+볼륨 삭제로 전환 문제를 해결하지 마세요. 사용하지 않는 기존 Knex 이력 테이블은 그대로 보존합니다.
+
+### 서버 재배포
 
 소스를 커밋·푸시한 뒤 **서버의 같은 저장소 디렉터리**에서 재배포합니다.
 

@@ -30,3 +30,13 @@ export function readConfig(environment: NodeJS.ProcessEnv = process.env) {
 }
 
 export type Config = ReturnType<typeof readConfig>
+
+export function databaseUrl(config: Config['database']) {
+  const url = new URL('mysql://localhost')
+  url.hostname = config.host
+  url.port = String(config.port)
+  url.username = encodeURIComponent(config.user)
+  url.password = encodeURIComponent(config.password)
+  url.pathname = `/${encodeURIComponent(config.name)}`
+  return url.toString()
+}
