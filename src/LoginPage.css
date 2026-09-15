@@ -119,6 +119,9 @@
 .login-page :focus-visible { outline: 2px solid #005bd3; outline-offset: 3px; }
 .login-contact-section { border-top: 1px solid var(--home-line); background: #f8f9f7; }
 .login-contact-inner { max-width: 1200px; margin: 0 auto; padding: 56px 32px 64px; }
+.login-contact-inner > h2 { margin: 16px 0; font-size: 28px; line-height: 1.5; }
+.login-contact-description { max-width: 640px; font-size: 13px; line-height: 1.9; color: #606b63; }
+.login-contact-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .login-contact-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; }
 .login-contact-panel { min-width: 0; padding: 28px 0 0; border-top: 2px solid #a7b7ab; }
 .login-contact-panel:nth-child(2) { border-color: #9aaeb6; }

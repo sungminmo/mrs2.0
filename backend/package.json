@@ -1,0 +1,29 @@
+{
+  "name": "mrs-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <26"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "build": "node --input-type=module -e \"import { rmSync, mkdirSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true }); mkdirSync('dist/migrations', { recursive: true })\" && tsc",
+    "start": "node dist/src/index.js",
+    "test": "tsx --test test/*.test.ts",
+    "db:migrate": "knex --knexfile dist/knexfile.js --env production migrate:latest",
+    "db:make": "node --env-file-if-exists=../.env --import tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts --env production migrate:make -x ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "hono": "4.13.7",
+    "knex": "3.3.0",
+    "mysql2": "3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.4",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2"
+  }
+}

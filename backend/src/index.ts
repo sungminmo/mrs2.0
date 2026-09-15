@@ -1,0 +1,32 @@
+import { serve } from '@hono/node-server'
+import { createApp } from './app.js'
+import { readConfig } from './config.js'
+import { createDatabase } from './database.js'
+
+const config = readConfig()
+const database = createDatabase(config.database)
+const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs })
+const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: config.port }, (info) => {
+  console.info(`Backend listening on port ${info.port}`)
+})
+
+let shuttingDown = false
+
+function shutdown() {
+  if (shuttingDown) return
+  shuttingDown = true
+  const deadline = setTimeout(() => process.exit(1), 10000)
+  deadline.unref()
+  server.close((error) => {
+    void database.close().then(() => {
+      clearTimeout(deadline)
+      process.exitCode = error ? 1 : 0
+    }).catch(() => {
+      console.error('Database shutdown failed')
+      process.exitCode = 1
+    })
+  })
+}
+
+process.on('SIGTERM', shutdown)
+process.on('SIGINT', shutdown)

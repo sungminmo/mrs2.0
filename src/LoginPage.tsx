@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowDownToLine, ArrowRight, Eye, EyeOff, Leaf, LogIn, MessageSquare, ReceiptText, ShoppingBag, Warehouse, X } from 'lucide-react'
+import { ArrowDown, ArrowRight, Eye, EyeOff, Leaf, LogIn, MessageSquare, Phone, ReceiptText, ShoppingBag, Warehouse, X } from 'lucide-react'
 import './LoginPage.css'
 
 const valueMetrics = [
@@ -81,13 +81,9 @@ function MaterialValueGrid() {
 export default function LoginPage({ onLogin, onBrowse }: { onLogin: () => void; onBrowse: () => void }) {
   const [visible, setVisible] = useState(false)
   const [notice, setNotice] = useState('')
-  const [inquiryOpen, setInquiryOpen] = useState(false)
-  const [inquiryComplete, setInquiryComplete] = useState(false)
-  const inquiryInput = useRef<HTMLInputElement>(null)
   const loginDialog = useRef<HTMLDialogElement>(null)
   const openLogin = () => loginDialog.current?.showModal()
   const closeLogin = () => loginDialog.current?.close()
-  useEffect(() => { if (inquiryOpen) inquiryInput.current?.focus() }, [inquiryOpen])
   return <div className="login-page">
     <ScrollProgress />
     <header className="login-header"><a href="#" aria-label="MRS 홈"><Leaf size={24} />MRS <span>Material Recycling Service</span></a><nav aria-label="홈페이지 메뉴"><a href="#services">서비스 소개</a><button onClick={openLogin} aria-haspopup="dialog">로그인<ArrowRight size={15} /></button></nav></header>
@@ -120,16 +116,12 @@ export default function LoginPage({ onLogin, onBrowse }: { onLogin: () => void; 
         <p className="login-demo">시제품에서는 계정 입력 없이 로그인할 수 있습니다. 입력한 비밀번호는 저장하거나 전송하지 않습니다.</p>
         {notice && <div className="login-notice" role="status"><span>{notice}</span><button aria-label="안내 닫기" onClick={() => setNotice('')}><X size={16} /></button></div>}
       </div></dialog>
-      <section className="login-contact-section" aria-labelledby="contact-title"><div className="login-contact-inner">
-        <div className="login-section-heading"><div><span className="login-eyebrow">LET'S CONNECT</span><h2 id="contact-title">MRS를 더 자세히 알아보세요</h2></div></div>
-        <div className="login-contact-grid">
-          <article className="login-contact-panel"><span className="login-eyebrow">ABOUT MRS</span><h3>자재의 입고부터 재유통까지,<br />하나로 연결된 관리</h3><p>MRS는 건설 현장의 잉여 자재를 보관하고, 자산 현황을 관리하며, 필요한 수요처와 연결하는 자재 관리 서비스입니다.</p><dl><div><dt>자산 관리</dt><dd>자재별 수량·품질 등급·보관 위치와 평가 가치를 확인합니다.</dd></div><div><dt>거래 연결</dt><dd>검수 및 관리자 승인 후 마켓에 등록하고, 구매 희망 자재의 견적을 요청합니다.</dd></div><div><dt>비용 확인</dt><dd>로케이션별 보관료와 판매 정산 내역을 함께 관리합니다.</dd></div></dl><a className="login-contact-cta" href="/MRS-service-guide.txt" download="MRS-서비스소개서.txt"><ArrowDownToLine size={17} />MRS소개서 다운받기</a><small className="login-contact-note">서비스 개요 · TXT 문서</small></article>
-          <article className="login-contact-panel"><span className="login-eyebrow">CONTACT US</span><h3>우리 현장에 맞는 활용 방법,<br />함께 알아보세요</h3><p>보관할 자재의 종류와 수량, 마켓 판매 계획, 서비스 도입 범위 등 궁금한 내용을 남겨 주세요.</p><ul className="login-inquiry-topics"><li>보관 가능한 자재와 입고 절차</li><li>마켓 등록 및 검수 진행 방식</li><li>보관 비용과 정산 기준</li><li>기업 단위 서비스 도입</li></ul><button className="login-contact-cta login-contact-cta-primary" aria-expanded={inquiryOpen} aria-controls="service-inquiry" onClick={() => setInquiryOpen(!inquiryOpen)}><MessageSquare size={17} />서비스 사용 문의</button><small className="login-contact-note">현재는 문의 작성만 가능하며 실제 전송은 지원하지 않습니다.</small>
-            {inquiryOpen && <form id="service-inquiry" className="login-inquiry-form" onInput={(event) => { setInquiryComplete(false); if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) event.target.setCustomValidity('') }} onSubmit={(event) => { event.preventDefault(); for (const field of event.currentTarget.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[required]')) { if (!field.value.trim()) { field.setCustomValidity('필수 항목을 입력해 주세요.'); field.reportValidity(); return } } setInquiryComplete(true) }}>
-              <label>업체명<input ref={inquiryInput} name="company" autoComplete="organization" placeholder="예: 에코건설" required maxLength={120} /></label><label>담당자명<input name="contact" autoComplete="name" placeholder="예: 홍길동" required maxLength={80} /></label><label>이메일<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required maxLength={254} /></label><label>문의 내용<textarea name="message" rows={4} placeholder="자재 종류, 예상 수량, 이용 목적 등을 알려 주세요." required maxLength={2000} /></label><button className="login-contact-cta" type="submit">문의 내용 작성 완료<ArrowRight size={17} /></button>{inquiryComplete && <p className="login-inquiry-result" role="status">문의 내용이 작성되었습니다. 현재는 시제품으로 운영팀에 전송되지 않습니다. 페이지를 나가면 입력 내용이 초기화됩니다.</p>}
-            </form>}
-          </article>
-        </div>
+      <section id="contact" className="login-contact-section" aria-labelledby="contact-title"><div className="login-contact-inner">
+        <span className="login-eyebrow">CONTACT US</span>
+        <h2 id="contact-title">우리 현장에 맞는 활용 방법,<br />함께 알아보세요</h2>
+        <p className="login-contact-description">보관할 자재의 종류와 수량, 마켓 판매 계획, 서비스 도입 범위 등 궁금한 내용을 남겨 주세요.</p>
+        <ul className="login-inquiry-topics"><li>보관 가능한 자재와 입고 절차</li><li>마켓 등록 및 검수 진행 방식</li><li>보관 비용과 정산 기준</li><li>기업 단위 서비스 도입</li></ul>
+        <div className="login-contact-actions"><a className="login-contact-cta login-contact-cta-primary" href="#/contact"><MessageSquare size={17} />서비스 사용 문의</a><a className="login-contact-cta" href="tel:0312981191"><Phone size={17} />031-298-1191</a></div>
       </div></section>
     </main><footer className="login-footer">© 2026 MRS · Material Recycling Service <a href="#/admin/dashboard">관리자 시안</a><a href="https://commons.wikimedia.org/wiki/File:A_bunch_of_rebar_up_close.jpg" target="_blank" rel="noreferrer">사진: W.carter · CC BY-SA 4.0 (화면에 맞게 자름)</a></footer>
   </div>

@@ -1,0 +1,42 @@
+.service-inquiry-page { min-height: 100dvh; background: #f8f9f7; color: #303b34; font-size: 13px; }
+.service-inquiry-page a { color: #315b45; text-decoration: none; }
+.service-inquiry-page a:hover { text-decoration: underline; }
+.service-inquiry-page :focus-visible { outline: 2px solid #36745a; outline-offset: 3px; }
+.si-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 32px; border-bottom: 1px solid #d8dfd9; background: #fdfefd; }
+.si-header a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+.si-brand { font-size: 23px; font-weight: 700; }
+.si-main { max-width: 1200px; margin: 0 auto; padding: 44px 32px 60px; }
+.si-heading { margin-bottom: 36px; }
+.si-heading > span { color: #587061; font-size: 11px; font-weight: 700; }
+.si-heading h1 { font-size: 30px; margin: 12px 0; line-height: 1.45; }
+.si-heading h1:focus { outline: none; }
+.si-heading p, .si-company p { color: #606b63; line-height: 1.9; }
+.si-layout { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr); gap: 56px; }
+.si-company { border-top: 2px solid #8aa192; padding-top: 24px; }
+.si-company h2 { display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 0 0 28px; }
+.si-company-name { display: block; font-size: 26px; margin-bottom: 10px; }
+.si-company dl > div { padding: 18px 0; border-bottom: 1px solid #d8dfd9; }
+.si-company dt { color: #606b63; font-size: 12px; margin-bottom: 8px; }
+.si-company dd { margin: 0; line-height: 1.9; }
+.si-company dd a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; font-size: 16px; }
+.si-form { min-width: 0; border-top: 2px solid #8aa192; padding-top: 24px; }
+.si-form-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 24px; }
+.si-form-heading h2 { font-size: 16px; margin: 0; }
+.si-form-heading span { font-size: 11px; color: #606b63; }
+.si-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 20px; }
+.si-fields label { font-size: 13px; display: grid; gap: 9px; }
+.si-fields input, .si-fields textarea { width: 100%; min-width: 0; border: 1px solid #aebcb2; border-radius: 4px; padding: 11px 12px; background: #fdfefd; color: #303b34; font: inherit; min-height: 44px; }
+.si-fields textarea { resize: vertical; line-height: 1.8; }
+.si-full { grid-column: 1 / -1; }
+.si-consent { display: flex; align-items: flex-start; gap: 9px; min-height: 44px; margin-top: 24px; padding: 10px 0; border-top: 1px solid #d8dfd9; line-height: 1.8; }
+.si-consent label { cursor: pointer; }
+.si-consent a { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.si-consent input { margin: 4px 0 0; width: 16px; height: 16px; flex-shrink: 0; accent-color: #315b45; }
+.si-demo { color: #606b63; font-size: 11px; line-height: 1.8; }
+.si-submit { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 44px; padding: 12px 24px; border: 0; border-radius: 4px; color: #fdfefd; background: #303b34; font-size: 13px; font-weight: 600; }
+.si-submit:hover { background: #1e2d23; }
+.si-submit:disabled { opacity: .6; cursor: default; }
+.si-result { margin: 20px 0 0; padding: 16px; background: #e6eee8; color: #315b45; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+.si-footer { border-top: 1px solid #d8dfd9; padding: 24px 32px; font-size: 11px; color: #606b63; }
+@media (max-width: 800px) { .si-layout { grid-template-columns: minmax(0, 1fr); gap: 36px; } .si-company { order: 2; } }
+@media (max-width: 560px) { .si-header { padding: 12px 20px; } .si-main { padding: 32px 20px 44px; } .si-heading h1 { font-size: 26px; } .si-fields { grid-template-columns: minmax(0, 1fr); } .si-submit { width: 100%; } }

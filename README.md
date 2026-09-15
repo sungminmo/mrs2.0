@@ -1,5 +1,162 @@
 # React + TypeScript + Vite
 
+## Docker 백엔드 개발 환경
+
+Ubuntu 24.04 서버에서 MariaDB, Hono/Node.js, React/Nginx를 함께 실행합니다.
+Mac에서 수정한 소스를 Git으로 전달하고 서버에서 이미지를 빌드합니다.
+프론트엔드는 루트에 유지하며 `backend/`는 독립 npm 패키지입니다.
+업무 API, 로그인, 실제 문의 저장은 아직 구현하지 않았습니다.
+
+| 구성 | 역할 | 호스트 공개 포트 |
+| --- | --- | --- |
+| Nginx | `/mrs2.0/` 화면과 `/api/` 프록시 | `127.0.0.1:8080`만 |
+| Hono / Node.js 24 | 상태 API, Knex/mysql2 연결 풀 | 없음 |
+| MariaDB 11.8 | `b2b_mall`, `b2b_app` 전용 계정 | 없음 |
+
+DB는 별도의 내부 네트워크에 있으며 Nginx에서 직접 접근할 수 없습니다.
+비밀번호는 루트 `.env`에서만 관리하고 backend에는 앱 계정 비밀번호만 전달합니다.
+이미지는 다중 아키텍처 다이제스트, npm 의존성은 lockfile로 고정했습니다.
+보안 업데이트 적용 시 이미지 다이제스트도 검토하고 갱신해야 합니다.
+
+### 서버 최초 실행
+
+아래 작업은 SSH로 접속한 **Ubuntu 서버**에서 실행합니다. 먼저 확인합니다.
+
+```sh
+uname -m
+docker version
+docker compose version
+ss -ltn '( sport = :8080 )'
+```
+
+Docker 데몬 접근 권한과 Git 저장소 접근 권한이 필요합니다. Docker 권한 오류는
+서버 관리자가 처리해야 하며, Docker 소켓을 누구나 쓰도록 권한을 변경하지 마세요.
+현재 이미지는 `amd64`와 `arm64`를 지원합니다. 8080이 사용 중이면 아래 `HTTP_PORT`를 변경합니다.
+
+```sh
+git clone <저장소_URL> MRS
+cd MRS
+umask 077
+cp .env.example .env
+chmod 600 .env
+```
+
+`.env`의 `DB_ROOT_PASSWORD`와 `DB_PASSWORD`에 서로 다른 긴 임의 값을 설정하세요.
+각 값은 `openssl rand -hex 32`로 생성할 수 있습니다. 값은 서버 터미널에서만 취급하고
+채팅, Git, 로그에 공유하지 마세요. 파일에 값을 넣은 뒤 다음을 실행합니다.
+빈 비밀번호는 Compose가 거부합니다. 실제 `.env`는 Git 및 이미지 빌드에서 제외됩니다.
+
+```sh
+docker compose config --quiet
+docker compose build
+docker compose up -d --wait db
+docker compose run --rm --no-deps backend npm run db:migrate
+docker compose up -d --wait
+docker compose ps
+curl --fail http://127.0.0.1:8080/api/health/ready
+```
+
+최초 마이그레이션은 Knex 이력 테이블만 초기화하며 업무 테이블이나 샘플 데이터를 만들지 않습니다.
+상태 API는 `/api/health/live`가 프로세스 생존을, `/api/health/ready`가 실제 `SELECT 1`
+성공 여부를 확인합니다. DB 장애나 제한 시간 초과 시 readiness는 `503`을 반환합니다.
+DB 복구 후에는 같은 연결 풀에서 자동으로 재연결합니다. Docker의 unhealthy 상태 자체는
+컨테이너 재시작을 유발하지 않습니다. 프로세스가 종료됐을 때 restart 정책이 적용됩니다.
+
+### Mac에서 접속
+
+Mac의 별도 터미널에서 아래 SSH 터널을 열고 유지합니다.
+
+```sh
+ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
+  -L 127.0.0.1:8080:127.0.0.1:8080 <SSH_사용자>@<서버_주소>
+```
+
+- 화면: http://localhost:8080/mrs2.0/
+- 준비 상태: http://localhost:8080/api/health/ready
+- 데모 관리자: http://localhost:8080/mrs2.0/#/admin/dashboard
+
+Mac의 8080이 사용 중이면 `-L 127.0.0.1:8081:127.0.0.1:8080`으로 바꾸고
+브라우저에서는 8081로 접속합니다. 서버의 `HTTP_PORT`를 바꿨다면 마지막 포트도 맞춰주세요.
+80, 443, 3000, 3306의 방화벽 개방은 필요하지 않습니다. 서버 공인 IP로는 화면에 접근할 수 없습니다.
+서버의 다른 로컬 사용자도 루프백 주소에 접근할 수 있으므로 신뢰하는 서버에서만 사용하세요.
+
+### Mac 개발 및 재배포
+
+Node.js 24 LTS를 권장합니다. 프론트엔드와 백엔드 의존성은 별도로 설치합니다.
+
+```sh
+npm ci
+npm --prefix backend ci
+npm --prefix backend run typecheck
+npm --prefix backend test
+npm --prefix backend run build
+npx tsc -b
+npx oxlint src backend/src backend/test backend/knexfile.ts
+```
+
+상태 API 단위 테스트는 DB 없이 실행됩니다. 전체 환경은 Mac에서도 Docker와 루트 `.env`를
+사용해 위 최초 실행 절차로 검증할 수 있으며, 이때는 SSH 터널 없이 루프백 주소로 접근합니다.
+호스트에서 실행하는 `npm --prefix backend run dev`는 별도로 접근 가능한 DB 환경변수를
+주입해야 합니다. 기본 구성은 DB를 호스트에 공개하지 않으므로 컨테이너 빌드로 통합 검증합니다.
+
+새 마이그레이션은 루트 `.env`에 앱 비밀번호를 설정한 뒤 아래처럼 생성합니다.
+생성 시 DB 연결은 하지 않습니다. 생성된 TypeScript의 `up`/`down`을 작성한 후 빌드해야 합니다.
+
+```sh
+DB_HOST=db DB_NAME=b2b_mall DB_USER=b2b_app \
+  npm --prefix backend run db:make -- 변경_설명
+```
+
+소스를 커밋·푸시한 뒤 **서버의 같은 저장소 디렉터리**에서 재배포합니다.
+
+```sh
+git pull --ff-only
+docker compose build
+docker compose up -d --wait db
+docker compose run --rm --no-deps backend npm run db:migrate
+docker compose up -d --wait
+curl --fail http://127.0.0.1:8080/api/health/ready
+```
+
+실패한 단계가 있으면 다음 단계로 진행하지 말고 원인을 확인하세요. 향후 스키마 변경은
+기존 실행 중인 버전과 호환되도록 작성해야 합니다. 파괴적 스키마 변경, 자동 롤백, 무중단 배포는
+현재 구성 범위가 아닙니다. 이미 실행된 마이그레이션 파일은 수정하지 마세요.
+
+### 진단과 데이터 보존
+
+```sh
+docker compose ps
+docker compose logs --tail=100 backend db frontend
+docker compose exec frontend nginx -t
+docker compose down
+docker compose up -d --wait
+```
+
+`docker compose down`은 컨테이너만 제거하며 `db-data` 볼륨의 데이터는 보존합니다.
+**`docker compose down -v`와 볼륨 삭제 명령은 DB를 삭제하므로 사용하지 마세요.**
+Compose 프로젝트 이름을 바꾸면 별도 볼륨이 생성되므로 서버에서는 프로젝트 이름을 유지하세요.
+DB 초기화 후 `.env`의 비밀번호만 바꿔도 기존 DB 계정은 바뀌지 않습니다.
+비밀번호 변경은 DB 사용자 변경 절차와 앱 설정 갱신을 함께 수행해야 합니다.
+
+볼륨은 백업이 아닙니다. 중요 데이터를 넣기 전 백업·복구 절차를 마련하세요.
+아래 예시는 DB 외부 공개 없이 서버의 저장소 밖에 논리 백업을 만듭니다.
+
+```sh
+umask 077
+mkdir -p "$HOME/mrs-backups"
+docker compose exec -T db sh -c \
+  'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb-dump -uroot --single-transaction --routines --events --triggers b2b_mall' \
+  > "$HOME/mrs-backups/b2b_mall-$(date +%Y%m%d-%H%M%S).sql"
+```
+
+명령 종료 성공 여부를 확인하고 별도 환경에서 복구 테스트를 수행하세요. 백업에는 민감한
+데이터가 포함될 수 있으므로 접근 제한과 암호화된 별도 보관이 필요합니다.
+확장된 `docker compose config`나 `docker inspect` 출력은 비밀번호를 포함할 수 있습니다.
+설정 확인에는 `docker compose config --quiet`를 사용하고 진단 출력은 공유 전 검토하세요.
+
+현재 화면은 인증·권한 없는 데모입니다. 실제 고객 데이터나 공개 서비스에는 사용하지 마세요.
+운영 전환 시 인증·권한, HTTPS, 계정별 DB 최소 권한, 비밀 관리, 자동 백업과 모니터링이 필요합니다.
+
 ## Administrator Prototype
 
 Open `/mrs2.0/#/admin/dashboard` (Vite base path), or use the administrator link in the homepage footer or customer sidebar. The header links back to the customer portal. Hash routes support direct entry, reload, history navigation, tabs, filters, and record detail links without server rewrites. Customer anchors such as `#services` remain unchanged.
