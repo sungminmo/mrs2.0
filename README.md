@@ -1,5 +1,26 @@
 # React + TypeScript + Vite
 
+## Administrator Prototype
+
+Open `/mrs2.0/#/admin/dashboard` (Vite base path), or use the administrator link in the homepage footer or customer sidebar. The header links back to the customer portal. Hash routes support direct entry, reload, history navigation, tabs, filters, and record detail links without server rewrites. Customer anchors such as `#services` remain unchanged.
+
+This is an independent, read-only prototype with fictional data as of September 14, 2026 (KST). There is no login, role policy, authorization, storage, approval, email delivery, billing execution, or customer-data synchronization. Never deploy actual customer or financial data into this unprotected prototype. Switching portals unmounts the previous portal; customer in-memory edits can reset.
+
+Menus: dashboard; receiving requests and schedules; inspections and disposal; inventory and locations; sales requests, products, purchase quotes and campaigns; storage invoices, payouts and disposal invoices; customers, sites and inquiries; reference categories, grades, units, rates and policies.
+
+### Data Relationships
+
+- [src/admin/adminData.ts](src/admin/adminData.ts): independent typed seed entities, numeric quantities/money, ISO timestamps, explicit status unions and reference IDs.
+- Customer → site → receiving request → inspection → inventory → location. Vehicle-based receiving estimates are not converted into inventory quantities.
+- Inventory → sale request/product → purchase quote lines. Quote lines retain product-name and price snapshots. Requested total sale value and product unit price are distinct.
+- Invoices reference customers and optionally receipts or locations; historical payout examples do not deduct current inventory. Inquiries link customers to receiving requests, inspections or purchase quotes.
+- [src/admin/adminViews.ts](src/admin/adminViews.ts): list/detail projections, related-record links, menu definitions and dashboard counts from the same seed. Search, customer/status/month filters, sorting and pagination only affect views.
+- Inspection closure and physical disposal completion are separate. Three-day automatic closure is a reference policy, not an implemented scheduler. Unknown quantities and amounts remain `null`; they are not displayed as zero. Only issued invoices enter billing totals, excluding the 48,000 KRW disposal estimate.
+- Campaigns are category-based. Exposure uses the fixed example date, inclusive start and exclusive end. Location capacity and rate formulas are not established; no fictional utilization percentage or automatic fee calculation is shown.
+- Missing inspection photos/documents are shown as unregistered. Product reference photographs retain their original credits and are not disposal evidence.
+
+Source checks: `npx tsc -b` and `npx oxlint src`. The existing `npm run lint` also scans tracked `dist` bundles, which can produce generated-code warnings. `npm run build` updates the tracked deployment output but does not publish it.
+
 ## Inspection And Disposal Prototype
 
 - My Assets includes asset overview and receipt-level inspection/disposal views. Sample receipts in `src/disposals.ts` are separate historical snapshots and do not subtract from live inventory or appraisal values.

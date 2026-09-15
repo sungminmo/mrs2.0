@@ -22,7 +22,7 @@ export default function AdminShell({ navigation, search, children, className = '
     <aside className={`sa-sidebar ${menuOpen ? 'is-open' : ''}`}>
       <div className="sa-workspace"><span className="sa-workspace-icon"><Warehouse size={19} /></span><div><b>{isGuest ? '비회원 둘러보기' : '현대건설 워크스페이스'}</b><span>{isGuest ? '자재 마켓' : 'ECO 파트너'}</span></div></div>
       <nav aria-label="주 메뉴" onClick={() => setMenuOpen(false)}>{navigation}</nav>
-      <div className="sa-sidebar-bottom"><span className="sa-partner"><span />{isGuest ? '비회원 이용 중' : '파트너 계정 활성'}</span><button onClick={() => setShowHelp(!showHelp)} aria-expanded={showHelp}><CircleHelp size={17} />도움말 및 지원</button>{showHelp && <p>현재는 시제품으로 변경 내역은 새로고침 시 초기화됩니다. 실제 업무 처리는 담당 운영팀에 문의해 주세요.</p>}</div>
+      <div className="sa-sidebar-bottom"><span className="sa-partner"><span />{isGuest ? '비회원 이용 중' : '파트너 계정 활성'}</span><a href="#/admin/dashboard">관리자 시안</a><button onClick={() => setShowHelp(!showHelp)} aria-expanded={showHelp}><CircleHelp size={17} />도움말 및 지원</button>{showHelp && <p>현재는 시제품으로 변경 내역은 새로고침 시 초기화됩니다. 실제 업무 처리는 담당 운영팀에 문의해 주세요.</p>}</div>
     </aside>
     {menuOpen && <button className="sa-menu-backdrop" aria-label="메뉴 닫기" onClick={() => setMenuOpen(false)} />}
     {children}

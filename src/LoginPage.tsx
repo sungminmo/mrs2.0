@@ -131,6 +131,6 @@ export default function LoginPage({ onLogin, onBrowse }: { onLogin: () => void; 
           </article>
         </div>
       </div></section>
-    </main><footer className="login-footer">© 2026 MRS · Material Recycling Service <a href="https://commons.wikimedia.org/wiki/File:A_bunch_of_rebar_up_close.jpg" target="_blank" rel="noreferrer">사진: W.carter · CC BY-SA 4.0 (화면에 맞게 자름)</a></footer>
+    </main><footer className="login-footer">© 2026 MRS · Material Recycling Service <a href="#/admin/dashboard">관리자 시안</a><a href="https://commons.wikimedia.org/wiki/File:A_bunch_of_rebar_up_close.jpg" target="_blank" rel="noreferrer">사진: W.carter · CC BY-SA 4.0 (화면에 맞게 자름)</a></footer>
   </div>
 }
