@@ -1,12 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, Layers } from 'lucide-react'
 import PageBanner from './PageBanner'
+import { categoryEnabled, materialCategories } from './categories'
 
 type Campaign = { id: string; title: string; description: string; category: string; enabled: boolean; order: number; startsAt: string | null; endsAt: string | null }
 const campaigns: Campaign[] = [
-  { id: 'steel', title: '철강 자재 기획전', description: '철근부터 H빔까지. 다음 현장에 필요한 철강 자재를 품질 등급과 함께 비교하세요.', category: '철강 / 금속', enabled: true, order: 1, startsAt: null, endsAt: null },
-  { id: 'wood', title: '다시 쓰는 목재 기획전', description: '회수 목재의 새로운 쓰임. 필요한 수량과 납품 조건에 맞춰 견적을 요청하세요.', category: '목재 / 합판', enabled: true, order: 2, startsAt: null, endsAt: null },
-  { id: 'pipe', title: '현장을 잇는 배관 기획전', description: '배관 자재를 한곳에서 확인하고, 현장 규격에 맞는 공급 조건을 상담하세요.', category: '배관 / 파이프', enabled: true, order: 3, startsAt: null, endsAt: null },
+  { id: 'steel', title: '철강 자재 기획전', description: '철근부터 H빔까지. 다음 현장에 필요한 철강 자재를 품질 등급과 함께 비교하세요.', category: 'CAT-001', enabled: true, order: 1, startsAt: null, endsAt: null },
+  { id: 'wood', title: '다시 쓰는 목재 기획전', description: '회수 목재의 새로운 쓰임. 필요한 수량과 납품 조건에 맞춰 견적을 요청하세요.', category: 'CAT-007', enabled: true, order: 2, startsAt: null, endsAt: null },
+  { id: 'pipe', title: '현장을 잇는 배관 기획전', description: '배관 자재를 한곳에서 확인하고, 현장 규격에 맞는 공급 조건을 상담하세요.', category: 'CAT-010', enabled: true, order: 3, startsAt: null, endsAt: null },
 ]
 
 export default function MarketCampaigns({ onSelect, renderImage }: { onSelect: (category: string) => void; renderImage: (category: string) => ReactNode }) {
@@ -16,7 +17,7 @@ export default function MarketCampaigns({ onSelect, renderImage }: { onSelect: (
     const timer = window.setInterval(() => setNow(Date.now()), 30000)
     return () => window.clearInterval(timer)
   }, [])
-  const active = campaigns.filter((campaign) => campaign.enabled && (!campaign.startsAt || now >= Date.parse(campaign.startsAt)) && (!campaign.endsAt || now < Date.parse(campaign.endsAt))).sort((first, second) => first.order - second.order)
+  const active = campaigns.filter((campaign) => campaign.enabled && categoryEnabled(materialCategories, campaign.category) && (!campaign.startsAt || now >= Date.parse(campaign.startsAt)) && (!campaign.endsAt || now < Date.parse(campaign.endsAt))).sort((first, second) => first.order - second.order)
   const campaign = active.find((item) => item.id === selected) ?? active[0]
   if (!campaign) return null
   const index = active.findIndex((item) => item.id === campaign.id)

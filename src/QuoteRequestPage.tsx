@@ -46,7 +46,7 @@ export default function QuoteRequestPage({ items, onBack, backLabel }: { items: 
     <div className="sm-request-layout">
       <section className="sm-request-items" aria-label="견적 요청 상품">
         <div className="sa-section-title"><h2>요청 상품</h2><span>{items.length}종</span></div>
-        {items.map((item) => <div className="sm-request-item" key={item.name}><span className="sa-thumbnail">{item.image ? <img src={item.image} alt={item.name} onError={(event) => { event.currentTarget.hidden = true }} /> : <Box size={24} />}</span><div><h3>{item.name}</h3><p>{money(item.price)} / {item.unit}</p><span>{item.quantity.toLocaleString('ko-KR')} {item.unit}</span></div><strong>{money(item.price * item.quantity)}</strong></div>)}
+        {items.map((item) => <div className="sm-request-item" key={item.name}><span className="sa-thumbnail">{item.image ? <img src={item.image} alt={item.name} onError={(event) => { event.currentTarget.hidden = true }} /> : <Box size={24} />}</span><div><h3>{item.name}</h3><p>{item.category}</p><p>{money(item.price)} / {item.unit}</p><span>{item.quantity.toLocaleString('ko-KR')} {item.unit}</span></div><strong>{money(item.price * item.quantity)}</strong></div>)}
         <div className="sm-quote-total"><span>예상 자재 금액</span><strong>{money(total)}</strong></div>
         <p className="sa-form-note">배송비·부가세 별도 확인. 주문이나 결제는 진행되지 않습니다.</p>
       </section>

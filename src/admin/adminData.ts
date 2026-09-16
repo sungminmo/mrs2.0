@@ -7,10 +7,14 @@ type Site = { id: string; customerId: string; name: string; address: string; sta
 type Receiving = { id: string; siteId: string; date: string; volume: string; summary: string; status: '접수 대기' | '견적 안내' | '입고 예정' | '입고 완료' | '취소'; scheduledAt: string | null; termsAt: string; estimate: number | null; note: string }
 type Material = { assetId: string | null; name: string; grade: 'S' | 'A' | 'B' | 'F' | null; unit: string; received: number; usable: number | null; disposal: number | null; processed: number | null; reason: string }
 type Inspection = { id: string; receivingId: string; date: string; inspectedAt: string | null; notifiedAt: string | null; status: '검수 대기' | '결과 확인 대기' | '검수 종료'; acknowledgedAt: string | null; disposalStatus: '판정 대기' | '미처리' | '처리 예정' | '폐기 완료'; materials: Material[]; evidence: string | null }
-type Inventory = { id: string; receiptId: string; locationId: string; name: string; grade: 'S' | 'A' | 'B'; quantity: number; unit: string; appraisal: number; status: '보관 중' | '출고 대기'; saleStatus: '미등록' | '승인 대기' | '판매 중'; specification: string }
+export const itemUnits = ['EA', 'Box', 'kg', 'ton', 'm', 'm³', '본'] as const
+export type AdminImage = { id: string; name: string; url: string }
+export type MasterItem = { id: string; name: string; category: string; specification: string; brand: string; unit: typeof itemUnits[number]; inboundPrice: number | null; outboundPrice: number | null; standardPrice: number | null; enabled: boolean; note: string; images: AdminImage[] }
+export type AssetChange = { at: string; reason: string; changes: [string, string, string][] }
+export type Inventory = { id: string; itemId: string; receivingId: string; customerId: string; receiptId: string | null; locationId: string; name: string; category: string; brand: string; grade: 'S' | 'A' | 'B' | 'F'; quantity: number; unit: typeof itemUnits[number]; appraisal: number | null; status: '입고대기' | '보관중' | '출고완료'; saleStatus: '판매대기' | '판매중' | '판매완료'; specification: string; images: AdminImage[]; history: AssetChange[] }
 type Location = { id: string; name: string; zone: string; status: '사용 중' | '비어 있음'; rate: number | null }
 type SaleRequest = { id: string; assetId: string; date: string; quantity: number; desiredAmount: number; status: '승인 대기' | '승인 완료' | '보완 요청'; inspection: string }
-type Product = { id: string; assetId: string; name: string; category: string; price: number; unit: string; status: '판매 중' | '노출 중지' }
+type Product = { id: string; assetId: string; name: string; price: number; unit: string; status: '판매 중' | '노출 중지' }
 type Quote = { id: string; customerId: string; date: string; dueAt: string; status: '접수 대기' | '견적 회신' | '고객 승인' | '취소'; lines: { productId: string; name: string; quantity: number; unit: string; unitPrice: number | null }[]; address: string; note: string }
 type Campaign = { id: string; name: string; category: string; description: string; enabled: boolean; order: number; startsAt: string; endsAt: string }
 type Invoice = { id: string; customerId: string; type: '보관료' | '판매 정산' | '폐기 비용'; date: string; period: string; status: '미청구' | '청구 완료' | '수납 완료' | '정산 완료'; estimate: number | null; lines: { label: string; amount: number }[]; receiptId?: string; locationId?: string; quoteId?: string }
@@ -49,10 +53,16 @@ export const locations: Location[] = [
   { id: 'LOC-C07', name: 'C-07 야적장', zone: 'C구역', status: '사용 중', rate: null },
   { id: 'LOC-A04', name: 'A-04 창고', zone: 'A구역', status: '비어 있음', rate: null },
 ]
+export const masterItems: MasterItem[] = [
+  { id: 'ITM-000001', name: '콘크리트 블록', category: 'CAT-015', specification: '390 × 190 × 190 mm', brand: '', unit: 'EA', inboundPrice: null, outboundPrice: 850, standardPrice: 780, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
+  { id: 'ITM-000002', name: '회수 참나무 구조목', category: 'CAT-009', specification: '38 × 89 mm, 2.4 m', brand: '', unit: 'm³', inboundPrice: null, outboundPrice: 43500, standardPrice: 43500, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
+  { id: 'ITM-000003', name: '폴리에틸렌 파이프 DN100', category: 'CAT-012', specification: 'DN100, SDR17, 6 m', brand: '', unit: 'm', inboundPrice: null, outboundPrice: 3490, standardPrice: 3490, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
+  { id: 'ITM-000004', name: '알루미늄 프레임', category: 'CAT-006', specification: '40 × 40 mm', brand: '', unit: '본', inboundPrice: null, outboundPrice: null, standardPrice: null, enabled: false, note: '미사용 품목 예시', images: [] },
+]
 export const inventory: Inventory[] = [
-  { id: 'AST-001', receiptId: 'RCV-0908', locationId: 'LOC-B08', name: '콘크리트 블록', grade: 'B', quantity: 500, unit: '개', appraisal: 390000, status: '보관 중', saleStatus: '승인 대기', specification: '390 × 190 × 190 mm' },
-  { id: 'AST-002', receiptId: 'RCV-0902', locationId: 'LOC-A03', name: '회수 참나무 구조목', grade: 'S', quantity: 80, unit: 'm³', appraisal: 3480000, status: '보관 중', saleStatus: '판매 중', specification: '38 × 89 mm, 2.4 m' },
-  { id: 'AST-003', receiptId: 'RCV-0827', locationId: 'LOC-C07', name: '폴리에틸렌 파이프 DN100', grade: 'A', quantity: 200, unit: 'm', appraisal: 698000, status: '보관 중', saleStatus: '판매 중', specification: 'DN100, SDR17, 6 m' },
+  { id: 'AST-001', itemId: 'ITM-000001', receivingId: 'REQ-0907-01', customerId: 'CUS-001', receiptId: 'RCV-0908', locationId: 'LOC-B08', name: '콘크리트 블록', category: 'CAT-015', brand: '', grade: 'B', quantity: 500, unit: 'EA', appraisal: 390000, status: '보관중', saleStatus: '판매대기', specification: '390 × 190 × 190 mm', images: [], history: [] },
+  { id: 'AST-002', itemId: 'ITM-000002', receivingId: 'REQ-0901-01', customerId: 'CUS-002', receiptId: 'RCV-0902', locationId: 'LOC-A03', name: '회수 참나무 구조목', category: 'CAT-009', brand: '', grade: 'S', quantity: 80, unit: 'm³', appraisal: 3480000, status: '보관중', saleStatus: '판매중', specification: '38 × 89 mm, 2.4 m', images: [], history: [] },
+  { id: 'AST-003', itemId: 'ITM-000003', receivingId: 'REQ-0826-01', customerId: 'CUS-001', receiptId: 'RCV-0827', locationId: 'LOC-C07', name: '폴리에틸렌 파이프 DN100', category: 'CAT-012', brand: '', grade: 'A', quantity: 200, unit: 'm', appraisal: 698000, status: '보관중', saleStatus: '판매중', specification: 'DN100, SDR17, 6 m', images: [], history: [] },
 ]
 export const saleRequests: SaleRequest[] = [
   { id: 'SALE-001', assetId: 'AST-001', date: '2026-09-10T10:00:00+09:00', quantity: 500, desiredAmount: 425000, status: '승인 대기', inspection: '판매용 정밀 검수 대기' },
@@ -60,17 +70,17 @@ export const saleRequests: SaleRequest[] = [
   { id: 'SALE-003', assetId: 'AST-003', date: '2026-09-01T10:00:00+09:00', quantity: 200, desiredAmount: 760000, status: '승인 완료', inspection: '판매용 정밀 검수 완료 · A등급' },
 ]
 export const products: Product[] = [
-  { id: 'PRD-002', assetId: 'AST-002', name: '회수 참나무 구조목', category: '목재 / 합판', price: 43500, unit: 'm³', status: '판매 중' },
-  { id: 'PRD-003', assetId: 'AST-003', name: '폴리에틸렌 파이프 DN100', category: '배관 / 파이프', price: 3490, unit: 'm', status: '판매 중' },
+  { id: 'PRD-002', assetId: 'AST-002', name: '회수 참나무 구조목', price: 43500, unit: 'm³', status: '판매 중' },
+  { id: 'PRD-003', assetId: 'AST-003', name: '폴리에틸렌 파이프 DN100', price: 3490, unit: 'm', status: '판매 중' },
 ]
 export const quotes: Quote[] = [
   { id: 'QUO-0914', customerId: 'CUS-003', date: '2026-09-14T10:00:00+09:00', dueAt: '2026-09-21T09:00:00+09:00', status: '접수 대기', lines: [{ productId: 'PRD-002', name: '회수 참나무 구조목', quantity: 10, unit: 'm³', unitPrice: null }, { productId: 'PRD-003', name: '폴리에틸렌 파이프 DN100', quantity: 30, unit: 'm', unitPrice: null }], address: '경기 수원시 · 예시 납품지', note: '일괄 배송 및 운반비 확인 요청' },
   { id: 'QUO-0911', customerId: 'CUS-002', date: '2026-09-11T10:00:00+09:00', dueAt: '2026-09-18T09:00:00+09:00', status: '견적 회신', lines: [{ productId: 'PRD-003', name: '폴리에틸렌 파이프 DN100', quantity: 20, unit: 'm', unitPrice: 3490 }], address: '서울 성동구 · 예시 납품지', note: '자재 금액 69,800원 · 운반비 별도' },
 ]
 export const campaigns: Campaign[] = [
-  { id: 'CAM-001', name: '다시 쓰는 목재 기획전', category: '목재 / 합판', description: '규격과 등급별 회수 목재', enabled: true, order: 1, startsAt: '2026-09-01T00:00:00+09:00', endsAt: '2026-09-16T00:00:00+09:00' },
-  { id: 'CAM-002', name: '배관 자재 모음전', category: '배관 / 파이프', description: '현장 규격별 배관 자재', enabled: true, order: 2, startsAt: '2026-09-20T00:00:00+09:00', endsAt: '2026-10-01T00:00:00+09:00' },
-  { id: 'CAM-003', name: '철강 기획전', category: '철강 / 금속', description: '철강 자재 편성 준비', enabled: false, order: 3, startsAt: '2026-09-01T00:00:00+09:00', endsAt: '2026-10-01T00:00:00+09:00' },
+  { id: 'CAM-001', name: '다시 쓰는 목재 기획전', category: 'CAT-007', description: '규격과 등급별 회수 목재', enabled: true, order: 1, startsAt: '2026-09-01T00:00:00+09:00', endsAt: '2026-09-16T00:00:00+09:00' },
+  { id: 'CAM-002', name: '배관 자재 모음전', category: 'CAT-010', description: '현장 규격별 배관 자재', enabled: true, order: 2, startsAt: '2026-09-20T00:00:00+09:00', endsAt: '2026-10-01T00:00:00+09:00' },
+  { id: 'CAM-003', name: '철강 기획전', category: 'CAT-001', description: '철강 자재 편성 준비', enabled: false, order: 3, startsAt: '2026-09-01T00:00:00+09:00', endsAt: '2026-10-01T00:00:00+09:00' },
 ]
 export const invoices: Invoice[] = [
   { id: 'BILL-0801', customerId: 'CUS-001', type: '보관료', date: '2026-08-29T16:45:00+09:00', period: '2026-08', status: '수납 완료', estimate: null, lines: [{ label: 'C-07 야적장 보관료 · 8월분', amount: 45000 }], locationId: 'LOC-C07' },
