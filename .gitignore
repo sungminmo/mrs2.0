@@ -8,7 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-# dist
+dist/
 dist-ssr
 *.local
 **/.env
@@ -16,6 +16,11 @@ dist-ssr
 !**/.env.example
 /backend/dist/
 /backend/src/generated/
+
+# Frontend tests (local only)
+/tests/
+*.test.mjs
+*.test.js
 
 # Editor directories and files
 .vscode/*

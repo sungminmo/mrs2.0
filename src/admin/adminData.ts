@@ -13,10 +13,10 @@ export type MasterItem = { id: string; name: string; category: string; specifica
 export type AssetChange = { at: string; reason: string; changes: [string, string, string][] }
 export type Inventory = { id: string; itemId: string; receivingId: string; customerId: string; receiptId: string | null; locationId: string; name: string; category: string; brand: string; grade: 'S' | 'A' | 'B' | 'F'; quantity: number; unit: typeof itemUnits[number]; appraisal: number | null; status: '입고대기' | '보관중' | '출고완료'; saleStatus: '판매대기' | '판매중' | '판매완료'; specification: string; images: AdminImage[]; history: AssetChange[] }
 type Location = { id: string; name: string; zone: string; status: '사용 중' | '비어 있음'; rate: number | null }
-type SaleRequest = { id: string; assetId: string; date: string; quantity: number; desiredAmount: number; status: '승인 대기' | '승인 완료' | '보완 요청'; inspection: string }
-type Product = { id: string; assetId: string; name: string; price: number; unit: string; status: '판매 중' | '노출 중지' }
-type Quote = { id: string; customerId: string; date: string; dueAt: string; status: '접수 대기' | '견적 회신' | '고객 승인' | '취소'; lines: { productId: string; name: string; quantity: number; unit: string; unitPrice: number | null }[]; address: string; note: string }
-type Campaign = { id: string; name: string; category: string; description: string; enabled: boolean; order: number; startsAt: string; endsAt: string }
+export type SaleRequest = { id: string; assetId: string; date: string; quantity: number; desiredAmount: number; status: '승인 대기' | '승인 완료' | '반려'; inspection: string }
+export type Product = { id: string; assetId: string; name: string; price: number; unit: string; status: '판매대기' | '판매 중' | '재고 없음' }
+export type Quote = { id: string; customerId: string; date: string; dueAt: string; status: '접수 대기' | '견적 회신' | '출고 완료'; lines: { productId: string; name: string; quantity: number; unit: string; unitPrice: number | null }[]; address: string; note: string }
+export type Campaign = { id: string; name: string; category: string; description: string; enabled: boolean; order: number; startsAt: string; endsAt: string }
 type Invoice = { id: string; customerId: string; type: '보관료' | '판매 정산' | '폐기 비용'; date: string; period: string; status: '미청구' | '청구 완료' | '수납 완료' | '정산 완료'; estimate: number | null; lines: { label: string; amount: number }[]; receiptId?: string; locationId?: string; quoteId?: string }
 type Inquiry = { id: string; customerId: string; date: string; type: '서비스' | '입고' | '검수 이의' | '구매'; title: string; text: string; status: '미답변' | '확인 중' | '답변 완료'; answer: string | null; receiptId?: string; receivingId?: string; quoteId?: string }
 

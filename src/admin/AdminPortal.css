@@ -124,6 +124,16 @@
 .adm-category-columns li svg { flex-shrink: 0; }
 .adm-category-columns small { display: block; color: var(--adm-muted); font-size: 10px; margin-top: 5px; }
 .adm-category-form { max-width: 960px; }
+.adm-market-status { padding: 16px 0; margin-bottom: 16px; border-block: 1px solid var(--adm-border); }
+.adm-market-status form, .adm-status-confirm { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.adm-market-status label { display: grid; gap: 8px; min-width: 0; font-size: 12px; }
+.adm-market-status select { min-height: 44px; max-width: 100%; padding: 10px; border: 1px solid #bfc8c1; border-radius: 4px; background: #fdfefd; color: #28312c; }
+.adm-market-status form > strong { align-self: center; font-size: 12px; }
+.adm-status-confirm { margin-top: 16px; align-items: center; }
+.adm-status-confirm span { flex: 1 1 260px; line-height: 1.8; }
+.adm-row-check { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
+.adm-row-check input { width: 18px; height: 18px; accent-color: #285c42; }
+.adm-campaign-category { margin-top: 20px; }
 @media (max-width: 640px) { .adm-category-columns { grid-template-columns: minmax(0, 1fr); } .adm-category-columns > section { border-right: 0; border-bottom: 1px solid var(--adm-border); padding: 16px 0; } .adm-category-columns ul { max-height: 210px; } }
 @media (max-width: 640px) { .adm-edit-fields, .adm-price-fields { grid-template-columns: minmax(0, 1fr); } .adm-edit-form h2 small { display: block; margin-top: 6px; } }
 @media (max-width: 1200px) { .adm-dashboard-columns { grid-template-columns: 1fr; } .adm-fields { grid-template-columns: 1fr; } .adm-metrics { gap: 12px; } }

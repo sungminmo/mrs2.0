@@ -161,7 +161,7 @@ docker compose exec -T db sh -c \
 
 Open `/mrs2.0/#/admin/dashboard` (Vite base path), or use the administrator link in the homepage footer or customer sidebar. The header links back to the customer portal. Hash routes support direct entry, reload, history navigation, tabs, filters, and record detail links without server rewrites. Customer anchors such as `#services` remain unchanged.
 
-This is an independent prototype with fictional data as of September 14, 2026 (KST). Categories, master items and inventory support temporary in-memory editing; other menus remain read-only. There is no login, role policy, authorization, persistent storage, approval, email delivery, billing execution, or customer-data synchronization. Never deploy actual customer or financial data into this unprotected prototype. Reloading or switching portals unmounts the previous portal and resets its in-memory edits, images and history.
+This is an independent prototype with fictional data as of September 14, 2026 (KST). Categories, master items, inventory and market operations support temporary in-memory editing; other menus remain read-only. There is no login, role policy, authorization, persistent storage, real approval processing, email delivery, billing execution, or customer-data synchronization. Never deploy actual customer or financial data into this unprotected prototype. Reloading or switching portals unmounts the previous portal and resets its in-memory edits, images and history.
 
 Menus: dashboard; receiving requests and schedules; inspections and disposal; master item management; category management; asset management with inventory and locations; sales requests, products, purchase quotes and campaigns; storage invoices, payouts and disposal invoices; customers, sites and inquiries; reference grades, units, rates and policies.
 
@@ -187,13 +187,23 @@ Menus: dashboard; receiving requests and schedules; inspections and disposal; ma
 - Images: one representative item image, up to eight asset photos, JPG/PNG/WebP, up to 5 MB each. Files are decoded for validation and previewed locally; images can be replaced/removed. They are not uploaded to a server or persisted across reloads.
 - Lists support search, status filters, sorting and pagination; assets additionally filter by grade, sale status, item, location and customer. Detail/list navigation retains filter conditions. Barcode/QR rendering/scanning, ERP integration and server-side audit records are not implemented.
 
+### Market Operations
+
+- Sales requests (`#/admin/market?tab=sales`): change approval status to 승인 대기, 승인 완료 or 반려 in detail; use checkboxes and the bulk action on the list. Approval does not automatically create a product or start selling.
+- Products (`#/admin/market?tab=products`): individual and bulk changes support 판매대기, 판매 중, 재고 없음. 판매취소 is an action that stores 판매대기, not a fourth persisted state. Only 판매 중 products with active categories appear in campaign product previews.
+- Bulk selection covers the current page only and resets on search, filters, sort or page changes. A confirmation step shows the selected count and destination state. Cancel leaves all records unchanged.
+- Purchase quotes (`#/admin/market?tab=quotes`): detail supports 접수 대기, 견적 회신 and 출고 완료. Status changes do not send quotes, deduct inventory quantities, change asset statuses or execute settlement.
+- Campaigns (`#/admin/market?tab=campaigns`): add/edit title, description, category at any depth, KST start/end date and time, display order and exposure flag. Codes are automatically assigned and immutable. End must be later than start, order must be an integer from 0 to 9,999, and category/title/description are required. Inactive categories cannot be newly assigned or enabled; existing campaigns can be disabled while retaining their category.
+- Changes update admin lists, details, approval dashboard counts and related projections immediately. Customer banners remain independent; no backend persistence, publication or synchronization is performed. Exposure status still uses the fixed example reference date.
+- Policy tests: `node --test tests/adminMarket.test.mjs tests/categories.test.mjs`.
+
 ### Data Relationships
 
 - [src/admin/adminData.ts](src/admin/adminData.ts): independent typed seed entities, numeric quantities/money, ISO timestamps, explicit status unions and reference IDs.
 - Customer → site → receiving request → inspection → inventory → location. Vehicle-based receiving estimates are not converted into inventory quantities.
 - Inventory → sale request/product → purchase quote lines. Quote lines retain product-name and price snapshots. Requested total sale value and product unit price are distinct.
 - Invoices reference customers and optionally receipts or locations; historical payout examples do not deduct current inventory. Inquiries link customers to receiving requests, inspections or purchase quotes.
-- [src/admin/adminViews.ts](src/admin/adminViews.ts): list/detail projections and related-record links rebuilt from the current in-memory inventory and items; dashboard workflow counts remain based on independent seed records. Search, filters, sorting and pagination only affect views.
+- [src/admin/adminViews.ts](src/admin/adminViews.ts): list/detail projections and related-record links rebuilt from current in-memory categories, inventory, items and market records. Dashboard counts use the same live projections. Search, filters, sorting and pagination only affect views.
 - Inspection closure and physical disposal completion are separate. Three-day automatic closure is a reference policy, not an implemented scheduler. Unknown quantities and amounts remain `null`; they are not displayed as zero. Only issued invoices enter billing totals, excluding the 48,000 KRW disposal estimate.
 - Campaigns are category-based. Exposure uses the fixed example date, inclusive start and exclusive end. Location capacity and rate formulas are not established; no fictional utilization percentage or automatic fee calculation is shown.
 - Missing inspection photos/documents are shown as unregistered. Product reference photographs retain their original credits and are not disposal evidence.
@@ -211,7 +221,7 @@ Source checks: `npx tsc -b` and `npx oxlint src`. The existing `npm run lint` al
 
 ## Market Campaign Configuration
 
-Market banners are configured in the `campaigns` array in [src/MarketCampaigns.tsx](src/MarketCampaigns.tsx). There is no admin editor or backend persistence yet; configuration changes require deployment.
+Customer market banners are configured in the `campaigns` array in [src/MarketCampaigns.tsx](src/MarketCampaigns.tsx). The administrator campaign editor operates on separate temporary demo data; customer banner configuration still requires deployment and has no backend persistence.
 
 - Keep `id` unique and stable. Edit `title` and `description` for campaign copy.
 - Set `category` to an existing catalog category. The CTA clears search and offer filters, selects that category, and focuses the product list. Images use the existing category reference photos and credits.
