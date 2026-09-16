@@ -1,4 +1,9 @@
 .login-page { --home-ink: #26312c; --home-green: #245b40; --home-line: #dbe0dc; min-height: 100dvh; background: #f8f9f7; color: var(--home-ink); display: flex; flex-direction: column; }
+.login-page [data-scroll-reveal] { opacity: 0; transform: translateY(24px); transition: opacity 720ms cubic-bezier(.22, 1, .36, 1), transform 720ms cubic-bezier(.22, 1, .36, 1); will-change: opacity, transform; }
+.login-page [data-scroll-reveal].is-revealed { opacity: 1; transform: translateY(0); }
+.login-problem-grid [data-scroll-reveal]:nth-child(2), .login-solution-flow [data-scroll-reveal]:nth-child(2), .login-service-grid [data-scroll-reveal]:nth-child(2) { transition-delay: 140ms; }
+.login-problem-grid [data-scroll-reveal]:nth-child(3), .login-solution-flow [data-scroll-reveal]:nth-child(3), .login-service-grid [data-scroll-reveal]:nth-child(3) { transition-delay: 280ms; }
+@media (prefers-reduced-motion: reduce) { .login-page [data-scroll-reveal] { opacity: 1; transform: none; transition: none; } }
 .login-page button, .login-page input { font: inherit; }
 .login-page button { cursor: pointer; }
 .login-scroll-progress { position: fixed; inset: 0 0 auto; height: 4px; z-index: 100; background: #dbe0dc66; pointer-events: none; }
