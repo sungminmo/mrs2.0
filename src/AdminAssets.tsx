@@ -1,12 +1,13 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from 'react'
-import { ArrowDownToLine, ArrowRight, ArrowUpDown, Box, Check, ChevronDown, ClipboardCheck, Leaf, MapPin, PackagePlus, Search, ShoppingCart, SlidersHorizontal, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRight, ArrowUpDown, Box, Check, ClipboardCheck, Leaf, MapPin, PackagePlus, Search, ShoppingCart, SlidersHorizontal, Tag, TrendingDown, TrendingUp, Warehouse, X } from 'lucide-react'
 import type { Asset } from './App'
 import './AdminAssets.css'
 import AdminShell from './AdminShell'
 import ShopifyAssetDetail from './ShopifyAssetDetail'
 import MarketRegistrationConfirm from './MarketRegistrationConfirm'
 import { materialPhotos } from './assetPhotos'
+import { assetValueHistory, monthLabel } from './assetValueHistory'
 import PageBanner from './PageBanner'
 
 const amount = (value: string) => Number(value.replaceAll(',', ''))
@@ -49,12 +50,14 @@ function useAssetValueMotion(inventory: Asset[], showingDetail: boolean, onValue
         animations.push(animation)
       })
     }
-    reveal('.sa-overview-heading, .sa-metrics', 0)
-    reveal('.sa-distribution', 500)
-    reveal('.sa-stacked-bar', 500, 400, 0, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }])
-    reveal('.sa-recent .sa-section-title', 950)
-    reveal('.sa-recent > button', 1030, 260, 60)
-    reveal('.sa-attention', 1450, 240)
+    reveal('.sa-hero', 0)
+    reveal('.sa-stacked-bar', 450, 400, 0, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }])
+    reveal('.sa-trend-area', 450, 500, 0, [{ opacity: 0 }, { opacity: 1 }])
+    reveal('.sa-trend-line', 450, 600, 0, [{ strokeDashoffset: '1' }, { strokeDashoffset: '0' }])
+    reveal('.sa-hero-stats > div', 600, 260, 70)
+    reveal('.sa-metric', 800, 260, 80)
+    reveal('.sa-metric-bar > span', 900, 400, 80, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }])
+    reveal('.sa-bottom-grid > section', 1150, 260, 90)
     reveal('.sa-notice', 1450, 240, 0, [{ opacity: 0 }, { opacity: 1 }])
     const start = performance.now()
     const tick = (time: number) => {
@@ -81,6 +84,23 @@ function AssetImage({ asset }: { asset: Asset }) {
   return asset.image && !failed ? <img src={asset.image} alt={asset.name} loading="lazy" onError={() => setFailed(true)} /> : <Box size={24} aria-label="이미지 없음" />
 }
 
+function TrendChart({ points }: { points: { label: string; value: number }[] }) {
+  const width = 320, height = 112, top = 10, bottom = 6
+  const max = Math.max(...points.map((point) => point.value), 1)
+  const coords = points.map((point, index) => [points.length > 1 ? index / (points.length - 1) * width : width, height - bottom - point.value / max * (height - top - bottom)] as const)
+  const line = coords.map(([x, y], index) => `${index ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ')
+  const [lastX, lastY] = coords[coords.length - 1]
+  return <figure className="sa-trend">
+    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={`자산 가치 추이: ${points.map((point) => `${point.label} ${money(point.value)}`).join(', ')}`}>
+      <defs><linearGradient id="sa-trend-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#b7dfbd" stopOpacity=".45" /><stop offset="1" stopColor="#b7dfbd" stopOpacity="0" /></linearGradient></defs>
+      <path className="sa-trend-area" d={`${line} L${width} ${height} L0 ${height} Z`} fill="url(#sa-trend-fill)" />
+      <path className="sa-trend-line" d={line} pathLength={1} fill="none" stroke="#b7dfbd" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <circle className="sa-trend-point" cx={lastX} cy={lastY} r="4" fill="#fafafa" stroke="#29845a" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+    </svg>
+    <figcaption aria-hidden="true">{points.map((point) => <span key={point.label}>{point.label}</span>)}</figcaption>
+  </figure>
+}
+
 export default function AdminAssets({ assets: inventory, onAssetsChange: setInventory, navigation, onValuesObserved, inspectionActive, onInspectionView, inspectionContent, inspectionCount }: { assets: Asset[]; onAssetsChange: Dispatch<SetStateAction<Asset[]>>; navigation: ReactNode; onValuesObserved: ObserveAssetValues; inspectionActive: boolean; onInspectionView: (active: boolean) => void; inspectionContent: ReactNode; inspectionCount: number }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<string>('전체')
@@ -89,12 +109,22 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
   const [showFilters, setShowFilters] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
   const [detail, setDetail] = useState<Asset | null>(null)
+  const [assetListActive, setAssetListActive] = useState(false)
   const overview = useAssetValueMotion(inventory, detail !== null || inspectionActive, onValuesObserved)
   const [message, setMessage] = useState('')
   const [marketConfirmOpen, setMarketConfirmOpen] = useState(false)
   const addDialog = useRef<HTMLDialogElement>(null)
   const total = inventory.reduce((sum, asset) => sum + amount(asset.appraisalValue), 0)
   const pending = inventory.filter((asset) => asset.status === '대기 중')
+  const statusValue = (item: string) => inventory.reduce((sum, asset) => sum + (asset.status === item ? amount(asset.appraisalValue) : 0), 0)
+  const saleTotal = inventory.reduce((sum, asset) => sum + amount(asset.salePrice), 0)
+  const expectedGain = saleTotal - total
+  const previousMonth = assetValueHistory[assetValueHistory.length - 1].value
+  const monthChange = total - previousMonth
+  const trend = [...assetValueHistory.map((point) => ({ label: monthLabel(point.month), value: point.value })), { label: '현재', value: total }]
+  const locationRows = [...new Set(inventory.map((asset) => asset.location))].map((place) => { const rows = inventory.filter((asset) => asset.location === place); return { place, count: rows.length, value: rows.reduce((sum, asset) => sum + amount(asset.appraisalValue), 0) } }).sort((first, second) => second.value - first.value)
+  const averageStorage = inventory.length ? Math.round(inventory.reduce((sum, asset) => sum + (parseInt(asset.storageDays) || 0), 0) / inventory.length) : 0
+  const topAsset = [...inventory].sort((first, second) => amount(second.appraisalValue) - amount(first.appraisalValue))[0]
   const visible = inventory.filter((asset) =>
     (status === '전체' || asset.status === status) &&
     (location === '전체 위치' || asset.location === location) &&
@@ -105,6 +135,7 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
   const toggleSelection = (code: string) => setSelected((current) => current.includes(code) ? current.filter((item) => item !== code) : [...current, code])
   const clearFilters = () => { setQuery(''); setStatus('전체'); setLocation('전체 위치') }
   const openDetail = (asset: Asset) => setDetail(asset)
+  const openList = (item: string) => { clearFilters(); setStatus(item); setAssetListActive(true) }
 
   const canRegisterMarket = selectedVisible.length > 0 && selectedVisible.every((asset) => asset.status === '보관 중')
 
@@ -171,23 +202,45 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
     <main ref={overview} className="sa-main sa-assets-main">
       {detail ? <ShopifyAssetDetail key={detail.code} asset={inventory[detailIndex]} previous={inventory[detailIndex - 1]} next={inventory[detailIndex + 1]} onBack={() => setDetail(null)} onNavigate={setDetail} onSave={(updated) => setInventory((current) => current.map((asset) => asset.code === updated.code ? updated : asset))} /> : <>
       <div className="sa-heading"><div><div className="sa-breadcrumb">워크스페이스 <span>/</span> 자산</div><h1>내 자산 <span>{inventory.length}</span></h1></div>{!inspectionActive && <div className="sa-heading-actions"><button className="sa-button" onClick={exportAssets} disabled={!visible.length}><ArrowDownToLine size={15} />내보내기</button><button className="sa-button sa-primary" onClick={() => addDialog.current?.showModal()}><PackagePlus size={16} />자산 등록</button></div>}</div>
-      <div className="inspection-tabs" role="group" aria-label="내 자산 보기"><button className="sa-button" aria-pressed={!inspectionActive} onClick={() => onInspectionView(false)}>자산 현황</button><button className="sa-button" aria-pressed={inspectionActive} onClick={() => onInspectionView(true)}>검수·폐기 내역</button></div>
+      <div className="inspection-tabs" role="group" aria-label="내 자산 보기"><button className="sa-button" aria-pressed={!inspectionActive && !assetListActive} onClick={() => { setAssetListActive(false); onInspectionView(false) }}>자산 현황</button><button className="sa-button" aria-pressed={assetListActive} onClick={() => { setAssetListActive(true); onInspectionView(false) }}>자산 목록</button><button className="sa-button" aria-pressed={inspectionActive} onClick={() => { setAssetListActive(false); onInspectionView(true) }}>검수·폐기 내역</button></div>
       {inspectionActive ? inspectionContent : <>
-      <div className="sa-overview-heading"><span><span className="sa-live-dot" />전체 자산 현황</span><span>입고 자산 기준 · KRW</span></div>
-      <section className="sa-metrics" aria-label="자산 요약">
-        {statuses.map((item) => {
-          const rows = item === '전체' ? inventory : inventory.filter((asset) => asset.status === item)
-          const value = rows.reduce((sum, asset) => sum + amount(asset.appraisalValue), 0)
-          return <button key={item} className={`sa-metric ${status === item ? 'is-active' : ''}`} onClick={() => setStatus(item)} aria-pressed={status === item}><span className="sa-metric-label">{item === '전체' ? '총 자산 가치' : item}<ChevronDown size={13} /></span><strong aria-label={money(value)}><span aria-hidden="true" data-asset-value={value}>{money(value)}</span></strong><span className="sa-metric-caption"><span className={`sa-dot ${statusClass(item)}`} />{item === '전체' ? `입고 자산 ${rows.length}건` : `${rows.length}건 · 전체 가치의 ${total ? Math.round(value / total * 100) : 0}%`}</span></button>
+      {!assetListActive && <>
+      <section className="sa-hero" aria-label="나의 자산 가치">
+        <div className="sa-hero-value">
+          <span className="sa-hero-label"><span className="sa-live-dot" />나의 총 자산 가치<small>입고 자산 평가 기준 · KRW</small></span>
+          <strong aria-label={money(total)}><span aria-hidden="true" data-asset-value={total}>{money(total)}</span></strong>
+          <div className="sa-hero-change"><span className={monthChange < 0 ? 'is-down' : 'is-up'}>{monthChange < 0 ? <TrendingDown size={14} /> : <TrendingUp size={14} />}{monthChange < 0 ? '-' : '+'}{money(Math.abs(monthChange))} ({previousMonth ? `${monthChange < 0 ? '' : '+'}${(monthChange / previousMonth * 100).toFixed(1)}%` : '—'})</span><span>전월 대비 · 입고 자산 {inventory.length}건 · 보관 위치 {locationRows.length}곳</span></div>
+          <div className="sa-stacked-bar" role="img" aria-label={statuses.slice(1).map((item) => `${item} ${money(statusValue(item))}`).join(', ')}>{statuses.slice(1).map((item) => <span key={item} className={statusClass(item)} style={{ width: `${total ? statusValue(item) / total * 100 : 0}%` }} />)}</div>
+          <div className="sa-hero-legend">{statuses.slice(1).map((item) => <span key={item}><i className={`sa-dot ${statusClass(item)}`} />{item} {total ? Math.round(statusValue(item) / total * 100) : 0}%</span>)}</div>
+        </div>
+        <div className="sa-hero-trend"><div className="sa-hero-trend-title"><span>자산 가치 추이</span><span>최근 6개월 · 월말 기준</span></div><TrendChart points={trend} /></div>
+        <div className="sa-hero-stats">
+          <div><span><Tag size={13} />판매 예정가 합계</span><b>{money(saleTotal)}</b><small>등록 판매가 기준</small></div>
+          <div><span><TrendingUp size={13} />평가 대비 기대 차익</span><b className={expectedGain < 0 ? 'is-down' : 'is-up'}>{expectedGain < 0 ? '-' : '+'}{money(Math.abs(expectedGain))}</b><small>{total ? `${expectedGain < 0 ? '' : '+'}${(expectedGain / total * 100).toFixed(1)}%` : '—'} · 판매 완료 시</small></div>
+          <div><span><Warehouse size={13} />평균 보관 기간</span><b>{averageStorage}일</b><small>{locationRows.length}개 보관 위치 운영</small></div>
+          <div><span><Box size={13} />최고 가치 자산</span><b>{topAsset ? money(amount(topAsset.appraisalValue)) : '—'}</b><small>{topAsset ? topAsset.name : '등록된 자산이 없습니다'}</small></div>
+        </div>
+      </section>
+      <section className="sa-metrics" aria-label="상태별 자산 가치">
+        {statuses.slice(1).map((item) => {
+          const rows = inventory.filter((asset) => asset.status === item)
+          const value = statusValue(item)
+          const share = total ? Math.round(value / total * 100) : 0
+          return <button key={item} className={`sa-metric ${statusClass(item)}`} onClick={() => openList(item)}><span className="sa-metric-label"><span className={`sa-dot ${statusClass(item)}`} />{item}<ArrowRight size={13} /></span><strong aria-label={money(value)}><span aria-hidden="true" data-asset-value={value}>{money(value)}</span></strong><span className="sa-metric-caption">{rows.length}건 · 전체 가치의 {share}%</span><span className="sa-metric-bar" aria-hidden="true"><span style={{ width: `${share}%` }} /></span></button>
         })}
       </section>
       <div className="sa-bottom-grid">
-        <section className="sa-distribution"><div className="sa-section-title"><h2>자산 가치 구성</h2><span>상태별 평가 가치</span></div><div className="sa-stacked-bar" role="img" aria-label={statuses.slice(1).map((item) => `${item} ${money(inventory.filter((asset) => asset.status === item).reduce((sum, asset) => sum + amount(asset.appraisalValue), 0))}`).join(', ')}>{statuses.slice(1).map((item) => <span key={item} className={statusClass(item)} style={{ width: `${total ? inventory.filter((asset) => asset.status === item).reduce((sum, asset) => sum + amount(asset.appraisalValue), 0) / total * 100 : 0}%` }} />)}</div><div className="sa-distribution-legend">{statuses.slice(1).map((item) => <div key={item}><span><i className={`sa-dot ${statusClass(item)}`} />{item}</span><b>{money(inventory.filter((asset) => asset.status === item).reduce((sum, asset) => sum + amount(asset.appraisalValue), 0))}</b></div>)}</div></section>
-        <section className="sa-recent"><div className="sa-section-title"><h2>최근 입고</h2><span>최근 3건</span></div>{[...inventory].sort((first, second) => second.receivedAt.localeCompare(first.receivedAt)).slice(0, 3).map((asset) => <button key={asset.code} onClick={() => openDetail(asset)}><span className="sa-recent-icon"><PackagePlus size={16} /></span><span><b>{asset.name}</b><small>{asset.location} · {asset.quantity} {asset.unit}</small></span><time>{asset.receivedAt.slice(5)}</time></button>)}</section>
+        <section className="sa-recent"><div className="sa-section-title"><h2>최근 입고</h2><button className="sa-text-button" onClick={() => openList('전체')}>전체 보기<ArrowRight size={12} /></button></div>{[...inventory].sort((first, second) => second.receivedAt.localeCompare(first.receivedAt)).slice(0, 4).map((asset) => <button key={asset.code} onClick={() => openDetail(asset)}><span className="sa-thumbnail"><AssetImage asset={asset} /></span><span><b>{asset.name}</b><small>{asset.location} · {number(Number(asset.quantity))} {asset.unit}</small></span><span className="sa-recent-meta"><b>{money(amount(asset.appraisalValue))}</b><time>{asset.receivedAt.slice(5)}</time></span></button>)}</section>
+        <section className="sa-locations"><div className="sa-section-title"><h2>보관 위치별 가치</h2><span>{locationRows.length}곳</span></div>{locationRows.map((row) => <div key={row.place}><span className="sa-location-head"><span><MapPin size={13} />{row.place}</span><b>{money(row.value)}</b></span><span className="sa-location-bar" aria-hidden="true"><span style={{ width: `${total ? row.value / total * 100 : 0}%` }} /></span><small>{row.count}건 · 전체의 {total ? Math.round(row.value / total * 100) : 0}%</small></div>)}</section>
+        <section className="sa-todo" aria-label="확인이 필요한 항목"><div className="sa-section-title"><h2>확인이 필요한 항목</h2><span>{pending.length + (inspectionCount > 0 ? 1 : 0)}건</span></div>
+          {pending.length > 0 && <button onClick={() => openList('대기 중')}><span className="sa-todo-icon pending"><ClipboardCheck size={16} /></span><span><b>검수 대기 자산 {pending.length}건</b><small>입고 정보를 확인하고 다음 단계를 진행해 주세요.</small></span><ArrowRight size={15} /></button>}
+          {inspectionCount > 0 && <button onClick={() => onInspectionView(true)}><span className="sa-todo-icon"><ClipboardCheck size={16} /></span><span><b>1차 검수 결과 도착 · 폐기 대상 포함</b><small>고객 확인 대기 {inspectionCount}건 · 예시</small></span><ArrowRight size={15} /></button>}
+          {pending.length === 0 && inspectionCount === 0 && <p className="sa-todo-empty"><Check size={15} />모든 자산이 정상 처리되었습니다.</p>}
+        </section>
       </div>
-      {pending.length > 0 && <div className="sa-attention" aria-label="검수 알림"><span className="sa-attention-icon"><ClipboardCheck size={19} /></span><div><b>검수 대기 자산 {pending.length}건</b><span>입고 정보를 확인하고 다음 단계를 진행해 주세요.</span></div><button onClick={() => { clearFilters(); setStatus('대기 중') }}>자산 확인<ArrowRight size={15} /></button></div>}
-      {inspectionCount > 0 && <div className="sa-attention" aria-label="1차 검수 결과 알림"><ClipboardCheck size={19} /><div><b>1차 검수 결과 도착 · 폐기 대상 포함</b><span>고객 확인 대기 {inspectionCount}건 · 예시</span></div><button onClick={() => onInspectionView(true)}>검수 결과 보기<ArrowRight size={15} /></button></div>}
       <PageBanner label="MRS · Material Recycling Service" title="남은 자재의 가치, MRS에서 이어집니다" description="보관에서 재유통까지. MRS는 현장의 잉여 자재를 관리하고 필요한 수요처와 연결하는 건설자재 보관·거래 플랫폼입니다." action="MRS소개서 다운받기" href="/MRS-service-guide.txt" download="MRS-서비스소개서.txt" icon={<Leaf size={17} />} />
+      </>}
+      {assetListActive &&
       <section className="sa-inventory" aria-label="자산 목록">
         <div className="sa-table-toolbar"><div className="sa-tabs" aria-label="자산 상태">{statuses.map((item) => <button key={item} aria-pressed={status === item} onClick={() => setStatus(item)}>{item}<span>{item === '전체' ? inventory.length : inventory.filter((asset) => asset.status === item).length}</span></button>)}</div><div className="sa-table-controls"><button className={`sa-icon ${showFilters ? 'is-active' : ''}`} title="보관 위치 필터" aria-label="보관 위치 필터" aria-expanded={showFilters} onClick={() => setShowFilters(!showFilters)}><SlidersHorizontal size={16} /></button><label className="sa-sort"><ArrowUpDown size={14} /><select aria-label="자산 정렬" value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">최근 입고순</option><option value="value">평가 가치순</option><option value="name">자산명순</option></select></label></div></div>
         {showFilters && <div className="sa-filter-row"><MapPin size={15} /><label>보관 위치<select aria-label="보관 위치 필터 선택" value={location} onChange={(event) => setLocation(event.target.value)}>{['전체 위치', ...new Set(inventory.map((asset) => asset.location))].map((item) => <option key={item}>{item}</option>)}</select></label><button className="sa-text-button" onClick={clearFilters}>필터 초기화</button></div>}
@@ -196,6 +249,7 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
         {visible.length === 0 && <div className="sa-empty"><Search size={26} /><h2>일치하는 자산이 없습니다</h2><button className="sa-button" onClick={clearFilters}>필터 초기화</button></div>}
         <div className="sa-table-footer"><span>총 {inventory.length}건 중 {visible.length}건 표시</span><span>평가 가치 합계 <b>{money(visible.reduce((sum, asset) => sum + amount(asset.appraisalValue), 0))}</b></span></div>
       </section>
+      }
       </>}
       </>}
       <footer className="sa-page-footer"><span><Leaf size={15} />자재의 다음 가치를 연결합니다.</span></footer>
