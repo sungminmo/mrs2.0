@@ -11,6 +11,7 @@ const valueMetrics = [
 
 function ScrollProgress() {
   const bar = useRef<HTMLDivElement>(null)
+  const progressContainer = useRef<HTMLDivElement>(null)
   useEffect(() => {
     let frame = 0
     const update = () => {
@@ -21,6 +22,7 @@ function ScrollProgress() {
         bar.current.style.transform = `scaleX(${progress})`
         bar.current.parentElement?.setAttribute('aria-valuenow', String(Math.round(progress * 100)))
       }
+      progressContainer.current?.classList.toggle('is-visible', window.scrollY > 0)
     }
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update) }
     const observer = new ResizeObserver(schedule)
@@ -35,7 +37,7 @@ function ScrollProgress() {
       window.removeEventListener('resize', schedule)
     }
   }, [])
-  return <div className="login-scroll-progress" role="progressbar" aria-label="페이지 스크롤 진행률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}><div ref={bar} /></div>
+  return <div ref={progressContainer} className="login-scroll-progress" role="progressbar" aria-label="페이지 스크롤 진행률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}><div ref={bar} /></div>
 }
 
 function MaterialValueGrid() {
@@ -101,7 +103,7 @@ export default function LoginPage({ onLogin, onBrowse }: { onLogin: () => void; 
   const closeLogin = () => loginDialog.current?.close()
   return <div ref={page} className="login-page">
     <ScrollProgress />
-    <header className="login-header"><a href="#" aria-label="MRS 홈"><Leaf size={24} />MRS <span>Material Recycling Service</span></a><nav aria-label="홈페이지 메뉴"><a href="#services">서비스 소개</a><button onClick={openLogin} aria-haspopup="dialog">로그인<ArrowRight size={15} /></button></nav></header>
+    <header className="login-header"><a href="#" aria-label="MRS 홈"><Leaf size={24} />MRS <span>Material Recycling Service</span></a><nav aria-label="홈페이지 메뉴"><a className="login-header-phone" href="tel:0312981191"><Phone size={15} />031-298-1191</a><a className="login-header-contact" href="#/contact"><MessageSquare size={15} />서비스 사용 문의</a><button onClick={openLogin} aria-haspopup="dialog">로그인<ArrowRight size={15} /></button></nav></header>
     <main className="login-main">
       <section className="login-hero" aria-labelledby="home-title"><img className="login-hero-image" src="https://thumb.wikimedia.org/wikipedia/commons/thumb/5/59/A_bunch_of_rebar_up_close.jpg/1280px-A_bunch_of_rebar_up_close.jpg" alt="보관 중인 건설용 철근 자재" fetchPriority="high" /><div className="login-hero-inner"><span className="login-eyebrow">보관에서 거래까지, 자재의 새로운 순환</span><h1 id="home-title">MRS<span>건설자재 보관·거래 플랫폼</span></h1><p>현장에 남은 자재를 보관하고, 필요한 곳으로 연결합니다.<br />입고부터 판매와 정산까지 한곳에서 관리하세요.</p><div className="login-hero-actions"><button className="login-primary" onClick={onBrowse}>마켓 둘러보기<ArrowRight size={18} /></button><button className="login-hero-login" onClick={openLogin} aria-haspopup="dialog">로그인<LogIn size={17} /></button></div><a className="login-hero-more" href="#services">MRS 제공 서비스<ArrowDown size={16} /></a></div></section>
       <section id="material-challenges" className="login-problem-section" aria-labelledby="problem-title"><div className="login-problem-inner">
@@ -136,7 +138,7 @@ export default function LoginPage({ onLogin, onBrowse }: { onLogin: () => void; 
         <h2 id="contact-title" data-scroll-reveal>우리 현장에 맞는 활용 방법,<br />함께 알아보세요</h2>
         <p className="login-contact-description" data-scroll-reveal>보관할 자재의 종류와 수량, 마켓 판매 계획, 서비스 도입 범위 등 궁금한 내용을 남겨 주세요.</p>
         <ul className="login-inquiry-topics" data-scroll-reveal><li>보관 가능한 자재와 입고 절차</li><li>마켓 등록 및 검수 진행 방식</li><li>보관 비용과 정산 기준</li><li>기업 단위 서비스 도입</li></ul>
-        <div className="login-contact-actions" data-scroll-reveal><a className="login-contact-cta login-contact-cta-primary" href="#/contact"><MessageSquare size={17} />서비스 사용 문의</a><a className="login-contact-cta" href="tel:0312981191"><Phone size={17} />031-298-1191</a></div>
+        <div className="login-contact-actions" data-scroll-reveal><a className="login-contact-cta" href="tel:0312981191"><Phone size={17} />031-298-1191</a><a className="login-contact-cta login-contact-cta-primary" href="#/contact"><MessageSquare size={17} />서비스 사용 문의</a></div>
       </div></section>
     </main><footer className="login-footer">© 2026 MRS · Material Recycling Service <a href="#/admin/dashboard">관리자 시안</a><a href="https://commons.wikimedia.org/wiki/File:A_bunch_of_rebar_up_close.jpg" target="_blank" rel="noreferrer">사진: W.carter · CC BY-SA 4.0 (화면에 맞게 자름)</a></footer>
   </div>
