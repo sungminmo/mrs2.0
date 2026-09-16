@@ -35,9 +35,9 @@
 .login-value-grid > div:first-child { padding-left: 0; }
 .login-value-grid > div:last-child { border-right: 0; }
 .login-value-grid dt { font-size: 12px; color: #526259; }
-.login-value-grid dd { margin: 14px 0; color: #254d38; font-size: 28px; font-weight: 700; line-height: 1.4; }
+.login-value-grid dd { margin: 14px 0; color: #254d38; font-size: 34px; font-weight: 800; line-height: 1.25; }
 .login-value-grid dd > span { display: flex; align-items: baseline; gap: 6px; }
-.login-value-grid dd small { font-size: 15px; font-weight: 500; }
+.login-value-grid dd small { font-size: 16px; font-weight: 600; }
 .login-value-number { display: inline-block; min-width: 9ch; font-variant-numeric: tabular-nums; }
 .login-value-grid > div:last-child dd { color: #856128; }
 .login-value-grid p { font-size: 11px; color: #5b6961; line-height: 1.8; margin: 0; }

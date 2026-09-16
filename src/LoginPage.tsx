@@ -3,10 +3,10 @@ import { ArrowDown, ArrowRight, Eye, EyeOff, Leaf, LogIn, MessageSquare, Phone, 
 import './LoginPage.css'
 
 const valueMetrics = [
-  { label: '등록 자재 가치', value: 6104000, description: '남은 자재를 관리 가능한 자산으로' },
-  { label: '보관 자산 가치', value: 2234000, description: '다음 사용을 위해 보관하는 가치' },
-  { label: '판매 중 자산 가치', value: 3480000, description: '새로운 수요와 연결 중인 가치' },
-  { label: '누적 판매 수익', value: 4120000, description: '자재 거래를 통해 회수한 수익' },
+  { label: '회수 자재 평가 가치', value: 6104000, description: '철근·타일 등 현장 잔여 자재를 자산으로 전환' },
+  { label: '재사용을 위해 보관한 가치', value: 2234000, description: '다음 현장에서 다시 활용할 수 있도록 보관' },
+  { label: '마켓 판매로 전환한 가치', value: 3480000, description: '필요한 현장과 연결해 폐기 대신 거래로 전환' },
+  { label: '재활용으로 회수한 판매 수익', value: 4120000, description: '버려질 뻔한 자재에서 되찾은 수익' },
 ]
 
 function ScrollProgress() {
@@ -74,9 +74,9 @@ function MaterialValueGrid() {
       <li data-scroll-reveal><span>02 / 수요 연결</span><h3>보관을 넘어 다음 현장으로</h3><p>판매할 자재는 검수와 관리자 승인 후 마켓에 등록합니다. 필요한 현장의 견적 요청을 통해 거래를 시작합니다.</p></li>
       <li data-scroll-reveal><span>03 / 가치 확인</span><h3>비용과 회수 금액을 함께</h3><p>로케이션별 보관 비용과 판매 정산 내역을 확인합니다. 계속 보관할지, 판매할지 판단할 정보를 모읍니다.</p></li>
     </ol>
-    <h3 className="login-value-caption" data-scroll-reveal>자재의 흐름을 가치로 살펴보면 <span>활용 예시</span></h3>
+    <h3 className="login-value-caption" data-scroll-reveal>버려질 뻔한 자재가 다시 만든 가치 <span>재활용 활용 사례</span></h3>
     <dl className="login-value-grid">{valueMetrics.map((metric) => <div key={metric.label} data-scroll-reveal><dt>{metric.label}</dt><dd aria-label={`${metric.value.toLocaleString('ko-KR')}원`}><span aria-hidden="true"><small>₩</small><span className="login-value-number">{Math.round(metric.value * progress).toLocaleString('ko-KR')}</span></span></dd><p>{metric.description}</p></div>)}</dl>
-    <p className="login-value-note" data-scroll-reveal>서비스 활용을 설명하기 위한 예시 데이터입니다. 실제 이용 실적이나 수익을 보장하지 않습니다. 누적 판매 수익은 자산 가치와 별도 지표입니다.</p>
+    <p className="login-value-note" data-scroll-reveal>회수 자재를 평가하고 보관·판매로 연결했을 때의 활용 사례입니다. 실제 이용 실적이나 수익을 보장하지 않으며, 판매 수익은 자산 가치와 별도 지표입니다.</p>
   </div></section>
 }
 
