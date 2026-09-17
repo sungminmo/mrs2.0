@@ -1,13 +1,13 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from 'react'
-import { ArrowDownToLine, ArrowRight, ArrowUpDown, Box, Check, ClipboardCheck, Leaf, MapPin, PackagePlus, Search, ShoppingCart, SlidersHorizontal, Tag, TrendingDown, TrendingUp, Warehouse, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRight, ArrowUpDown, Box, Check, ClipboardCheck, Clock, Layers, Leaf, MapPin, PackagePlus, Search, ShoppingCart, SlidersHorizontal, Tag, TrendingUp, X } from 'lucide-react'
 import type { Asset } from './App'
 import './AdminAssets.css'
 import AdminShell from './AdminShell'
 import ShopifyAssetDetail from './ShopifyAssetDetail'
 import MarketRegistrationConfirm from './MarketRegistrationConfirm'
 import { materialPhotos } from './assetPhotos'
-import { assetValueHistory, monthLabel } from './assetValueHistory'
+import { categoryChain, materialCategories } from './categories'
 import PageBanner from './PageBanner'
 
 const amount = (value: string) => Number(value.replaceAll(',', ''))
@@ -15,6 +15,25 @@ const number = (value: number) => value.toLocaleString('ko-KR')
 const money = (value: number) => `₩${number(value)}`
 const statuses = ['전체', '판매 중', '보관 중', '대기 중'] as const
 const statusClass = (status: string) => status === '판매 중' ? 'selling' : status === '대기 중' ? 'pending' : 'stored'
+const STORAGE_FEE_DAYS = 30
+const STORAGE_WARNING_DAYS = 7
+const storageDays = (asset: Asset) => parseInt(asset.storageDays) || 0
+const storageBuckets = [
+  { label: '0–7일', min: 0, max: 7, tone: 'ok' },
+  { label: '8–14일', min: 8, max: 14, tone: 'ok' },
+  { label: '15–22일', min: 15, max: STORAGE_FEE_DAYS - STORAGE_WARNING_DAYS - 1, tone: 'ok' },
+  { label: `23–${STORAGE_FEE_DAYS}일 · 부과 임박`, min: STORAGE_FEE_DAYS - STORAGE_WARNING_DAYS, max: STORAGE_FEE_DAYS, tone: 'warn' },
+  { label: `${STORAGE_FEE_DAYS}일 초과 · 보관료 발생`, min: STORAGE_FEE_DAYS + 1, max: Infinity, tone: 'over' },
+] as const
+const categoryPalette = ['#349b75', '#7e9ccc', '#ddb655', '#c98b6b', '#8f7fc2', '#5fb3b3', '#a0a0a0']
+const rootCategory = (asset: Asset) => categoryChain(materialCategories, asset.categoryId)[0]?.name ?? '기타'
+function categoryShares(rows: Asset[]) {
+  const sum = rows.reduce((acc, asset) => acc + amount(asset.appraisalValue), 0)
+  return [...new Set(rows.map(rootCategory))]
+    .map((name) => { const items = rows.filter((asset) => rootCategory(asset) === name); const value = items.reduce((acc, asset) => acc + amount(asset.appraisalValue), 0); return { name, count: items.length, value, share: sum ? value / sum * 100 : 0 } })
+    .sort((first, second) => second.value - first.value)
+    .map((row, index) => ({ ...row, color: categoryPalette[index % categoryPalette.length] }))
+}
 
 export type AssetValueSnapshot = { signature: string; values: number[] }
 type ObserveAssetValues = (snapshot: AssetValueSnapshot) => AssetValueSnapshot | null
@@ -52,11 +71,11 @@ function useAssetValueMotion(inventory: Asset[], showingDetail: boolean, onValue
     }
     reveal('.sa-hero', 0)
     reveal('.sa-stacked-bar', 450, 400, 0, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }])
-    reveal('.sa-trend-area', 450, 500, 0, [{ opacity: 0 }, { opacity: 1 }])
-    reveal('.sa-trend-line', 450, 600, 0, [{ strokeDashoffset: '1' }, { strokeDashoffset: '0' }])
+    reveal('.sa-storage-row', 450, 240, 60)
+    reveal('.sa-storage-bar > span', 500, 420, 60, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }])
     reveal('.sa-hero-stats > div', 600, 260, 70)
     reveal('.sa-metric', 800, 260, 80)
-    reveal('.sa-metric-bar > span', 900, 400, 80, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }])
+    reveal('.sa-metric-bar > span, .sa-share-bar > span', 900, 400, 80, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }])
     reveal('.sa-bottom-grid > section', 1150, 260, 90)
     reveal('.sa-notice', 1450, 240, 0, [{ opacity: 0 }, { opacity: 1 }])
     const start = performance.now()
@@ -84,21 +103,12 @@ function AssetImage({ asset }: { asset: Asset }) {
   return asset.image && !failed ? <img src={asset.image} alt={asset.name} loading="lazy" onError={() => setFailed(true)} /> : <Box size={24} aria-label="이미지 없음" />
 }
 
-function TrendChart({ points }: { points: { label: string; value: number }[] }) {
-  const width = 320, height = 112, top = 10, bottom = 6
-  const max = Math.max(...points.map((point) => point.value), 1)
-  const coords = points.map((point, index) => [points.length > 1 ? index / (points.length - 1) * width : width, height - bottom - point.value / max * (height - top - bottom)] as const)
-  const line = coords.map(([x, y], index) => `${index ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ')
-  const [lastX, lastY] = coords[coords.length - 1]
-  return <figure className="sa-trend">
-    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={`자산 가치 추이: ${points.map((point) => `${point.label} ${money(point.value)}`).join(', ')}`}>
-      <defs><linearGradient id="sa-trend-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#b7dfbd" stopOpacity=".45" /><stop offset="1" stopColor="#b7dfbd" stopOpacity="0" /></linearGradient></defs>
-      <path className="sa-trend-area" d={`${line} L${width} ${height} L0 ${height} Z`} fill="url(#sa-trend-fill)" />
-      <path className="sa-trend-line" d={line} pathLength={1} fill="none" stroke="#b7dfbd" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-      <circle className="sa-trend-point" cx={lastX} cy={lastY} r="4" fill="#fafafa" stroke="#29845a" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-    </svg>
-    <figcaption aria-hidden="true">{points.map((point) => <span key={point.label}>{point.label}</span>)}</figcaption>
-  </figure>
+function CategoryShare({ rows, label }: { rows: ReturnType<typeof categoryShares>; label: string }) {
+  if (!rows.length) return <p className="sa-share-empty">표시할 자산이 없습니다.</p>
+  return <>
+    <div className="sa-share-bar" role="img" aria-label={`${label}: ${rows.map((row) => `${row.name} ${Math.round(row.share)}%`).join(', ')}`}>{rows.map((row) => <span key={row.name} style={{ width: `${row.share}%`, background: row.color }} />)}</div>
+    <ul className="sa-share-legend">{rows.map((row) => <li key={row.name}><i style={{ background: row.color }} /><span>{row.name}</span><b>{Math.round(row.share)}%</b></li>)}</ul>
+  </>
 }
 
 export default function AdminAssets({ assets: inventory, onAssetsChange: setInventory, navigation, onValuesObserved, inspectionActive, onInspectionView, inspectionContent, inspectionCount }: { assets: Asset[]; onAssetsChange: Dispatch<SetStateAction<Asset[]>>; navigation: ReactNode; onValuesObserved: ObserveAssetValues; inspectionActive: boolean; onInspectionView: (active: boolean) => void; inspectionContent: ReactNode; inspectionCount: number }) {
@@ -119,11 +129,14 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
   const statusValue = (item: string) => inventory.reduce((sum, asset) => sum + (asset.status === item ? amount(asset.appraisalValue) : 0), 0)
   const saleTotal = inventory.reduce((sum, asset) => sum + amount(asset.salePrice), 0)
   const expectedGain = saleTotal - total
-  const previousMonth = assetValueHistory[assetValueHistory.length - 1].value
-  const monthChange = total - previousMonth
-  const trend = [...assetValueHistory.map((point) => ({ label: monthLabel(point.month), value: point.value })), { label: '현재', value: total }]
-  const locationRows = [...new Set(inventory.map((asset) => asset.location))].map((place) => { const rows = inventory.filter((asset) => asset.location === place); return { place, count: rows.length, value: rows.reduce((sum, asset) => sum + amount(asset.appraisalValue), 0) } }).sort((first, second) => second.value - first.value)
-  const averageStorage = inventory.length ? Math.round(inventory.reduce((sum, asset) => sum + (parseInt(asset.storageDays) || 0), 0) / inventory.length) : 0
+  const locationCount = new Set(inventory.map((asset) => asset.location)).size
+  const feeSoon = inventory.filter((asset) => storageDays(asset) >= STORAGE_FEE_DAYS - STORAGE_WARNING_DAYS && storageDays(asset) <= STORAGE_FEE_DAYS)
+  const feeCharged = inventory.filter((asset) => storageDays(asset) > STORAGE_FEE_DAYS)
+  const storageRows = storageBuckets.map((bucket) => { const rows = inventory.filter((asset) => storageDays(asset) >= bucket.min && storageDays(asset) <= bucket.max); return { ...bucket, count: rows.length, value: rows.reduce((sum, asset) => sum + amount(asset.appraisalValue), 0) } })
+  const storageMax = Math.max(...storageRows.map((row) => row.count), 1)
+  const recent = [...inventory].sort((first, second) => second.receivedAt.localeCompare(first.receivedAt)).slice(0, 4)
+  const categoryRows = categoryShares(inventory)
+  const recentCategoryRows = categoryShares(recent)
   const topAsset = [...inventory].sort((first, second) => amount(second.appraisalValue) - amount(first.appraisalValue))[0]
   const visible = inventory.filter((asset) =>
     (status === '전체' || asset.status === status) &&
@@ -180,7 +193,7 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
     if (!name || !storage) return
     const receivedAt = new Intl.DateTimeFormat('sv-SE').format(new Date()).replaceAll('-', '.')
     const asset: Asset = {
-      code: `EMX-NEW-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, name,
+      code: `EMX-NEW-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, name, categoryId: 'CAT-019',
       grade: String(data.get('grade')), quantity: String(data.get('quantity')), unit: String(data.get('unit')),
       location: storage, appraisalValue: number(Number(data.get('value'))), receivedAt, storageDays: '0일',
       status: '대기 중', salePrice: '0',
@@ -209,15 +222,17 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
         <div className="sa-hero-value">
           <span className="sa-hero-label"><span className="sa-live-dot" />나의 총 자산 가치<small>입고 자산 평가 기준 · KRW</small></span>
           <strong aria-label={money(total)}><span aria-hidden="true" data-asset-value={total}>{money(total)}</span></strong>
-          <div className="sa-hero-change"><span className={monthChange < 0 ? 'is-down' : 'is-up'}>{monthChange < 0 ? <TrendingDown size={14} /> : <TrendingUp size={14} />}{monthChange < 0 ? '-' : '+'}{money(Math.abs(monthChange))} ({previousMonth ? `${monthChange < 0 ? '' : '+'}${(monthChange / previousMonth * 100).toFixed(1)}%` : '—'})</span><span>전월 대비 · 입고 자산 {inventory.length}건 · 보관 위치 {locationRows.length}곳</span></div>
+          <div className="sa-hero-change"><span>입고 자산 {inventory.length}건 · 보관 위치 {locationCount}곳 · 자재 카테고리 {categoryRows.length}종</span></div>
           <div className="sa-stacked-bar" role="img" aria-label={statuses.slice(1).map((item) => `${item} ${money(statusValue(item))}`).join(', ')}>{statuses.slice(1).map((item) => <span key={item} className={statusClass(item)} style={{ width: `${total ? statusValue(item) / total * 100 : 0}%` }} />)}</div>
           <div className="sa-hero-legend">{statuses.slice(1).map((item) => <span key={item}><i className={`sa-dot ${statusClass(item)}`} />{item} {total ? Math.round(statusValue(item) / total * 100) : 0}%</span>)}</div>
         </div>
-        <div className="sa-hero-trend"><div className="sa-hero-trend-title"><span>자산 가치 추이</span><span>최근 6개월 · 월말 기준</span></div><TrendChart points={trend} /></div>
+        <div className="sa-hero-trend"><div className="sa-hero-trend-title"><span>보관 기간별 자산 분포</span><span>{STORAGE_FEE_DAYS}일 경과 시 보관료 발생</span></div>
+          <div className="sa-storage" role="img" aria-label={`보관 기간별 자산 분포: ${storageRows.map((row) => `${row.label} ${row.count}건`).join(', ')}`}>{storageRows.map((row) => <div key={row.label} className={`sa-storage-row is-${row.tone}`}><span>{row.label}</span><span className="sa-storage-bar"><span style={{ width: `${row.count / storageMax * 100}%` }} /></span><b>{row.count}건</b></div>)}</div>
+        </div>
         <div className="sa-hero-stats">
           <div><span><Tag size={13} />판매 예정가 합계</span><b>{money(saleTotal)}</b><small>등록 판매가 기준</small></div>
           <div><span><TrendingUp size={13} />평가 대비 기대 차익</span><b className={expectedGain < 0 ? 'is-down' : 'is-up'}>{expectedGain < 0 ? '-' : '+'}{money(Math.abs(expectedGain))}</b><small>{total ? `${expectedGain < 0 ? '' : '+'}${(expectedGain / total * 100).toFixed(1)}%` : '—'} · 판매 완료 시</small></div>
-          <div><span><Warehouse size={13} />평균 보관 기간</span><b>{averageStorage}일</b><small>{locationRows.length}개 보관 위치 운영</small></div>
+          <div className={feeSoon.length || feeCharged.length ? 'is-alert' : ''}><span><Clock size={13} />보관료 부과 임박 (D-{STORAGE_WARNING_DAYS} 이내)</span><b><em className="sa-fee-badge">{feeSoon.length}건</em>{feeCharged.length > 0 && <small className="sa-fee-over">발생 중 {feeCharged.length}건</small>}</b><small>{feeSoon.length ? `${money(feeSoon.reduce((sum, asset) => sum + amount(asset.appraisalValue), 0))} · 프로모션 할인으로 판매 촉진 권장` : `${STORAGE_FEE_DAYS}일 경과 시 보관료 발생`}</small></div>
           <div><span><Box size={13} />최고 가치 자산</span><b>{topAsset ? money(amount(topAsset.appraisalValue)) : '—'}</b><small>{topAsset ? topAsset.name : '등록된 자산이 없습니다'}</small></div>
         </div>
       </section>
@@ -230,12 +245,19 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
         })}
       </section>
       <div className="sa-bottom-grid">
-        <section className="sa-recent"><div className="sa-section-title"><h2>최근 입고</h2><button className="sa-text-button" onClick={() => openList('전체')}>전체 보기<ArrowRight size={12} /></button></div>{[...inventory].sort((first, second) => second.receivedAt.localeCompare(first.receivedAt)).slice(0, 4).map((asset) => <button key={asset.code} onClick={() => openDetail(asset)}><span className="sa-thumbnail"><AssetImage asset={asset} /></span><span><b>{asset.name}</b><small>{asset.location} · {number(Number(asset.quantity))} {asset.unit}</small></span><span className="sa-recent-meta"><b>{money(amount(asset.appraisalValue))}</b><time>{asset.receivedAt.slice(5)}</time></span></button>)}</section>
-        <section className="sa-locations"><div className="sa-section-title"><h2>보관 위치별 가치</h2><span>{locationRows.length}곳</span></div>{locationRows.map((row) => <div key={row.place}><span className="sa-location-head"><span><MapPin size={13} />{row.place}</span><b>{money(row.value)}</b></span><span className="sa-location-bar" aria-hidden="true"><span style={{ width: `${total ? row.value / total * 100 : 0}%` }} /></span><small>{row.count}건 · 전체의 {total ? Math.round(row.value / total * 100) : 0}%</small></div>)}</section>
-        <section className="sa-todo" aria-label="확인이 필요한 항목"><div className="sa-section-title"><h2>확인이 필요한 항목</h2><span>{pending.length + (inspectionCount > 0 ? 1 : 0)}건</span></div>
+        <section className="sa-recent"><div className="sa-section-title"><h2>최근 입고</h2><button className="sa-text-button" onClick={() => openList('전체')}>전체 보기<ArrowRight size={12} /></button></div>
+          <div className="sa-recent-share"><span className="sa-share-caption">최근 입고 {recent.length}건 카테고리 비중 · 평가 가치 기준</span><CategoryShare rows={recentCategoryRows} label="최근 입고 카테고리 비중" /></div>
+          {recent.map((asset) => <button key={asset.code} onClick={() => openDetail(asset)}><span className="sa-thumbnail"><AssetImage asset={asset} /></span><span><b>{asset.name}</b><small>{rootCategory(asset)} · {asset.location} · {number(Number(asset.quantity))} {asset.unit}</small></span><span className="sa-recent-meta"><b>{money(amount(asset.appraisalValue))}</b><time>{asset.receivedAt.slice(5)}</time></span></button>)}</section>
+        <section className="sa-categories"><div className="sa-section-title"><h2>자재 카테고리별 자산 비중</h2><span>{categoryRows.length}종 · 평가 가치 기준</span></div>
+          <div className="sa-share-bar" role="img" aria-label={`카테고리별 자산 비중: ${categoryRows.map((row) => `${row.name} ${Math.round(row.share)}%`).join(', ')}`}>{categoryRows.map((row) => <span key={row.name} style={{ width: `${row.share}%`, background: row.color }} />)}</div>
+          {categoryRows.map((row) => <div key={row.name} className="sa-category-row"><span className="sa-location-head"><span><Layers size={13} style={{ color: row.color }} />{row.name}</span><b>{money(row.value)}</b></span><span className="sa-location-bar" aria-hidden="true"><span style={{ width: `${row.share}%`, background: row.color }} /></span><small>{row.count}건 · 전체의 {Math.round(row.share)}%</small></div>)}
+          {categoryRows.length === 0 && <p className="sa-share-empty">등록된 자산이 없습니다.</p>}
+        </section>
+        <section className="sa-todo" aria-label="확인이 필요한 항목"><div className="sa-section-title"><h2>확인이 필요한 항목</h2><span>{(feeSoon.length ? 1 : 0) + (pending.length ? 1 : 0) + (inspectionCount > 0 ? 1 : 0)}건</span></div>
+          {feeSoon.length > 0 && <button className="is-warn" onClick={() => { openList('전체'); setSort('newest') }}><span className="sa-todo-icon warn"><Clock size={16} /></span><span><b>보관료 부과 임박 자산 {feeSoon.length}건</b><small>{feeSoon.map((asset) => asset.name).join(', ')} · 할인율 상향 프로모션을 검토해 주세요.</small></span><ArrowRight size={15} /></button>}
           {pending.length > 0 && <button onClick={() => openList('대기 중')}><span className="sa-todo-icon pending"><ClipboardCheck size={16} /></span><span><b>검수 대기 자산 {pending.length}건</b><small>입고 정보를 확인하고 다음 단계를 진행해 주세요.</small></span><ArrowRight size={15} /></button>}
           {inspectionCount > 0 && <button onClick={() => onInspectionView(true)}><span className="sa-todo-icon"><ClipboardCheck size={16} /></span><span><b>1차 검수 결과 도착 · 폐기 대상 포함</b><small>고객 확인 대기 {inspectionCount}건 · 예시</small></span><ArrowRight size={15} /></button>}
-          {pending.length === 0 && inspectionCount === 0 && <p className="sa-todo-empty"><Check size={15} />모든 자산이 정상 처리되었습니다.</p>}
+          {feeSoon.length === 0 && pending.length === 0 && inspectionCount === 0 && <p className="sa-todo-empty"><Check size={15} />모든 자산이 정상 처리되었습니다.</p>}
         </section>
       </div>
       <PageBanner label="MRS · Material Recycling Service" title="남은 자재의 가치, MRS에서 이어집니다" description="보관에서 재유통까지. MRS는 현장의 잉여 자재를 관리하고 필요한 수요처와 연결하는 건설자재 보관·거래 플랫폼입니다." action="MRS소개서 다운받기" href="/MRS-service-guide.txt" download="MRS-서비스소개서.txt" icon={<Leaf size={17} />} />
