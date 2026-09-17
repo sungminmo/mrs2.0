@@ -112,14 +112,14 @@
 .login-password input { padding-right: 44px; }
 .login-password button { position: absolute; right: 0; top: 0; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: #616161; }
 .login-links { display: flex; justify-content: flex-end; gap: 14px; margin: 0 0 24px; }
-.login-links button, .login-register button { padding: 0; border: 0; background: transparent; font-size: 11px; color: #426451; }
+.login-links button, .login-register a { padding: 0; border: 0; background: transparent; font-size: 11px; color: #426451; }
 .login-primary, .login-browse { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 9px; border-radius: 6px; font-size: 13px !important; font-weight: 600 !important; }
 .login-primary { border: 1px solid #252525; background: #303030; color: #fff; }
 .login-primary:hover { background: #171717; }
 .login-browse { background: #fdfdfd; border: 1px solid #c5c5c5; color: #303030; margin-top: 10px; }
 .login-browse:hover { background: #ebebeb; }
 .login-register { font-size: 12px; margin: 24px 0; text-align: center; color: #707070; }
-.login-register button { margin-left: 8px; font-weight: 600; }
+.login-register a { margin-left: 8px; font-weight: 600; }
 .login-form-inner .login-demo { border-top: 1px solid #ddd; padding-top: 18px; font-size: 11px; }
 .login-notice { display: flex; align-items: center; gap: 10px; font-size: 12px; line-height: 1.7; padding: 12px; background: #e8eee9; border-radius: 5px; }
 .login-notice button { border: 0; background: transparent; display: grid; place-items: center; }

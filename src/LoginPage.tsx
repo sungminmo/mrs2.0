@@ -129,7 +129,7 @@ export default function LoginPage({ onLogin, onBrowse }: { onLogin: () => void; 
           <button type="submit" className="login-primary"><LogIn size={17} />로그인</button>
         </form>
         <button className="login-browse" onClick={onBrowse}>둘러보기<ArrowRight size={17} /></button>
-        <div className="login-register">아직 회원이 아니신가요? <button onClick={() => setNotice('회원가입은 계정 서비스 연결 후 이용할 수 있습니다.')}>회원가입</button></div>
+        <div className="login-register">아직 회원이 아니신가요? <a href="#/register" onClick={closeLogin}>회원가입</a></div>
         <p className="login-demo">시제품에서는 계정 입력 없이 로그인할 수 있습니다. 입력한 비밀번호는 저장하거나 전송하지 않습니다.</p>
         {notice && <div className="login-notice" role="status"><span>{notice}</span><button aria-label="안내 닫기" onClick={() => setNotice('')}><X size={16} /></button></div>}
       </div></dialog>
