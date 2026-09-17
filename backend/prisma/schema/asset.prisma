@@ -1,0 +1,77 @@
+enum AssetGrade {
+  S
+  A
+  B
+  F
+}
+
+enum AssetStorageStatus {
+  PENDING  @map("입고대기")
+  STORED   @map("보관중")
+  RELEASED @map("출고완료")
+}
+
+enum AssetSaleStatus {
+  PENDING @map("판매대기")
+  ON_SALE @map("판매중")
+  SOLD    @map("판매완료")
+}
+
+model Asset {
+  id            String             @id @db.VarChar(20)
+  itemId        String             @db.VarChar(20)
+  receivingId   String             @db.VarChar(20)
+  customerId    String             @db.VarChar(20)
+  receiptId     String?            @db.VarChar(20)
+  locationId    String?            @db.VarChar(20)
+  categoryId    String             @db.VarChar(20)
+  name          String             @db.VarChar(160)
+  specification String             @db.VarChar(500)
+  brand         String             @default("") @db.VarChar(160)
+  grade         AssetGrade
+  quantity      Decimal            @db.Decimal(18, 3)
+  unit          ItemUnit
+  appraisal     Decimal?           @db.Decimal(19, 0)
+  storageStatus AssetStorageStatus
+  saleStatus    AssetSaleStatus
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  item     MasterItem       @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  category MaterialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  images   AssetImage[]
+  history  AssetChange[]
+
+  @@index([itemId])
+  @@index([categoryId])
+  @@index([customerId, storageStatus])
+  @@index([receivingId])
+  @@index([saleStatus, storageStatus])
+  @@map("assets")
+}
+
+model AssetImage {
+  id       String @id @db.VarChar(36)
+  assetId  String @db.VarChar(20)
+  name     String @db.VarChar(255)
+  url      String @db.Text
+  sortOrder Int   @default(0)
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([assetId, sortOrder])
+  @@map("asset_images")
+}
+
+model AssetChange {
+  id        String   @id @db.VarChar(36)
+  assetId   String   @db.VarChar(20)
+  reason    String   @db.VarChar(500)
+  changes   Json
+  createdAt DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([assetId, createdAt])
+  @@map("asset_changes")
+}

@@ -1,0 +1,46 @@
+enum ItemUnit {
+  EA
+  BOX @map("Box")
+  KG  @map("kg")
+  TON @map("ton")
+  M   @map("m")
+  M3  @map("m³")
+  PIECE @map("본")
+}
+
+model MasterItem {
+  id            String   @id @db.VarChar(20)
+  name          String   @db.VarChar(160)
+  categoryId    String   @db.VarChar(20)
+  specification String   @db.VarChar(255)
+  brand         String   @default("") @db.VarChar(160)
+  unit          ItemUnit
+  inboundPrice  Decimal? @db.Decimal(19, 0)
+  outboundPrice Decimal? @db.Decimal(19, 0)
+  standardPrice Decimal? @db.Decimal(19, 0)
+  enabled       Boolean  @default(true)
+  note          String   @default("") @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  category MaterialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  images   MasterItemImage[]
+  assets   Asset[]
+
+  @@unique([name, categoryId, specification, brand, unit])
+  @@index([categoryId, enabled])
+  @@map("master_items")
+}
+
+model MasterItemImage {
+  id           String @id @db.VarChar(36)
+  masterItemId String @db.VarChar(20)
+  name         String @db.VarChar(255)
+  url          String @db.Text
+  sortOrder    Int    @default(0)
+
+  masterItem MasterItem @relation(fields: [masterItemId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([masterItemId, sortOrder])
+  @@map("master_item_images")
+}

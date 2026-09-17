@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { ErrorCode, failure, handleError, success } from './http.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -8,7 +9,9 @@ type Dependencies = {
 export function createApp({ checkDatabase, readinessTimeoutMs }: Dependencies) {
   const app = new Hono()
 
-  app.get('/api/health/live', (context) => context.json({ status: 'ok' }))
+  app.onError(handleError)
+
+  app.get('/api/health/live', (context) => success(context, { status: 'ok' }))
 
   app.get('/api/health/ready', async (context) => {
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -20,17 +23,16 @@ export function createApp({ checkDatabase, readinessTimeoutMs }: Dependencies) {
         }),
       ])
       context.header('Cache-Control', 'no-store')
-      return context.json({ status: 'ok', database: 'up' })
+      return success(context, { status: 'ok', database: 'up' })
     } catch {
       context.header('Cache-Control', 'no-store')
-      return context.json({ status: 'unavailable', database: 'down' }, 503)
+      return failure(context, 503, ErrorCode.SERVICE_UNAVAILABLE, 'Database is unavailable')
     } finally {
       clearTimeout(timer)
     }
   })
 
-  app.notFound((context) => context.json({ error: 'Not found' }, 404))
-  app.onError((_error, context) => context.json({ error: 'Internal server error' }, 500))
+  app.notFound((context) => failure(context, 404, ErrorCode.NOT_FOUND, 'Not found'))
 
   return app
 }

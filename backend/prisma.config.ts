@@ -8,7 +8,7 @@ const envPath = fileURLToPath(new URL('../.env', import.meta.url))
 if (existsSync(envPath)) loadEnvFile(envPath)
 
 export default defineConfig({
-  schema: 'prisma/schema.prisma',
+  schema: 'prisma/schema',
   migrations: { path: 'prisma/migrations' },
   datasource: {
     url: process.env.DB_HOST ? databaseUrl(readConfig().database) : undefined,

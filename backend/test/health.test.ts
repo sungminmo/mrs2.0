@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { z } from 'zod'
 import { createApp } from '../src/app.js'
+import { AppError, ErrorCode } from '../src/http.js'
 import { databaseUrl, readConfig } from '../src/config.js'
 import { createDatabase, databaseOptions } from '../src/database.js'
 
@@ -15,7 +17,7 @@ test('liveness does not depend on the database', async () => {
   })
   const response = await app.request('/api/health/live')
   assert.equal(response.status, 200)
-  assert.deepEqual(await response.json(), { status: 'ok' })
+  assert.deepEqual(await response.json(), { success: true, data: { status: 'ok' } })
 })
 
 test('readiness checks the database and is not cached', async () => {
@@ -25,7 +27,7 @@ test('readiness checks the database and is not cached', async () => {
   assert.equal(response.status, 200)
   assert.equal(checks, 1)
   assert.equal(response.headers.get('Cache-Control'), 'no-store')
-  assert.deepEqual(await response.json(), { status: 'ok', database: 'up' })
+  assert.deepEqual(await response.json(), { success: true, data: { status: 'ok', database: 'up' } })
 })
 
 test('database errors are redacted and recovery does not require an app restart', async () => {
@@ -37,7 +39,10 @@ test('database errors are redacted and recovery does not require an app restart'
   const response = await app.request('/api/health/ready')
   assert.equal(response.status, 503)
   assert.equal(response.headers.get('Cache-Control'), 'no-store')
-  assert.deepEqual(await response.json(), { status: 'unavailable', database: 'down' })
+  assert.deepEqual(await response.json(), {
+    success: false,
+    error: { code: 'SERVICE_UNAVAILABLE', message: 'Database is unavailable' },
+  })
   unavailable = false
   assert.equal((await app.request('/api/health/ready')).status, 200)
 })
@@ -51,7 +56,49 @@ test('unknown API routes return JSON 404', async () => {
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50 })
   const response = await app.request('/api/unknown')
   assert.equal(response.status, 404)
-  assert.deepEqual(await response.json(), { error: 'Not found' })
+  assert.deepEqual(await response.json(), {
+    success: false,
+    error: { code: 'NOT_FOUND', message: 'Not found' },
+  })
+})
+
+test('global error handler normalizes business, validation, and unexpected errors', async () => {
+  const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50 })
+  app.get('/api/test/business-error', () => {
+    throw new AppError(409, ErrorCode.CONFLICT, 'Asset code already exists')
+  })
+  app.get('/api/test/validation-error', () => {
+    z.object({ quantity: z.number().positive() }).parse({ quantity: 0 })
+    throw new Error('Validation was expected to fail')
+  })
+  app.get('/api/test/unexpected-error', () => {
+    throw new Error('secret diagnostic information')
+  })
+
+  const businessResponse = await app.request('/api/test/business-error')
+  assert.equal(businessResponse.status, 409)
+  assert.deepEqual(await businessResponse.json(), {
+    success: false,
+    error: { code: 'CONFLICT', message: 'Asset code already exists' },
+  })
+
+  const validationResponse = await app.request('/api/test/validation-error')
+  assert.equal(validationResponse.status, 400)
+  assert.deepEqual(await validationResponse.json(), {
+    success: false,
+    error: {
+      code: 'VALIDATION_ERROR',
+      message: 'Request validation failed',
+      details: [{ path: 'quantity', message: 'Too small: expected number to be >0', code: 'too_small' }],
+    },
+  })
+
+  const unexpectedResponse = await app.request('/api/test/unexpected-error')
+  assert.equal(unexpectedResponse.status, 500)
+  assert.deepEqual(await unexpectedResponse.json(), {
+    success: false,
+    error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
+  })
 })
 
 test('configuration requires connection values without exposing their contents', () => {

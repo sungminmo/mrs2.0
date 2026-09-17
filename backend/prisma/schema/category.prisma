@@ -1,0 +1,16 @@
+model MaterialCategory {
+  id        String  @id @db.VarChar(20)
+  parentId  String? @db.VarChar(20)
+  name      String  @db.VarChar(80)
+  enabled   Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  parent   MaterialCategory?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children MaterialCategory[] @relation("CategoryTree")
+  items    MasterItem[]
+  assets   Asset[]
+
+  @@unique([parentId, name])
+  @@index([parentId, sortOrder])
+  @@map("material_categories")
+}
