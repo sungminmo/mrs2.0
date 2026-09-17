@@ -5,7 +5,7 @@ import SaleRegistration from './SaleRegistration'
 import MarketRegistrationConfirm from './MarketRegistrationConfirm'
 
 type Asset = {
-  code: string; name: string; grade: string; unit: string; quantity: string;
+  code: string; name: string; categoryId: string; grade: string; unit: string; quantity: string;
   location: string; receivedAt: string; storageDays: string; status: string;
   appraisalValue: string; salePrice: string; brand: string; specification: string;
   shipmentUnit: string; note: string; image: string;
