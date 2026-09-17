@@ -14,8 +14,18 @@ export function readConfig(environment: NodeJS.ProcessEnv = process.env) {
     return value
   }
 
+  function secret(name: string) {
+    const value = required(name)
+    if (value.length < 32) throw new Error(`${name} must be at least 32 characters`)
+    return value
+  }
+
   return {
     port: integer('PORT', 3000, 65535),
+    jwt: {
+      secret: secret('JWT_SECRET'),
+      expiresIn: environment.JWT_EXPIRES_IN?.trim() || '1h',
+    },
     database: {
       host: required('DB_HOST'),
       port: integer('DB_PORT', 3306, 65535),

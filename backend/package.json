@@ -23,6 +23,7 @@
     "@prisma/adapter-mariadb": "7.10.0",
     "@prisma/client": "7.10.0",
     "hono": "4.13.7",
+    "jose": "^6.2.12",
     "prisma": "7.10.0",
     "zod": "^4.6.5"
   },

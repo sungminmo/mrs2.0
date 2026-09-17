@@ -1,0 +1,30 @@
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  SUSPENDED
+}
+
+model User {
+  id           String     @id @default(uuid()) @db.VarChar(36)
+  email        String     @unique @db.VarChar(254)
+  passwordHash String     @db.VarChar(255)
+  companyName  String     @db.VarChar(160)
+  companyPhone String?    @db.VarChar(30)
+  managerName  String     @db.VarChar(80)
+  managerPhone String     @db.VarChar(30)
+  address      String?    @db.VarChar(500)
+  role         UserRole   @default(CUSTOMER)
+  status       UserStatus @default(PENDING)
+  approvedAt   DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([status, createdAt])
+  @@map("users")
+}

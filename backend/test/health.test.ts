@@ -2,12 +2,13 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { z } from 'zod'
 import { createApp } from '../src/app.js'
+import { hashPassword } from '../src/auth.js'
 import { AppError, ErrorCode } from '../src/http.js'
 import { databaseUrl, readConfig } from '../src/config.js'
 import { createDatabase, databaseOptions } from '../src/database.js'
 
 const environment = {
-  DB_HOST: 'db', DB_NAME: 'b2b_mall', DB_USER: 'b2b_app', DB_PASSWORD: 'test-only',
+  DB_HOST: 'db', DB_NAME: 'b2b_mall', DB_USER: 'b2b_app', DB_PASSWORD: 'test-only', JWT_SECRET: 'test-only-secret-at-least-32-characters',
 }
 
 test('liveness does not depend on the database', async () => {
@@ -62,6 +63,45 @@ test('unknown API routes return JSON 404', async () => {
   })
 })
 
+test('JWT login issues tokens only for approved users and protects account APIs', async () => {
+  const passwordHash = await hashPassword('correct-password')
+  const activeUser = { id: 'user-active', email: 'active@example.com', passwordHash, companyName: 'MRS 건설', managerName: '홍길동', role: 'CUSTOMER' as const, status: 'ACTIVE' as const }
+  const pendingUser = { ...activeUser, id: 'user-pending', email: 'pending@example.com', status: 'PENDING' as const }
+  const users = [activeUser, pendingUser]
+  const app = createApp({
+    checkDatabase: async () => {},
+    readinessTimeoutMs: 50,
+    auth: {
+      repository: {
+        findByEmail: async (email) => users.find((user) => user.email === email) ?? null,
+        findById: async (id) => users.find((user) => user.id === id) ?? null,
+      },
+      secret: environment.JWT_SECRET,
+      expiresIn: '1h',
+    },
+  })
+
+  const loginResponse = await app.request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: activeUser.email, password: 'correct-password' }), headers: { 'Content-Type': 'application/json' } })
+  assert.equal(loginResponse.status, 200)
+  const loginBody = await loginResponse.json() as { success: boolean; data: { accessToken: string; tokenType: string; user: { email: string; id: string } } }
+  assert.equal(loginBody.success, true)
+  assert.equal(loginBody.data.tokenType, 'Bearer')
+  assert.equal(loginBody.data.user.email, activeUser.email)
+  assert.ok(loginBody.data.accessToken.length > 30)
+
+  const meResponse = await app.request('/api/auth/me', { headers: { Authorization: `Bearer ${loginBody.data.accessToken}` } })
+  assert.equal(meResponse.status, 200)
+  assert.deepEqual(await meResponse.json(), { success: true, data: { user: { id: activeUser.id, email: activeUser.email, companyName: activeUser.companyName, managerName: activeUser.managerName, role: 'CUSTOMER' } } })
+
+  const pendingResponse = await app.request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: pendingUser.email, password: 'correct-password' }), headers: { 'Content-Type': 'application/json' } })
+  assert.equal(pendingResponse.status, 403)
+  assert.deepEqual(await pendingResponse.json(), { success: false, error: { code: 'ACCOUNT_PENDING', message: 'Account approval is pending' } })
+
+  const unauthorizedResponse = await app.request('/api/auth/me')
+  assert.equal(unauthorizedResponse.status, 401)
+  assert.deepEqual(await unauthorizedResponse.json(), { success: false, error: { code: 'UNAUTHORIZED', message: 'Bearer token is required' } })
+})
+
 test('global error handler normalizes business, validation, and unexpected errors', async () => {
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50 })
   app.get('/api/test/business-error', () => {
@@ -107,6 +147,7 @@ test('configuration requires connection values without exposing their contents',
   }
   assert.equal(readConfig(environment).database.port, 3306)
   assert.equal(readConfig(environment).database.poolMax, 5)
+  assert.throws(() => readConfig({ ...environment, JWT_SECRET: 'too-short' }), /JWT_SECRET must be at least 32 characters/)
 })
 
 test('configuration rejects invalid numeric values', () => {

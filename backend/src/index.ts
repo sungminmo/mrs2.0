@@ -5,7 +5,11 @@ import { createDatabase } from './database.js'
 
 const config = readConfig()
 const database = createDatabase(config.database)
-const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs })
+const authRepository = {
+  findByEmail: (email: string) => database.client.user.findUnique({ where: { email } }),
+  findById: (id: string) => database.client.user.findUnique({ where: { id } }),
+}
+const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt } })
 const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: config.port }, (info) => {
   console.info(`Backend listening on port ${info.port}`)
 })

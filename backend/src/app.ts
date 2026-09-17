@@ -1,15 +1,22 @@
 import { Hono } from 'hono'
+import { authRoutes, currentUser, requireAuth, type AuthRepository } from './auth.js'
 import { ErrorCode, failure, handleError, success } from './http.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
   readinessTimeoutMs: number
+  auth?: { repository: AuthRepository; secret: string; expiresIn: string }
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth }: Dependencies) {
   const app = new Hono()
 
   app.onError(handleError)
+
+  if (auth) {
+    app.post('/api/auth/login', authRoutes(auth.repository, auth.secret, auth.expiresIn))
+    app.get('/api/auth/me', requireAuth(auth.repository, auth.secret), currentUser)
+  }
 
   app.get('/api/health/live', (context) => success(context, { status: 'ok' }))
 
