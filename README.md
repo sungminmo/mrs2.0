@@ -1,5 +1,9 @@
 # React + TypeScript + Vite
 
+## 서비스 정책
+
+현재 구현된 업무 흐름, 상태값, 운영 제약 및 시제품 한계는 [SERVICE_POLICY.md](SERVICE_POLICY.md)를 참고하세요.
+
 ## Docker 백엔드 개발 환경
 
 Ubuntu 24.04 서버에서 MariaDB, Hono/Node.js, React/Nginx를 함께 실행합니다.
