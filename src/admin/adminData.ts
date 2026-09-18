@@ -4,7 +4,11 @@ export const dateText = (value: string | null) => value ? new Intl.DateTimeForma
 
 type Customer = { id: string; name: string; manager: string; phone: string; email: string; status: '이용 중' | '상담 중' }
 type Site = { id: string; customerId: string; name: string; address: string; status: '운영 중' | '종료' }
-type Receiving = { id: string; siteId: string; date: string; volume: string; summary: string; status: '접수 대기' | '견적 안내' | '입고 예정' | '입고 완료' | '취소'; scheduledAt: string | null; termsAt: string; estimate: number | null; note: string }
+export const receivingStatuses = ['입고 신청', '입고 승인', '입고 완료', '입고 반려', '취소'] as const
+export type ReceivingStatus = typeof receivingStatuses[number]
+export const receivingChannels = ['관리자 등록', '홈페이지', '카카오톡', 'MRS고객포탈', '기타'] as const
+export type ReceivingChannel = typeof receivingChannels[number]
+export type Receiving = { id: string; siteId: string; date: string; channel: ReceivingChannel; volume: string; summary: string; status: ReceivingStatus; scheduledAt: string | null; termsAt: string; estimate: number | null; note: string }
 type Material = { assetId: string | null; name: string; grade: 'S' | 'A' | 'B' | 'F' | null; unit: string; received: number; usable: number | null; disposal: number | null; processed: number | null; reason: string }
 type Inspection = { id: string; receivingId: string; date: string; inspectedAt: string | null; notifiedAt: string | null; status: '검수 대기' | '결과 확인 대기' | '검수 종료'; acknowledgedAt: string | null; disposalStatus: '판정 대기' | '미처리' | '처리 예정' | '폐기 완료'; materials: Material[]; evidence: string | null }
 export const itemUnits = ['EA', 'Box', 'kg', 'ton', 'm', 'm³', '본'] as const
@@ -39,14 +43,14 @@ export const sites: Site[] = [
   { id: 'SITE-004', customerId: 'CUS-003', name: '수원 자재센터', address: '경기 수원시 · 예시 현장', status: '운영 중' },
 ]
 export const receivings: Receiving[] = [
-  { id: 'REQ-0914-01', siteId: 'SITE-004', date: '2026-09-14T09:00:00+09:00', volume: '2.5톤 트럭 · 약 4~5 파렛트', summary: '가설재 및 합판', status: '접수 대기', scheduledAt: null, termsAt: '2026-09-14T09:00:00+09:00', estimate: null, note: '오전 수거 가능 여부 문의' },
-  { id: 'REQ-0913-01', siteId: 'SITE-002', date: '2026-09-13T11:00:00+09:00', volume: '1톤 트럭 이하', summary: '마감용 타일', status: '견적 안내', scheduledAt: null, termsAt: '2026-09-13T11:00:00+09:00', estimate: 120000, note: '운반비 120,000원 견적 예시 · 보관료 별도' },
-  { id: 'REQ-0912-01', siteId: 'SITE-001', date: '2026-09-12T10:00:00+09:00', volume: '5톤 트럭 이상', summary: '구조용 H빔', status: '입고 예정', scheduledAt: '2026-09-15T10:00:00+09:00', termsAt: '2026-09-12T10:00:00+09:00', estimate: 240000, note: '운반비 240,000원 견적 예시 · 하역 장비 필요' },
-  { id: 'REQ-0907-01', siteId: 'SITE-001', date: '2026-09-07T10:00:00+09:00', volume: '2.5톤 트럭 · 약 4~5 파렛트', summary: '콘크리트 블록', status: '입고 완료', scheduledAt: '2026-09-08T10:00:00+09:00', termsAt: '2026-09-07T10:00:00+09:00', estimate: 150000, note: '운반비 견적 예시' },
-  { id: 'REQ-0901-01', siteId: 'SITE-002', date: '2026-09-01T10:00:00+09:00', volume: '5톤 트럭 이상', summary: '회수 참나무 구조목', status: '입고 완료', scheduledAt: '2026-09-02T10:00:00+09:00', termsAt: '2026-09-01T10:00:00+09:00', estimate: 300000, note: '운반비 견적 예시' },
-  { id: 'REQ-0826-01', siteId: 'SITE-003', date: '2026-08-26T10:00:00+09:00', volume: '1톤 트럭 이하', summary: '폴리에틸렌 파이프', status: '입고 완료', scheduledAt: '2026-08-27T10:00:00+09:00', termsAt: '2026-08-26T10:00:00+09:00', estimate: 90000, note: '운반비 견적 예시' },
-  { id: 'REQ-0910-01', siteId: 'SITE-004', date: '2026-09-10T10:00:00+09:00', volume: '1톤 트럭 이하', summary: '알루미늄 프레임', status: '취소', scheduledAt: null, termsAt: '2026-09-10T10:00:00+09:00', estimate: null, note: '고객 일정 변경으로 취소' },
-  { id: 'REQ-0914-02', siteId: 'SITE-004', date: '2026-09-14T08:00:00+09:00', volume: '1톤 트럭 이하', summary: '재사용 바닥 타일', status: '입고 완료', scheduledAt: '2026-09-14T11:00:00+09:00', termsAt: '2026-09-14T08:00:00+09:00', estimate: 80000, note: '운반비 견적 예시' },
+  { id: 'REQ-0914-01', siteId: 'SITE-004', date: '2026-09-14T09:00:00+09:00', channel: 'MRS고객포탈', volume: '2.5톤 트럭 · 약 4~5 파렛트', summary: '가설재 및 합판', status: '입고 신청', scheduledAt: null, termsAt: '2026-09-14T09:00:00+09:00', estimate: null, note: '오전 수거 가능 여부 문의' },
+  { id: 'REQ-0913-01', siteId: 'SITE-002', date: '2026-09-13T11:00:00+09:00', channel: '홈페이지', volume: '1톤 트럭 이하', summary: '마감용 타일', status: '입고 반려', scheduledAt: null, termsAt: '2026-09-13T11:00:00+09:00', estimate: 120000, note: '운반 조건 협의 불가로 반려' },
+  { id: 'REQ-0912-01', siteId: 'SITE-001', date: '2026-09-12T10:00:00+09:00', channel: '관리자 등록', volume: '5톤 트럭 이상', summary: '구조용 H빔', status: '입고 승인', scheduledAt: '2026-09-15T10:00:00+09:00', termsAt: '2026-09-12T10:00:00+09:00', estimate: 240000, note: '운반비 240,000원 견적 예시 · 하역 장비 필요' },
+  { id: 'REQ-0907-01', siteId: 'SITE-001', date: '2026-09-07T10:00:00+09:00', channel: '카카오톡', volume: '2.5톤 트럭 · 약 4~5 파렛트', summary: '콘크리트 블록', status: '입고 완료', scheduledAt: '2026-09-08T10:00:00+09:00', termsAt: '2026-09-07T10:00:00+09:00', estimate: 150000, note: '운반비 견적 예시' },
+  { id: 'REQ-0901-01', siteId: 'SITE-002', date: '2026-09-01T10:00:00+09:00', channel: '홈페이지', volume: '5톤 트럭 이상', summary: '회수 참나무 구조목', status: '입고 완료', scheduledAt: '2026-09-02T10:00:00+09:00', termsAt: '2026-09-01T10:00:00+09:00', estimate: 300000, note: '운반비 견적 예시' },
+  { id: 'REQ-0826-01', siteId: 'SITE-003', date: '2026-08-26T10:00:00+09:00', channel: '기타', volume: '1톤 트럭 이하', summary: '폴리에틸렌 파이프', status: '입고 완료', scheduledAt: '2026-08-27T10:00:00+09:00', termsAt: '2026-08-26T10:00:00+09:00', estimate: 90000, note: '운반비 견적 예시' },
+  { id: 'REQ-0910-01', siteId: 'SITE-004', date: '2026-09-10T10:00:00+09:00', channel: 'MRS고객포탈', volume: '1톤 트럭 이하', summary: '알루미늄 프레임', status: '취소', scheduledAt: null, termsAt: '2026-09-10T10:00:00+09:00', estimate: null, note: '고객 일정 변경으로 취소' },
+  { id: 'REQ-0914-02', siteId: 'SITE-004', date: '2026-09-14T08:00:00+09:00', channel: '카카오톡', volume: '1톤 트럭 이하', summary: '재사용 바닥 타일', status: '입고 완료', scheduledAt: '2026-09-14T11:00:00+09:00', termsAt: '2026-09-14T08:00:00+09:00', estimate: 80000, note: '운반비 견적 예시' },
 ]
 export const inspections: Inspection[] = [
   { id: 'RCV-0908', receivingId: 'REQ-0907-01', date: '2026-09-08T10:00:00+09:00', inspectedAt: '2026-09-09T09:30:00+09:00', notifiedAt: '2026-09-09T10:00:00+09:00', status: '결과 확인 대기', acknowledgedAt: null, disposalStatus: '미처리', materials: [{ assetId: 'AST-001', name: '콘크리트 블록', grade: 'B', unit: '개', received: 550, usable: 500, disposal: 50, processed: 0, reason: '균열 및 모서리 파손' }], evidence: null },

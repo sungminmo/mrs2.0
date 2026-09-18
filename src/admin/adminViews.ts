@@ -1,4 +1,4 @@
-import { campaigns, campaignStatus, customerForSite, customers, dateText, inspections, inquiries, invoiceAmount, invoices, locations, memberAccounts, money, products, quotes, receivings, saleRequests, siteForReceipt, sites, type AdminImage, type Inventory, type Location, type MasterItem, type MemberAccount } from './adminData'
+import { campaigns, campaignStatus, customerForSite, customers, dateText, inspections, inquiries, invoiceAmount, invoices, locations, memberAccounts, money, products, quotes, receivings, saleRequests, siteForReceipt, sites, type AdminImage, type Inventory, type Location, type MasterItem, type MemberAccount, type Receiving } from './adminData'
 import { categoryEnabled, categoryMatches, categoryPath, materialCategories, type MaterialCategory } from '../categories'
 import type { MarketData } from './adminMarket'
 
@@ -9,7 +9,7 @@ export type AdminRow = { id: string; title: string; status: string; customerId?:
 export type AdminView = { title: string; headers: string[]; rows: AdminRow[]; note?: string }
 export const menus: { id: MenuId; label: string; tabs: { id: string; label: string }[] }[] = [
   { id: 'dashboard', label: '대시보드', tabs: [] },
-  { id: 'receiving', label: '견적·입고', tabs: [{ id: 'requests', label: '입고 신청' }, { id: 'schedule', label: '입고 일정' }] },
+  { id: 'receiving', label: '견적·입고', tabs: [{ id: 'requests', label: '입고 신청' }] },
   { id: 'inspections', label: '검수·폐기', tabs: [{ id: 'receipts', label: '입고 검수' }] },
   { id: 'items', label: '품목 관리', tabs: [{ id: 'master', label: '품목 목록' }] },
   { id: 'categories', label: '카테고리 관리', tabs: [{ id: 'tree', label: '카테고리 분류' }] },
@@ -37,15 +37,15 @@ const invoiceTab = (type: string) => type === '보관료' ? 'storage' : type ===
 const qty = (value: number | null, unit: string) => value === null ? '미확정' : `${value.toLocaleString('ko-KR')} ${unit}`
 const campaignDateText = (value: string) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value))
 
-export function createAdminViews(inventory: Inventory[], masterItems: MasterItem[], categories: MaterialCategory[] = materialCategories, market: MarketData = { sales: saleRequests, products, quotes, campaigns }, members: MemberAccount[] = memberAccounts, locationRecords: Location[] = locations): Record<string, AdminView> {
+export function createAdminViews(inventory: Inventory[], masterItems: MasterItem[], categories: MaterialCategory[] = materialCategories, market: MarketData = { sales: saleRequests, products, quotes, campaigns }, members: MemberAccount[] = memberAccounts, locationRecords: Location[] = locations, receivingRecords: Receiving[] = receivings): Record<string, AdminView> {
 const { sales: saleRequests, products, quotes, campaigns } = market
 const categoryLink = (id: string): AdminLink => ({ label: categoryPath(categories, id), menu: 'categories', tab: 'tree', id })
-const receivingRows: AdminRow[] = receivings.map((request) => {
+const receivingRows: AdminRow[] = receivingRecords.map((request) => {
   const site = sites.find((item) => item.id === request.siteId)!
   const customer = customers.find((item) => item.id === site.customerId)!
   return { id: request.id, title: request.summary, status: request.status, customerId: customer.id, date: request.date,
-    cells: [request.id, dateText(request.date), customer.name, site.name, request.volume, request.status],
-    fields: [['신청번호', request.id], ['고객사', customer.name], ['현장명', site.name], ['담당자', customer.manager], ['연락처', customer.phone], ['접수일', dateText(request.date)], ['차량 기준 예상물량', request.volume], ['입고 예정일', dateText(request.scheduledAt)], ['폐기 규정 동의일', dateText(request.termsAt)], ['운반비 견적 (예시)', money(request.estimate)], ['자재 사진', '미등록'], ['요청 메모', request.note]],
+    cells: [request.id, dateText(request.date), request.channel, customer.name, site.name, request.volume, request.status],
+    fields: [['신청번호', request.id], ['고객사', customer.name], ['현장명', site.name], ['담당자', customer.manager], ['연락처', customer.phone], ['접수일', dateText(request.date)], ['신청 경로', request.channel], ['차량 기준 예상물량', request.volume], ['입고 예정일', dateText(request.scheduledAt)], ['폐기 규정 동의일', dateText(request.termsAt)], ['운반비 견적 (예시)', money(request.estimate)], ['자재 사진', '미등록'], ['요청 메모', request.note]],
     links: [customerLink(customer.id), siteLink(site.id), ...inspections.filter((receipt) => receipt.receivingId === request.id).map((receipt) => receiptLink(receipt.id))],
   }
 })
@@ -61,7 +61,7 @@ const inspectionRows: AdminRow[] = inspections.map((receipt) => {
   }
 })
 const inventoryRows: AdminRow[] = inventory.map((asset) => {
-  const siteId = receivings.find((request) => request.id === asset.receivingId)!.siteId
+  const siteId = receivingRecords.find((request) => request.id === asset.receivingId)!.siteId
   const customerId = asset.customerId
   const location = locationRecords.find((item) => item.id === asset.locationId)
   return { id: asset.id, title: asset.name, status: asset.status, customerId, images: asset.images, grade: asset.grade, saleStatus: asset.saleStatus, itemId: asset.itemId, locationId: asset.locationId, categoryId: asset.category,
@@ -102,14 +102,13 @@ const campaignRows: AdminRow[] = campaigns.map((campaign) => {
 const invoiceRows: AdminRow[] = invoices.map((invoice) => ({ id: invoice.id, title: `${customerName(invoice.customerId)} ${invoice.type}`, customerId: invoice.customerId, date: invoice.date, status: invoice.status, cells: [invoice.id, dateText(invoice.date), customerName(invoice.customerId), invoice.period, money(invoiceAmount(invoice)), invoice.status], fields: [['명세번호', invoice.id], ['고객사', customerName(invoice.customerId)], ['구분', invoice.type], ['대상 기간', invoice.period], ['최초 예상액', money(invoice.estimate)], ['청구·정산 금액', money(invoiceAmount(invoice))], ['상태', invoice.status]], sections: [{ title: '명세 항목', headers: ['항목', '금액'], rows: invoice.lines.map((line) => [line.label, money(line.amount)]) }], links: [customerLink(invoice.customerId), ...(invoice.receiptId ? [receiptLink(invoice.receiptId)] : []), ...(invoice.locationId ? [{ label: invoice.locationId, menu: 'inventory' as const, tab: 'locations', id: invoice.locationId }] : [])], note: '예시 금액은 부가세 포함입니다. 미산정 금액은 0원이 아니며 미청구 예상액은 합계에서 제외합니다.' }))
 const customerRows: AdminRow[] = customers.map((customer) => ({ id: customer.id, title: customer.name, customerId: customer.id, status: customer.status, cells: [customer.id, customer.name, customer.manager, customer.phone, customer.status], fields: [['고객번호', customer.id], ['고객사', customer.name], ['담당자', customer.manager], ['연락처', customer.phone], ['이메일', customer.email], ['이용 상태', customer.status]], links: [...sites.filter((site) => site.customerId === customer.id).map((site) => siteLink(site.id)), { label: '고객 문의', menu: 'customers', tab: 'inquiries', customer: customer.id }, { label: '보관료 명세', menu: 'billing', tab: 'storage', customer: customer.id }] }))
 const memberRows: AdminRow[] = members.map((member) => ({ id: member.id, title: member.companyName, status: member.status, date: member.joinedAt, cells: [member.id, member.type, member.email, member.companyName, member.managerName, member.managerPhone, dateText(member.lastLoginAt), dateText(member.joinedAt), member.status], fields: [['회원코드', member.id], ['유형', member.type], ['아이디 (이메일)', member.email], ['회사명', member.companyName], ['사업자번호', member.businessNumber], ['대표자명', member.representativeName], ['담당자', member.managerName], ['담당자 연락처', member.managerPhone], ['회사 전화번호', member.companyPhone], ['팩스 번호', member.faxNumber || '미등록'], ['최근 로그인', dateText(member.lastLoginAt)], ['가입일', dateText(member.joinedAt)], ['가입 상태', member.status]], links: [], note: member.status === '가입 승인 대기' ? '가입 신청 정보를 확인한 후 승인 처리하면 즉시 서비스 이용이 가능합니다.' : undefined }))
-const siteRows: AdminRow[] = sites.map((site) => ({ id: site.id, title: site.name, customerId: site.customerId, status: site.status, cells: [site.id, site.name, customerName(site.customerId), site.address, site.status], fields: [['현장번호', site.id], ['현장명', site.name], ['고객사', customerName(site.customerId)], ['주소', site.address], ['운영 상태', site.status]], links: [customerLink(site.customerId), ...receivings.filter((request) => request.siteId === site.id).map((request) => requestLink(request.id))] }))
+const siteRows: AdminRow[] = sites.map((site) => ({ id: site.id, title: site.name, customerId: site.customerId, status: site.status, cells: [site.id, site.name, customerName(site.customerId), site.address, site.status], fields: [['현장번호', site.id], ['현장명', site.name], ['고객사', customerName(site.customerId)], ['주소', site.address], ['운영 상태', site.status]], links: [customerLink(site.customerId), ...receivingRecords.filter((request) => request.siteId === site.id).map((request) => requestLink(request.id))] }))
 const inquiryRows: AdminRow[] = inquiries.map((inquiry) => ({ id: inquiry.id, title: inquiry.title, customerId: inquiry.customerId, date: inquiry.date, status: inquiry.status, cells: [inquiry.id, dateText(inquiry.date), inquiry.type, customerName(inquiry.customerId), inquiry.title, inquiry.status], fields: [['문의번호', inquiry.id], ['문의 유형', inquiry.type], ['접수일', dateText(inquiry.date)], ['고객사', customerName(inquiry.customerId)], ['문의 원문', inquiry.text], ['답변', inquiry.answer ?? '미답변']], links: [customerLink(inquiry.customerId), ...(inquiry.receiptId ? [receiptLink(inquiry.receiptId)] : []), ...(inquiry.receivingId ? [requestLink(inquiry.receivingId)] : []), ...(inquiry.quoteId ? [{ label: inquiry.quoteId, menu: 'market' as const, tab: 'quotes', id: inquiry.quoteId }] : [])] }))
 
 const referenceRows = (items: [string, string, string][]): AdminRow[] => items.map(([id, title, content]) => ({ id, title, status: '참고 기준', cells: [id, title, content], fields: [['코드', id], ['항목', title], ['내용', content]], links: [] }))
 return {
   'items/master': { title: '품목 목록', headers: ['품목코드', '품목명', '카테고리', '규격', '브랜드', '단위', '입고단가', '출고단가', '표준단가', '사용 구분'], rows: itemRows, note: '원 / 기준 단위 · 부가세 포함 · 미사용 품목 및 분류는 신규 자산 연결 제외' },
-  'receiving/requests': { title: '입고 신청', headers: ['신청번호', '접수일', '고객사', '현장', '예상물량', '상태'], rows: receivingRows },
-  'receiving/schedule': { title: '입고 일정', headers: ['신청번호', '입고 예정일', '고객사', '현장', '예상물량', '상태'], rows: receivingRows.filter((row) => receivings.find((request) => request.id === row.id)!.scheduledAt).map((row) => { const scheduledAt = receivings.find((request) => request.id === row.id)!.scheduledAt!; return { ...row, date: scheduledAt, cells: row.cells.map((cell, index) => index === 1 ? dateText(scheduledAt) : cell) } }) },
+  'receiving/requests': { title: '입고 신청', headers: ['신청번호', '접수일', '신청 경로', '고객사', '현장', '예상물량', '상태'], rows: receivingRows },
   'inspections/receipts': { title: '입고 검수', headers: ['입고번호', '고객사', '입고일', '검수 완료일', '검수 상태', '폐기 상태'], rows: inspectionRows },
   'inventory/stock': { title: '자산 목록', headers: ['재고번호', '품목코드', '자산명', '카테고리', '고객사', '등급', '현재 수량', '로케이션', '보관 상태', '판매 상태'], rows: inventoryRows },
   'inventory/locations': { title: '로케이션', headers: ['위치번호', '로케이션', '구역', '점유 품목', '상태'], rows: locationRows },
@@ -131,7 +130,7 @@ return {
 }
 
 export const dashboardMetrics: (AdminLink & { count: number })[] = [
-  { label: '입고 접수 대기', menu: 'receiving', tab: 'requests', status: '접수 대기', count: receivings.filter((item) => item.status === '접수 대기').length },
+  { label: '입고 신청', menu: 'receiving', tab: 'requests', status: '입고 신청', count: receivings.filter((item) => item.status === '입고 신청').length },
   { label: '입고 검수 대기', menu: 'inspections', tab: 'receipts', status: '검수 대기', count: inspections.filter((item) => item.status === '검수 대기').length },
   { label: '판매 승인 대기', menu: 'market', tab: 'sales', status: '승인 대기', count: saleRequests.filter((item) => item.status === '승인 대기').length },
   { label: '미답변 문의', menu: 'customers', tab: 'inquiries', status: '미답변', count: inquiries.filter((item) => item.status === '미답변').length },
