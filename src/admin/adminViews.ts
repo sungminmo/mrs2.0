@@ -1,6 +1,6 @@
 import { campaigns, campaignStatus, customerForSite, customers, dateText, inspections, inquiries, invoiceAmount, invoices, locations, memberAccounts, money, products, quotes, receivings, saleRequests, siteForReceipt, sites, type AdminImage, type Inventory, type Location, type MasterItem, type MemberAccount, type Receiving } from './adminData'
 import { categoryEnabled, categoryMatches, categoryPath, materialCategories, type MaterialCategory } from '../categories'
-import type { MarketData } from './adminMarket'
+import { detailedInspectionStatus, type MarketData } from './adminMarket'
 
 export type MenuId = 'dashboard' | 'receiving' | 'inspections' | 'categories' | 'items' | 'inventory' | 'market' | 'billing' | 'customers' | 'members' | 'settings'
 export type AdminLink = { label: string; menu: MenuId; tab: string; id?: string; status?: string; customer?: string }
@@ -36,7 +36,6 @@ const siteLink = (id: string): AdminLink => ({ label: sites.find((site) => site.
 const invoiceTab = (type: string) => type === '보관료' ? 'storage' : type === '판매 정산' ? 'payouts' : 'disposal'
 const qty = (value: number | null, unit: string) => value === null ? '미확정' : `${value.toLocaleString('ko-KR')} ${unit}`
 const campaignDateText = (value: string) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value))
-const detailedInspectionStatus = (request: typeof saleRequests[number]) => request.inspection.includes('완료') ? '상세 검수 완료' : '상세 검수 대기'
 
 export function createAdminViews(inventory: Inventory[], masterItems: MasterItem[], categories: MaterialCategory[] = materialCategories, market: MarketData = { sales: saleRequests, products, quotes, campaigns }, members: MemberAccount[] = memberAccounts, locationRecords: Location[] = locations, receivingRecords: Receiving[] = receivings): Record<string, AdminView> {
 const { sales: saleRequests, products, quotes, campaigns } = market

@@ -8,12 +8,16 @@ export const marketStatusOptions = {
   quotes: ['접수 대기', '견적 회신', '출고 완료'],
 } as const
 export type MarketStatusTab = keyof typeof marketStatusOptions
+export const detailedInspectionStatus = (request: SaleRequest) => request.inspection.includes('완료') ? '상세 검수 완료' : '상세 검수 대기'
 
 export function changeMarketStatus(data: MarketData, tab: MarketStatusTab, ids: string[], status: string): MarketData {
   if (!(marketStatusOptions[tab] as readonly string[]).includes(status)) throw new Error('변경할 상태를 선택해 주세요.')
   if (!ids.length || ids.some((id) => !data[tab].some((record) => record.id === id))) throw new Error('변경할 내역을 다시 선택해 주세요.')
   const selected = new Set(ids)
-  if (tab === 'sales') return { ...data, sales: data.sales.map((record) => selected.has(record.id) ? { ...record, status: status as SaleRequest['status'] } : record) }
+  if (tab === 'sales') {
+    if (status === '승인 완료' && data.sales.some((record) => selected.has(record.id) && detailedInspectionStatus(record) !== '상세 검수 완료')) throw new Error('상세 검수가 완료된 판매 요청만 승인할 수 있습니다.')
+    return { ...data, sales: data.sales.map((record) => selected.has(record.id) ? { ...record, status: status as SaleRequest['status'] } : record) }
+  }
   if (tab === 'quotes') return { ...data, quotes: data.quotes.map((record) => selected.has(record.id) ? { ...record, status: status as Quote['status'] } : record) }
   const productStatus = status === '판매취소' ? '판매대기' : status as Product['status']
   return { ...data, products: data.products.map((record) => selected.has(record.id) ? { ...record, status: productStatus } : record) }
