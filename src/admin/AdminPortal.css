@@ -86,6 +86,7 @@
 .adm-product-photo figcaption { margin-top: 8px; font-size: 11px; line-height: 1.7; color: var(--adm-muted); }
 .adm-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .adm-management-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.adm-inspection-action { padding: 16px 0; border-block: 1px solid var(--adm-border); }
 .admin-portal .adm-primary { color: #fdfefd; background: #285c42; border-color: #285c42; }
 .adm-primary:disabled { opacity: .6; cursor: default; }
 .adm-editor { max-width: 1000px; }
