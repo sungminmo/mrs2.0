@@ -5,12 +5,12 @@
 Ubuntu 24.04 서버에서 MariaDB, Hono/Node.js, React/Nginx를 함께 실행합니다.
 Mac에서 수정한 소스를 Git으로 전달하고 서버에서 이미지를 빌드합니다.
 프론트엔드는 루트에 유지하며 `backend/`는 독립 npm 패키지입니다.
-업무 API, 로그인, 실제 문의 저장은 아직 구현하지 않았습니다.
+백엔드는 상태 확인과 JWT 로그인 API를 제공합니다. 회원가입, 승인, 품목 및 자산 업무 API는 아직 구현하지 않았습니다.
 
 | 구성 | 역할 | 호스트 공개 포트 |
 | --- | --- | --- |
 | Nginx | `/mrs2.0/` 화면과 `/api/` 프록시 | `127.0.0.1:8080`만 |
-| Hono / Node.js 24 | 상태 API, Knex/mysql2 연결 풀 | 없음 |
+| Hono / Node.js 24 | 상태 API, JWT 인증, Prisma/MariaDB 연결 | 없음 |
 | MariaDB 11.8 | `b2b_mall`, `b2b_app` 전용 계정 | 없음 |
 
 DB는 별도의 내부 네트워크에 있으며 Nginx에서 직접 접근할 수 없습니다.
@@ -41,8 +41,8 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-`.env`의 `DB_ROOT_PASSWORD`와 `DB_PASSWORD`에 서로 다른 긴 임의 값을 설정하세요.
-각 값은 `openssl rand -hex 32`로 생성할 수 있습니다. 값은 서버 터미널에서만 취급하고
+`.env`의 `DB_ROOT_PASSWORD`, `DB_PASSWORD`, `JWT_SECRET`에 서로 다른 긴 임의 값을 설정하세요.
+각 값은 `openssl rand -hex 32`로 생성할 수 있습니다. `JWT_SECRET`은 최소 32자여야 합니다. 값은 서버 터미널에서만 취급하고
 채팅, Git, 로그에 공유하지 마세요. 파일에 값을 넣은 뒤 다음을 실행합니다.
 빈 비밀번호는 Compose가 거부합니다. 실제 `.env`는 Git 및 이미지 빌드에서 제외됩니다.
 
@@ -56,7 +56,7 @@ docker compose ps
 curl --fail http://127.0.0.1:8080/api/health/ready
 ```
 
-최초 마이그레이션은 Knex 이력 테이블만 초기화하며 업무 테이블이나 샘플 데이터를 만들지 않습니다.
+최초 마이그레이션은 Prisma가 관리하며 사용자, 카테고리, 품목, 자산 관련 테이블을 생성합니다. 샘플 데이터는 만들지 않습니다.
 상태 API는 `/api/health/live`가 프로세스 생존을, `/api/health/ready`가 실제 `SELECT 1`
 성공 여부를 확인합니다. DB 장애나 제한 시간 초과 시 readiness는 `503`을 반환합니다.
 DB 복구 후에는 같은 연결 풀에서 자동으로 재연결합니다. Docker의 unhealthy 상태 자체는
@@ -91,7 +91,7 @@ npm --prefix backend run typecheck
 npm --prefix backend test
 npm --prefix backend run build
 npx tsc -b
-npx oxlint src backend/src backend/test backend/knexfile.ts
+npx oxlint src backend/src backend/test
 ```
 
 상태 API 단위 테스트는 DB 없이 실행됩니다. 전체 환경은 Mac에서도 Docker와 루트 `.env`를
@@ -99,13 +99,16 @@ npx oxlint src backend/src backend/test backend/knexfile.ts
 호스트에서 실행하는 `npm --prefix backend run dev`는 별도로 접근 가능한 DB 환경변수를
 주입해야 합니다. 기본 구성은 DB를 호스트에 공개하지 않으므로 컨테이너 빌드로 통합 검증합니다.
 
-새 마이그레이션은 루트 `.env`에 앱 비밀번호를 설정한 뒤 아래처럼 생성합니다.
-생성 시 DB 연결은 하지 않습니다. 생성된 TypeScript의 `up`/`down`을 작성한 후 빌드해야 합니다.
+새 마이그레이션은 MariaDB를 실행한 상태에서 Prisma 스키마를 변경한 뒤 생성합니다.
 
 ```sh
-DB_HOST=db DB_NAME=b2b_mall DB_USER=b2b_app \
-  npm --prefix backend run db:make -- 변경_설명
+docker compose build backend
+docker compose up -d --wait db
+docker compose run --rm --no-deps backend npm run db:dev -- --name 변경_설명
 ```
+
+스키마 파일은 `backend/prisma/schema/`에 도메인별로 분리되어 있고, 생성된 SQL은
+`backend/prisma/migrations/`에 저장됩니다. 이미 배포한 마이그레이션 파일은 수정하지 마세요.
 
 소스를 커밋·푸시한 뒤 **서버의 같은 저장소 디렉터리**에서 재배포합니다.
 
