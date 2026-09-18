@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowUpRight, Archive, Building2, ChevronLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutDashboard, ListChecks, Menu, PackageCheck, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, X } from 'lucide-react'
-import { campaigns, customers, dateText, inventory, invoiceAmount, invoices, masterItems, money, products, quotes, referenceDate, saleRequests } from './adminData'
+import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutDashboard, ListChecks, Menu, PackageCheck, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
+import { campaigns, customers, dateText, inventory, invoiceAmount, invoices, masterItems, memberAccounts, money, products, quotes, referenceDate, saleRequests } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
 import { materialPhotos } from '../assetPhotos'
 import InventoryEditor from './InventoryEditor'
@@ -11,7 +11,7 @@ import CampaignEditor, { MarketStatusEditor } from './MarketEditor'
 import { changeMarketStatus, marketStatusOptions, type MarketStatusTab } from './adminMarket'
 import './AdminPortal.css'
 
-const icons = { dashboard: LayoutDashboard, receiving: PackageCheck, inspections: ClipboardCheck, items: ListChecks, categories: ListChecks, inventory: Archive, market: ShoppingCart, billing: ReceiptText, customers: Building2, settings: Settings2 }
+const icons = { dashboard: LayoutDashboard, receiving: PackageCheck, inspections: ClipboardCheck, items: ListChecks, categories: ListChecks, inventory: Archive, market: ShoppingCart, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2 }
 const pageSize = 5
 
 export default function AdminPortal({ hash }: { hash: string }) {
@@ -19,8 +19,9 @@ export default function AdminPortal({ hash }: { hash: string }) {
   const [items, setItems] = useState(() => structuredClone(masterItems))
   const [categories, setCategories] = useState(() => structuredClone(materialCategories))
   const [market, setMarket] = useState(() => structuredClone({ sales: saleRequests, products, quotes, campaigns }))
+  const [members, setMembers] = useState(() => structuredClone(memberAccounts))
   const [notice, setNotice] = useState({ scope: '', text: '' })
-  const views = createAdminViews(assets, items, categories, market)
+  const views = createAdminViews(assets, items, categories, market, members)
   const url = new URL(hash.slice(1), 'https://mrs.example')
   const route = url.pathname.split('/')[2] || 'dashboard'
   const menu = menus.find((item) => item.id === route) ?? menus[0]
@@ -32,6 +33,7 @@ export default function AdminPortal({ hash }: { hash: string }) {
   const editable = menu.id === 'items' || menu.id === 'inventory' && tab?.id === 'stock' || campaignEditing
   const recordKind = campaignEditing ? '기획전' : menu.id === 'items' ? '품목' : '자산'
   const statusTab = menu.id === 'market' && tab && Object.hasOwn(marketStatusOptions, tab.id) ? tab.id as MarketStatusTab : undefined
+  const memberApplication = menu.id === 'members' && tab?.id === 'applications' && row?.status === '가입 승인 대기'
   const noticeScope = `${menu.id}/${tab?.id}/${id ?? ''}`
   const updateStatus = (ids: string[], status: string) => {
     if (!statusTab) return
@@ -85,12 +87,17 @@ export default function AdminPortal({ hash }: { hash: string }) {
         {statusTab && <p className="adm-note">상태는 임시 저장되며 새로고침·고객 포털 이동 시 초기화됩니다. 실제 판매·발송·재고 차감·정산은 실행하지 않습니다.</p>}
         {editing && campaignEditing ? <CampaignEditor key={`${mode}/${id}`} campaign={mode === 'edit' ? market.campaigns.find((entry) => entry.id === id) : undefined} campaigns={market.campaigns} categories={categories} cancelHref={cancelHref} onSave={(campaign) => { setMarket((current) => ({ ...current, campaigns: current.campaigns.some((entry) => entry.id === campaign.id) ? current.campaigns.map((entry) => entry.id === campaign.id ? campaign : entry) : [...current.campaigns, campaign] })); setNotice({ scope: `market/campaigns/${campaign.id}`, text: '기획전이 임시 저장되었습니다.' }); saved(campaign.id) }} /> : editing ? <InventoryEditor key={`${menu.id}/${mode}/${id}`} kind={menu.id === 'items' ? 'items' : 'inventory'} items={items} assets={assets} categories={categories} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSaveItem={(item) => { setItems((current) => current.some((entry) => entry.id === item.id) ? current.map((entry) => entry.id === item.id ? item : entry) : [...current, item]); saved(item.id) }} onSaveAsset={(asset) => { setAssets((current) => current.some((entry) => entry.id === asset.id) ? current.map((entry) => entry.id === asset.id ? asset : entry) : [...current, asset]); saved(asset.id) }} /> : <>
           {editable && (!id || row) && <div className="adm-management-actions"><span className="adm-note">새로고침·고객 포털 이동 시 변경 내용 초기화</span><a className="adm-button adm-primary" href={editHref}>{row ? <Pencil size={16} /> : <Plus size={16} />}{recordKind} {row ? '수정' : '등록'}</a></div>}
-          {view && (id ? <><a className="adm-button adm-back" href={listHref}><ArrowLeft size={15} />목록으로</a>{row ? <>{statusTab && <MarketStatusEditor key={`${row.id}/${row.status}`} tab={statusTab} ids={[row.id]} currentStatus={row.status} onChange={updateStatus} />}<RecordDetail row={row} /></> : <div className="adm-empty"><h2>내역을 찾을 수 없습니다</h2><p>선택한 메뉴에 해당 번호가 없습니다.</p></div>}</> : <RecordList key={`${menu.id}/${tab?.id}`} view={view} params={url.searchParams} path={menu.id} categories={categories} statusTab={statusTab} onStatusChange={updateStatus} />)}
+          {view && (id ? <><a className="adm-button adm-back" href={listHref}><ArrowLeft size={15} />목록으로</a>{row ? <>{statusTab && <MarketStatusEditor key={`${row.id}/${row.status}`} tab={statusTab} ids={[row.id]} currentStatus={row.status} onChange={updateStatus} />}{memberApplication && <MemberApproval onApprove={() => { setMembers((current) => current.map((member) => member.id === row.id ? { ...member, status: '이용 중' } : member)); setNotice({ scope: `members/applications/${row.id}`, text: `${row.id} 회원 가입을 승인했습니다.` }); window.location.hash = `/admin/members?tab=list&id=${row.id}` }} />}<RecordDetail row={row} /></> : <div className="adm-empty"><h2>내역을 찾을 수 없습니다</h2><p>선택한 메뉴에 해당 번호가 없습니다.</p></div>}</> : <RecordList key={`${menu.id}/${tab?.id}`} view={view} params={url.searchParams} path={menu.id} categories={categories} statusTab={statusTab} onStatusChange={updateStatus} />)}
         </>}
       </>}
       <footer className="adm-footer">MRS 운영 관리 · 예시 데이터 / 실제 승인·발송·청구 없음</footer>
     </main>
   </div>
+}
+
+function MemberApproval({ onApprove }: { onApprove: () => void }) {
+  const [confirming, setConfirming] = useState(false)
+  return <section className="adm-member-approval" aria-label="회원 가입 승인">{confirming ? <><span>이 회원의 가입을 승인하시겠습니까? 승인 후 즉시 로그인할 수 있습니다.</span><button className="adm-button adm-primary" onClick={onApprove}><Check size={16} />승인 확정</button><button className="adm-button" onClick={() => setConfirming(false)}><X size={16} />취소</button></> : <><span>가입 신청 정보를 확인한 후 승인 처리해 주세요.</span><button className="adm-button adm-primary" onClick={() => setConfirming(true)}><Check size={16} />가입 승인</button></>}</section>
 }
 
 function Status({ value }: { value: string }) {

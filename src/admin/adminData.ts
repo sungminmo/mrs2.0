@@ -17,6 +17,7 @@ export type SaleRequest = { id: string; assetId: string; date: string; quantity:
 export type Product = { id: string; assetId: string; name: string; price: number; unit: string; status: '판매대기' | '판매 중' | '재고 없음' }
 export type Quote = { id: string; customerId: string; date: string; dueAt: string; status: '접수 대기' | '견적 회신' | '출고 완료'; lines: { productId: string; name: string; quantity: number; unit: string; unitPrice: number | null }[]; address: string; note: string }
 export type Campaign = { id: string; name: string; category: string; description: string; enabled: boolean; order: number; startsAt: string; endsAt: string }
+export type MemberAccount = { id: string; type: '기업회원' | '공급처'; email: string; companyName: string; businessNumber: string; representativeName: string; managerName: string; managerPhone: string; companyPhone: string; faxNumber: string; lastLoginAt: string | null; joinedAt: string; status: '가입 승인 대기' | '이용 중' | '승인 반려' }
 type Invoice = { id: string; customerId: string; type: '보관료' | '판매 정산' | '폐기 비용'; date: string; period: string; status: '미청구' | '청구 완료' | '수납 완료' | '정산 완료'; estimate: number | null; lines: { label: string; amount: number }[]; receiptId?: string; locationId?: string; quoteId?: string }
 type Inquiry = { id: string; customerId: string; date: string; type: '서비스' | '입고' | '검수 이의' | '구매'; title: string; text: string; status: '미답변' | '확인 중' | '답변 완료'; answer: string | null; receiptId?: string; receivingId?: string; quoteId?: string }
 
@@ -24,6 +25,12 @@ export const customers: Customer[] = [
   { id: 'CUS-001', name: '새봄건설 (예시)', manager: '김담당', phone: '010-0000-1001', email: 'operations@example.com', status: '이용 중' },
   { id: 'CUS-002', name: '다온인테리어 (예시)', manager: '이담당', phone: '010-0000-1002', email: 'design@example.com', status: '이용 중' },
   { id: 'CUS-003', name: '한결자재 (예시)', manager: '박담당', phone: '010-0000-1003', email: 'materials@example.com', status: '상담 중' },
+]
+export const memberAccounts: MemberAccount[] = [
+  { id: 'MBR-000001', type: '기업회원', email: 'operations@saebom.example.com', companyName: '새봄건설(주)', businessNumber: '123-45-67890', representativeName: '김새봄', managerName: '김담당', managerPhone: '010-0000-1001', companyPhone: '02-0000-1101', faxNumber: '02-0000-1102', lastLoginAt: '2026-09-14T09:10:00+09:00', joinedAt: '2026-08-18T10:00:00+09:00', status: '이용 중' },
+  { id: 'MBR-000002', type: '기업회원', email: 'design@daon.example.com', companyName: '다온인테리어(주)', businessNumber: '234-56-78901', representativeName: '이 다온', managerName: '이담당', managerPhone: '010-0000-1002', companyPhone: '02-0000-1201', faxNumber: '', lastLoginAt: '2026-09-13T16:24:00+09:00', joinedAt: '2026-08-25T09:30:00+09:00', status: '이용 중' },
+  { id: 'MBR-000003', type: '공급처', email: 'partner@hangyeol.example.com', companyName: '한결자재', businessNumber: '345-67-89012', representativeName: '박한결', managerName: '박담당', managerPhone: '010-0000-1003', companyPhone: '031-000-1301', faxNumber: '031-000-1302', lastLoginAt: null, joinedAt: '2026-09-14T09:15:00+09:00', status: '가입 승인 대기' },
+  { id: 'MBR-000004', type: '기업회원', email: 'materials@greenbuild.example.com', companyName: '그린빌드', businessNumber: '456-78-90123', representativeName: '최그린', managerName: '최담당', managerPhone: '010-0000-1004', companyPhone: '02-0000-1401', faxNumber: '', lastLoginAt: null, joinedAt: '2026-09-15T14:20:00+09:00', status: '가입 승인 대기' },
 ]
 export const sites: Site[] = [
   { id: 'SITE-001', customerId: 'CUS-001', name: '강동 주거단지', address: '서울 강동구 · 예시 현장', status: '운영 중' },
