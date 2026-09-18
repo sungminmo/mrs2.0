@@ -10,6 +10,8 @@ const valueMetrics = [
   { label: '재활용으로 회수한 판매 수익', value: 4120000, description: '버려질 뻔한 자재에서 되찾은 수익' },
 ]
 
+const companyLogo = `${import.meta.env.BASE_URL}logo.png`
+
 function ScrollProgress() {
   const bar = useRef<HTMLDivElement>(null)
   const progressContainer = useRef<HTMLDivElement>(null)
@@ -147,6 +149,12 @@ export default function LoginPage({ onLogin, onBrowse }: { onLogin: () => void; 
         <ul className="login-inquiry-topics" data-scroll-reveal><li>보관 가능한 자재와 입고 절차</li><li>마켓 등록 및 검수 진행 방식</li><li>보관 비용과 정산 기준</li><li>기업 단위 서비스 도입</li></ul>
         <div className="login-contact-actions" data-scroll-reveal><a className="login-contact-cta" href="tel:0312981191"><Phone size={17} />031-298-1191</a><a className="login-contact-cta login-contact-cta-primary" href="#/contact"><MessageSquare size={17} />서비스 사용 문의</a></div>
       </div></section>
-    </main><footer className="login-footer">© 2026 MRS · Material Recycling Service <a href="#/admin/dashboard">관리자 시안</a><a href="https://commons.wikimedia.org/wiki/File:A_bunch_of_rebar_up_close.jpg" target="_blank" rel="noreferrer">사진: W.carter · CC BY-SA 4.0 (화면에 맞게 자름)</a></footer>
+    </main><footer className="login-footer"><div className="login-footer-inner">
+      <div className="login-footer-brand"><img src={companyLogo} alt="NEWONE" /></div>
+      <address className="login-footer-company">
+        <p><span>공동대표이사 : 이율범, 조청오</span><i aria-hidden="true">|</i><span>사업자등록번호 : 124-87-01984</span></p>
+        <p>본사 : 경기도 화성시 효행구 융건로 84-25. <a href="tel:0312981191">Tel: 031-298-1191</a> <span>Fax: 031-297-4460</span></p>
+      </address>
+    </div><div className="login-footer-bottom"><span>© 2026 MRS. All rights reserved.</span><a href="#/admin/dashboard">관리자 시안</a><a href="https://commons.wikimedia.org/wiki/File:A_bunch_of_rebar_up_close.jpg" target="_blank" rel="noreferrer">사진: W.carter · CC BY-SA 4.0</a></div></footer>
   </div>
 }
