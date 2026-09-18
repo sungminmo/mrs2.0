@@ -1,4 +1,4 @@
-import { campaigns, campaignStatus, customerForSite, customers, dateText, inspections, inquiries, invoiceAmount, invoices, locations, memberAccounts, money, products, quotes, receivings, saleRequests, siteForReceipt, sites, type AdminImage, type Inventory, type MasterItem, type MemberAccount } from './adminData'
+import { campaigns, campaignStatus, customerForSite, customers, dateText, inspections, inquiries, invoiceAmount, invoices, locations, memberAccounts, money, products, quotes, receivings, saleRequests, siteForReceipt, sites, type AdminImage, type Inventory, type Location, type MasterItem, type MemberAccount } from './adminData'
 import { categoryEnabled, categoryMatches, categoryPath, materialCategories, type MaterialCategory } from '../categories'
 import type { MarketData } from './adminMarket'
 
@@ -37,7 +37,7 @@ const invoiceTab = (type: string) => type === '보관료' ? 'storage' : type ===
 const qty = (value: number | null, unit: string) => value === null ? '미확정' : `${value.toLocaleString('ko-KR')} ${unit}`
 const campaignDateText = (value: string) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value))
 
-export function createAdminViews(inventory: Inventory[], masterItems: MasterItem[], categories: MaterialCategory[] = materialCategories, market: MarketData = { sales: saleRequests, products, quotes, campaigns }, members: MemberAccount[] = memberAccounts): Record<string, AdminView> {
+export function createAdminViews(inventory: Inventory[], masterItems: MasterItem[], categories: MaterialCategory[] = materialCategories, market: MarketData = { sales: saleRequests, products, quotes, campaigns }, members: MemberAccount[] = memberAccounts, locationRecords: Location[] = locations): Record<string, AdminView> {
 const { sales: saleRequests, products, quotes, campaigns } = market
 const categoryLink = (id: string): AdminLink => ({ label: categoryPath(categories, id), menu: 'categories', tab: 'tree', id })
 const receivingRows: AdminRow[] = receivings.map((request) => {
@@ -63,7 +63,7 @@ const inspectionRows: AdminRow[] = inspections.map((receipt) => {
 const inventoryRows: AdminRow[] = inventory.map((asset) => {
   const siteId = receivings.find((request) => request.id === asset.receivingId)!.siteId
   const customerId = asset.customerId
-  const location = locations.find((item) => item.id === asset.locationId)
+  const location = locationRecords.find((item) => item.id === asset.locationId)
   return { id: asset.id, title: asset.name, status: asset.status, customerId, images: asset.images, grade: asset.grade, saleStatus: asset.saleStatus, itemId: asset.itemId, locationId: asset.locationId, categoryId: asset.category,
     cells: [asset.id, asset.itemId, asset.name, categoryPath(categories, asset.category), customerName(customerId), asset.grade, qty(asset.quantity, asset.unit), location?.name ?? '미지정', asset.status, asset.saleStatus],
     fields: [['재고번호', asset.id], ['입고 신청번호', asset.receivingId], ['품목코드', asset.itemId], ['고객사', customerName(customerId)], ['현장', sites.find((site) => site.id === siteId)!.name], ['자산명', asset.name], ['카테고리', categoryPath(categories, asset.category)], ['카테고리 사용', categoryEnabled(categories, asset.category) ? '사용' : '미사용'], ['규격', asset.specification], ['브랜드', asset.brand || '미등록'], ['등급', asset.grade], ['현재 수량', qty(asset.quantity, asset.unit)], ['평가금액 (총액)', money(asset.appraisal)], ['보관 상태', asset.status], ['판매 상태', asset.saleStatus], ['판매 승인', saleRequests.find((request) => request.assetId === asset.id)?.status ?? '요청 없음'], ['로케이션', location?.name ?? '미지정']],
@@ -79,7 +79,7 @@ const itemRows: AdminRow[] = masterItems.map((item) => ({
   links: [categoryLink(item.category), ...inventory.filter((asset) => asset.itemId === item.id).map((asset) => assetLink(asset.id))],
   note: '단가는 기준 단위당 원화·부가세 포함 금액입니다. 품목 변경은 기존 자산 정보와 평가·판매·정산 금액에 소급 적용되지 않습니다.',
 }))
-const locationRows: AdminRow[] = locations.map((location) => {
+const locationRows: AdminRow[] = locationRecords.map((location) => {
   const stock = inventory.filter((asset) => asset.locationId === location.id && asset.status === '보관중' && asset.quantity > 0)
   const status = stock.length ? '사용 중' : '비어 있음'
   return { id: location.id, title: location.name, status, cells: [location.id, location.name, location.zone, `${stock.length}건`, status], fields: [['로케이션', location.name], ['구역', location.zone], ['점유 재고', `${stock.length}건`], ['요금 단가', location.rate === null ? '미설정' : money(location.rate)]], sections: [{ title: '점유 재고', headers: ['재고번호', '자재', '수량'], rows: stock.map((asset) => [asset.id, asset.name, qty(asset.quantity, asset.unit)]) }], links: stock.map((asset) => assetLink(asset.id)), note: '서로 다른 단위의 수량은 합산하지 않습니다. 면적·용량 기준 미설정으로 가동률을 계산하지 않습니다.' }

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutDashboard, ListChecks, Menu, PackageCheck, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
-import { campaigns, customers, dateText, inventory, invoiceAmount, invoices, masterItems, memberAccounts, money, products, quotes, referenceDate, saleRequests } from './adminData'
+import { campaigns, customers, dateText, inventory, invoiceAmount, invoices, locations, masterItems, memberAccounts, money, products, quotes, referenceDate, saleRequests } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
 import { materialPhotos } from '../assetPhotos'
 import InventoryEditor from './InventoryEditor'
+import LocationEditor from './LocationEditor'
 import { categoryMatches, materialCategories, type MaterialCategory } from '../categories'
 import CategorySelect from '../CategorySelect'
 import CategoryManager from './CategoryManager'
@@ -20,8 +21,9 @@ export default function AdminPortal({ hash }: { hash: string }) {
   const [categories, setCategories] = useState(() => structuredClone(materialCategories))
   const [market, setMarket] = useState(() => structuredClone({ sales: saleRequests, products, quotes, campaigns }))
   const [members, setMembers] = useState(() => structuredClone(memberAccounts))
+  const [locationRecords, setLocationRecords] = useState(() => structuredClone(locations))
   const [notice, setNotice] = useState({ scope: '', text: '' })
-  const views = createAdminViews(assets, items, categories, market, members)
+  const views = createAdminViews(assets, items, categories, market, members, locationRecords)
   const url = new URL(hash.slice(1), 'https://mrs.example')
   const route = url.pathname.split('/')[2] || 'dashboard'
   const menu = menus.find((item) => item.id === route) ?? menus[0]
@@ -30,8 +32,9 @@ export default function AdminPortal({ hash }: { hash: string }) {
   const id = url.searchParams.get('id')
   const row = view?.rows.find((item) => item.id === id)
   const campaignEditing = menu.id === 'market' && tab?.id === 'campaigns'
-  const editable = menu.id === 'items' || menu.id === 'inventory' && tab?.id === 'stock' || campaignEditing
-  const recordKind = campaignEditing ? '기획전' : menu.id === 'items' ? '품목' : '자산'
+  const locationEditing = menu.id === 'inventory' && tab?.id === 'locations'
+  const editable = menu.id === 'items' || menu.id === 'inventory' && (tab?.id === 'stock' || locationEditing) || campaignEditing
+  const recordKind = campaignEditing ? '기획전' : locationEditing ? '로케이션' : menu.id === 'items' ? '품목' : '자산'
   const statusTab = menu.id === 'market' && tab && Object.hasOwn(marketStatusOptions, tab.id) ? tab.id as MarketStatusTab : undefined
   const memberApplication = menu.id === 'members' && tab?.id === 'applications' && row?.status === '가입 승인 대기'
   const noticeScope = `${menu.id}/${tab?.id}/${id ?? ''}`
@@ -85,7 +88,7 @@ export default function AdminPortal({ hash }: { hash: string }) {
         <nav className="adm-tabs" aria-label={`${menu.label} 보기`}>{menu.tabs.map((item) => <a key={item.id} href={adminHref({ label: item.label, menu: menu.id, tab: item.id })} aria-current={item.id === tab?.id ? 'page' : undefined}>{item.label}</a>)}</nav>
         {notice.scope === noticeScope && !editing && <p className="adm-note" role="status">{notice.text}</p>}
         {statusTab && <p className="adm-note">상태는 임시 저장되며 새로고침·고객 포털 이동 시 초기화됩니다. 실제 판매·발송·재고 차감·정산은 실행하지 않습니다.</p>}
-        {editing && campaignEditing ? <CampaignEditor key={`${mode}/${id}`} campaign={mode === 'edit' ? market.campaigns.find((entry) => entry.id === id) : undefined} campaigns={market.campaigns} categories={categories} cancelHref={cancelHref} onSave={(campaign) => { setMarket((current) => ({ ...current, campaigns: current.campaigns.some((entry) => entry.id === campaign.id) ? current.campaigns.map((entry) => entry.id === campaign.id ? campaign : entry) : [...current.campaigns, campaign] })); setNotice({ scope: `market/campaigns/${campaign.id}`, text: '기획전이 임시 저장되었습니다.' }); saved(campaign.id) }} /> : editing ? <InventoryEditor key={`${menu.id}/${mode}/${id}`} kind={menu.id === 'items' ? 'items' : 'inventory'} items={items} assets={assets} categories={categories} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSaveItem={(item) => { setItems((current) => current.some((entry) => entry.id === item.id) ? current.map((entry) => entry.id === item.id ? item : entry) : [...current, item]); saved(item.id) }} onSaveAsset={(asset) => { setAssets((current) => current.some((entry) => entry.id === asset.id) ? current.map((entry) => entry.id === asset.id ? asset : entry) : [...current, asset]); saved(asset.id) }} /> : <>
+        {editing && campaignEditing ? <CampaignEditor key={`${mode}/${id}`} campaign={mode === 'edit' ? market.campaigns.find((entry) => entry.id === id) : undefined} campaigns={market.campaigns} categories={categories} cancelHref={cancelHref} onSave={(campaign) => { setMarket((current) => ({ ...current, campaigns: current.campaigns.some((entry) => entry.id === campaign.id) ? current.campaigns.map((entry) => entry.id === campaign.id ? campaign : entry) : [...current.campaigns, campaign] })); setNotice({ scope: `market/campaigns/${campaign.id}`, text: '기획전이 임시 저장되었습니다.' }); saved(campaign.id) }} /> : editing && locationEditing ? <LocationEditor key={`${mode}/${id}`} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSave={(location) => { setLocationRecords((current) => current.some((entry) => entry.id === location.id) ? current.map((entry) => entry.id === location.id ? location : entry) : [...current, location]); setNotice({ scope: `inventory/locations/${location.id}`, text: `${location.id} 로케이션이 임시 저장되었습니다.` }); saved(location.id) }} /> : editing ? <InventoryEditor key={`${menu.id}/${mode}/${id}`} kind={menu.id === 'items' ? 'items' : 'inventory'} items={items} assets={assets} categories={categories} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSaveItem={(item) => { setItems((current) => current.some((entry) => entry.id === item.id) ? current.map((entry) => entry.id === item.id ? item : entry) : [...current, item]); saved(item.id) }} onSaveAsset={(asset) => { setAssets((current) => current.some((entry) => entry.id === asset.id) ? current.map((entry) => entry.id === asset.id ? asset : entry) : [...current, asset]); saved(asset.id) }} /> : <>
           {editable && (!id || row) && <div className="adm-management-actions"><span className="adm-note">새로고침·고객 포털 이동 시 변경 내용 초기화</span><a className="adm-button adm-primary" href={editHref}>{row ? <Pencil size={16} /> : <Plus size={16} />}{recordKind} {row ? '수정' : '등록'}</a></div>}
           {view && (id ? <><a className="adm-button adm-back" href={listHref}><ArrowLeft size={15} />목록으로</a>{row ? <>{statusTab && <MarketStatusEditor key={`${row.id}/${row.status}`} tab={statusTab} ids={[row.id]} currentStatus={row.status} onChange={updateStatus} />}{memberApplication && <MemberApproval onApprove={() => { setMembers((current) => current.map((member) => member.id === row.id ? { ...member, status: '이용 중' } : member)); setNotice({ scope: `members/applications/${row.id}`, text: `${row.id} 회원 가입을 승인했습니다.` }); window.location.hash = `/admin/members?tab=list&id=${row.id}` }} />}<RecordDetail row={row} /></> : <div className="adm-empty"><h2>내역을 찾을 수 없습니다</h2><p>선택한 메뉴에 해당 번호가 없습니다.</p></div>}</> : <RecordList key={`${menu.id}/${tab?.id}`} view={view} params={url.searchParams} path={menu.id} categories={categories} statusTab={statusTab} onStatusChange={updateStatus} />)}
         </>}

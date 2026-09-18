@@ -1,4 +1,4 @@
-import { customerForSite, inspections, itemUnits, locations, receivings, type Inventory, type MasterItem } from './adminData'
+import { customerForSite, inspections, itemUnits, locations, receivings, type Inventory, type Location, type MasterItem } from './adminData'
 import { categoryPath, materialCategories, validateLeafCategory, type MaterialCategory } from '../categories'
 
 export function nextCode(prefix: string, records: { id: string }[], digits: number) {
@@ -18,7 +18,7 @@ export function validateMasterItem(item: MasterItem, items: MasterItem[], assets
   if (item.images.length > 1) throw new Error('대표 이미지는 1개만 등록할 수 있습니다.')
 }
 
-export function prepareInventory(asset: Inventory, previous: Inventory | undefined, items: MasterItem[], reason: string, categories: MaterialCategory[] = materialCategories): Inventory {
+export function prepareInventory(asset: Inventory, previous: Inventory | undefined, items: MasterItem[], reason: string, categories: MaterialCategory[] = materialCategories, locationRecords: Location[] = locations): Inventory {
   const item = items.find((candidate) => candidate.id === asset.itemId)
   const receiving = receivings.find((candidate) => candidate.id === asset.receivingId)
   if (!item || (!item.enabled && previous?.itemId !== item.id)) throw new Error('사용 중인 품목을 선택해 주세요.')
@@ -33,7 +33,7 @@ export function prepareInventory(asset: Inventory, previous: Inventory | undefin
   if (asset.status === '출고완료' ? asset.quantity !== 0 : asset.quantity <= 0) throw new Error('출고완료 자산의 현재 수량은 0, 입고대기·보관중 자산의 수량은 0보다 커야 합니다.')
   if ((asset.grade === 'F' || asset.status === '입고대기') && asset.saleStatus !== '판매대기') throw new Error('F등급 또는 입고대기 자산은 판매대기로만 등록할 수 있습니다.')
   if (asset.saleStatus === '판매중' && asset.status !== '보관중') throw new Error('판매중 자산은 보관중 상태여야 합니다.')
-  if (asset.locationId && !locations.some((location) => location.id === asset.locationId)) throw new Error('유효한 로케이션을 선택해 주세요.')
+  if (asset.locationId && !locationRecords.some((location) => location.id === asset.locationId)) throw new Error('유효한 로케이션을 선택해 주세요.')
   if (asset.status === '보관중' && !asset.locationId) throw new Error('보관중 자산의 로케이션을 선택해 주세요.')
   if (asset.images.length > 8) throw new Error('자산 이미지는 최대 8개까지 등록할 수 있습니다.')
   if (previous && !reason.trim()) throw new Error('변경 사유를 입력해 주세요.')
