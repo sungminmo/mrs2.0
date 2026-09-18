@@ -208,7 +208,7 @@ Menus: dashboard; receiving requests and schedules; inspections and disposal; ma
 - Campaigns are category-based. Exposure uses the fixed example date, inclusive start and exclusive end. Location capacity and rate formulas are not established; no fictional utilization percentage or automatic fee calculation is shown.
 - Missing inspection photos/documents are shown as unregistered. Product reference photographs retain their original credits and are not disposal evidence.
 
-Source checks: `npx tsc -b` and `npx oxlint src`. The existing `npm run lint` also scans tracked `dist` bundles, which can produce generated-code warnings. `npm run build` updates the tracked deployment output but does not publish it.
+Source checks: `npx tsc -b` and `npx oxlint src`. `dist` is a local build artifact and is excluded from Git; GitHub Pages and Docker both build it from source during deployment.
 
 ## Inspection And Disposal Prototype
 
