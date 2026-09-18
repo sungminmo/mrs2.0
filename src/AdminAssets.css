@@ -257,6 +257,8 @@ body:has(.shop-admin) { min-width: 360px; background: #f1f1f1; }
 .sa-dialog-eyebrow { display: block; margin-bottom: 4px; color: #397150; font-size: 10px; font-weight: 700; }
 .sa-receiving-fields { margin-top: 20px; }
 .sa-receiving-fields label > b { margin-left: 5px; color: #a63d36; font-size: 10px; }
+.sa-receiving-fields textarea { width: 100%; min-height: 96px; resize: vertical; padding: 10px 12px; border: 1px solid #b5bfb8; border-radius: 5px; background: #fdfefd; color: inherit; font: inherit; line-height: 1.7; }
+.sa-receiving-fields .sa-optional { margin-left: 5px; color: #69736c; font-size: 10px; }
 .sa-receiving-upload { display: flex; align-items: center; gap: 12px; position: relative; margin-top: 6px; padding: 13px; border: 1px dashed #9fac9f; border-radius: 5px; color: #397150; }
 .sa-receiving-upload > span { min-width: 0; font-size: 12px; font-weight: 600; }
 .sa-receiving-upload small { display: block; margin-top: 3px; color: #707070; font-size: 10px; font-weight: 400; }

@@ -52,7 +52,7 @@ export default function App() {
   const [settlementKind, setSettlementKind] = useState('전체')
   const openInspection = (id: string) => { setInspectionId(id); setInspectionActive(true); setTab('assets') }
   const changeDisposal = (id: string, action: DisposalAction) => setDisposals((current) => current.map((record) => record.id === id ? updateDisposal(record, action) : record))
-  if (access === 'login') return <LoginPage onLogin={() => { setAccess('member'); setTab('assets') }} onBrowse={() => { setAccess('guest'); setTab('market') }} />
+  if (access === 'login') return <ReceivingRequestProvider contact={contact}><LoginPage onLogin={() => { setAccess('member'); setTab('assets') }} onBrowse={() => { setAccess('guest'); setTab('market') }} /></ReceivingRequestProvider>
   if (access === 'guest') return <ShopifyMarket products={products} navigation={<><Nav active icon={<ShoppingCart />} label="마켓" onClick={() => setTab('market')} /><Nav active={false} icon={<UserRound />} label="로그인" onClick={() => setAccess('login')} /></>} basket={{}} onBasketChange={setMarketBasket} isGuest onLogin={() => setAccess('login')} />
   const navigation = <>
     <Nav active={tab === 'assets'} icon={<Archive />} label="내 자산" onClick={() => setTab('assets')} />

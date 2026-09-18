@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowRight, Eye, EyeOff, Leaf, LogIn, MessageSquare, Phone, ReceiptText, ShoppingBag, Warehouse, X } from 'lucide-react'
+import { useReceivingRequest } from './ReceivingRequest'
 import './LoginPage.css'
 
 const valueMetrics = [
@@ -81,6 +82,8 @@ function MaterialValueGrid() {
 }
 
 export default function LoginPage({ onLogin, onBrowse }: { onLogin: () => void; onBrowse: () => void }) {
+  const receivingRequest = useReceivingRequest()
+  const [receivingFloatVisible, setReceivingFloatVisible] = useState(true)
   const [visible, setVisible] = useState(false)
   const [notice, setNotice] = useState('')
   const page = useRef<HTMLDivElement>(null)
@@ -103,6 +106,10 @@ export default function LoginPage({ onLogin, onBrowse }: { onLogin: () => void; 
   const closeLogin = () => loginDialog.current?.close()
   return <div ref={page} className="login-page">
     <ScrollProgress />
+    {receivingRequest && receivingFloatVisible && <div className="login-receiving-float">
+      <button type="button" className="login-receiving-float-action" onClick={receivingRequest.open} aria-haspopup="dialog"><strong>MRS<br />입고 신청</strong></button>
+      <button type="button" className="login-receiving-float-close" onClick={() => setReceivingFloatVisible(false)} aria-label="입고 신청 버튼 닫기"><X size={15} /></button>
+    </div>}
     <header className="login-header"><a href="#" aria-label="MRS 홈"><Leaf size={24} />MRS <span>Material Recycling Service</span></a><nav aria-label="홈페이지 메뉴"><a className="login-header-phone" href="tel:0312981191"><Phone size={15} />031-298-1191</a><a className="login-header-contact" href="#/contact"><MessageSquare size={15} />서비스 사용 문의</a><button onClick={openLogin} aria-haspopup="dialog">로그인<ArrowRight size={15} /></button></nav></header>
     <main className="login-main">
       <section className="login-hero" aria-labelledby="home-title"><img className="login-hero-image" src="https://thumb.wikimedia.org/wikipedia/commons/thumb/5/59/A_bunch_of_rebar_up_close.jpg/1280px-A_bunch_of_rebar_up_close.jpg" alt="보관 중인 건설용 철근 자재" fetchPriority="high" /><div className="login-hero-inner"><span className="login-eyebrow">보관에서 거래까지, 자재의 새로운 순환</span><h1 id="home-title">MRS<span>건설자재 보관·거래 플랫폼</span></h1><p>현장에 남은 자재를 보관하고, 필요한 곳으로 연결합니다.<br />입고부터 판매와 정산까지 한곳에서 관리하세요.</p><div className="login-hero-actions"><button className="login-primary" onClick={onBrowse}>마켓 둘러보기<ArrowRight size={18} /></button><button className="login-hero-login" onClick={openLogin} aria-haspopup="dialog">로그인<LogIn size={17} /></button></div><a className="login-hero-more" href="#services">MRS 제공 서비스<ArrowDown size={16} /></a></div></section>
