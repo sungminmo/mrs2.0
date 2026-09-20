@@ -9,8 +9,8 @@ export default function CategoryManager({ categories, items, assets, params, onS
   const creating = params.get('mode') === 'new'
   const parentId = params.get('parent') || null
   const chain = categoryChain(categories, creating ? parentId ?? '' : selected?.id ?? '')
-  const href = (id: string) => `#/admin/categories?tab=tree&id=${encodeURIComponent(id)}`
-  const createHref = (parent: string | null) => `#/admin/categories?tab=tree&mode=new${parent ? `&parent=${encodeURIComponent(parent)}` : ''}`
+  const href = (id: string) => `#/admin/basic?tab=categories&id=${encodeURIComponent(id)}`
+  const createHref = (parent: string | null) => `#/admin/basic?tab=categories&mode=new${parent ? `&parent=${encodeURIComponent(parent)}` : ''}`
   const invalidParent = creating && parentId !== null && (!categories.some((category) => category.id === parentId) || categoryChain(categories, parentId).length >= 3)
   return <>
     <p className="adm-note">3차 분류 기준 · 상위 분류 미사용 시 하위 분류 신규 선택 제한 · 새로고침·고객 포털 이동 시 초기화</p>
@@ -25,7 +25,7 @@ export default function CategoryManager({ categories, items, assets, params, onS
     })}</div>
     {invalidParent || params.has('id') && !selected ? <p className="adm-form-error" role="alert">카테고리를 찾을 수 없거나 하위 분류를 추가할 수 없습니다.</p> : creating || selected ? <>
       <CategoryForm key={`${selected?.id ?? ''}/${creating}/${parentId}`} categories={categories} category={creating ? undefined : selected} parentId={parentId} onSave={onSave} />
-      {!creating && selected && <section className="adm-detail-section"><h2>연결 내역 · 하위 분류 포함</h2><div className="adm-related"><a href={`#/admin/items?tab=master&category=${selected.id}`}>품목 {items.filter((item) => categoryMatches(categories, item.category, selected.id)).length}건<ChevronRight size={14} /></a><a href={`#/admin/inventory?tab=stock&category=${selected.id}`}>자산 {assets.filter((asset) => categoryMatches(categories, asset.category, selected.id)).length}건<ChevronRight size={14} /></a><a href={`#/admin/market?tab=products&category=${selected.id}`}>상품 조회<ChevronRight size={14} /></a></div></section>}
+      {!creating && selected && <section className="adm-detail-section"><h2>연결 내역 · 하위 분류 포함</h2><div className="adm-related"><a href={`#/admin/basic?tab=items&category=${selected.id}`}>품목 {items.filter((item) => categoryMatches(categories, item.category, selected.id)).length}건<ChevronRight size={14} /></a><a href={`#/admin/inventory?tab=stock&category=${selected.id}`}>자산 {assets.filter((asset) => categoryMatches(categories, asset.category, selected.id)).length}건<ChevronRight size={14} /></a><a href={`#/admin/market?tab=products&category=${selected.id}`}>상품 조회<ChevronRight size={14} /></a></div></section>}
     </> : <p className="adm-note">수정할 분류를 선택하거나 새 분류를 등록해 주세요.</p>}
   </>
 }

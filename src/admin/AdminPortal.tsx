@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutDashboard, ListChecks, Menu, PackageCheck, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutDashboard, ListChecks, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
 import { campaigns, customers, dateText, inventory, invoiceAmount, invoices, locations, masterItems, memberAccounts, money, products, quotes, receivings, receivingStatuses, referenceDate, saleRequests, type ReceivingStatus } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
 import { materialPhotos } from '../assetPhotos'
@@ -12,7 +12,7 @@ import CampaignEditor, { MarketStatusEditor } from './MarketEditor'
 import { changeMarketStatus, marketStatusOptions, type MarketStatusTab } from './adminMarket'
 import './AdminPortal.css'
 
-const icons = { dashboard: LayoutDashboard, receiving: PackageCheck, inspections: ClipboardCheck, items: ListChecks, categories: ListChecks, inventory: Archive, market: ShoppingCart, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2 }
+const icons = { dashboard: LayoutDashboard, basic: ListChecks, receiving: ClipboardCheck, inventory: Archive, market: ShoppingCart, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2 }
 const pageSize = 5
 
 export default function AdminPortal({ hash }: { hash: string }) {
@@ -26,19 +26,23 @@ export default function AdminPortal({ hash }: { hash: string }) {
   const [notice, setNotice] = useState({ scope: '', text: '' })
   const views = createAdminViews(assets, items, categories, market, members, locationRecords, receivingRecords)
   const url = new URL(hash.slice(1), 'https://mrs.example')
-  const route = url.pathname.split('/')[2] || 'dashboard'
+  const rawRoute = url.pathname.split('/')[2] || 'dashboard'
+  const legacyRoute = rawRoute === 'items' ? { menu: 'basic' as const, tab: 'items' } : rawRoute === 'categories' ? { menu: 'basic' as const, tab: 'categories' } : rawRoute === 'inspections' ? { menu: 'receiving' as const, tab: url.searchParams.get('tab') || 'primary' } : null
+  const route = legacyRoute?.menu ?? rawRoute
   const menu = menus.find((item) => item.id === route) ?? menus[0]
-  const tab = menu.tabs.find((item) => item.id === url.searchParams.get('tab')) ?? menu.tabs[0]
+  const tab = menu.tabs.find((item) => item.id === (legacyRoute?.tab ?? url.searchParams.get('tab'))) ?? menu.tabs[0]
   const view = tab ? views[`${menu.id}/${tab.id}`] : null
   const id = url.searchParams.get('id')
   const row = view?.rows.find((item) => item.id === id)
   const campaignEditing = menu.id === 'market' && tab?.id === 'campaigns'
   const locationEditing = menu.id === 'inventory' && tab?.id === 'locations'
-  const editable = menu.id === 'items' || menu.id === 'inventory' && (tab?.id === 'stock' || locationEditing) || campaignEditing
-  const recordKind = campaignEditing ? '기획전' : locationEditing ? '로케이션' : menu.id === 'items' ? '품목' : '자산'
+  const itemManagement = menu.id === 'basic' && tab?.id === 'items'
+  const categoryManagement = menu.id === 'basic' && tab?.id === 'categories'
+  const editable = itemManagement || menu.id === 'inventory' && (tab?.id === 'stock' || locationEditing) || campaignEditing
+  const recordKind = campaignEditing ? '기획전' : locationEditing ? '로케이션' : itemManagement ? '품목' : '자산'
   const statusTab = menu.id === 'market' && tab && Object.hasOwn(marketStatusOptions, tab.id) ? tab.id as MarketStatusTab : undefined
   const receivingRequest = menu.id === 'receiving' && tab?.id === 'requests'
-  const inspectionStage = menu.id === 'inspections' ? tab?.id : undefined
+  const inspectionStage = menu.id === 'receiving' && tab?.id !== 'requests' ? tab?.id : undefined
   const memberApplication = menu.id === 'members' && tab?.id === 'applications' && row?.status === '가입 승인 대기'
   const noticeScope = `${menu.id}/${tab?.id}/${id ?? ''}`
   const updateStatus = (ids: string[], status: string) => {
@@ -56,14 +60,18 @@ export default function AdminPortal({ hash }: { hash: string }) {
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => { heading.current?.focus(); window.scrollTo(0, 0) }, [menu.id, tab?.id, id, mode])
   useEffect(() => {
-    if (route === 'settings' && url.searchParams.get('tab') === 'categories') {
-      window.location.replace('#/admin/categories?tab=tree')
+    if (rawRoute === 'settings' && url.searchParams.get('tab') === 'categories') {
+      window.location.replace('#/admin/basic?tab=categories')
+      return
+    }
+    if (legacyRoute) {
+      window.location.replace(adminHref({ label: '', menu: legacyRoute.menu, tab: legacyRoute.tab, id: url.searchParams.get('id') ?? undefined }))
       return
     }
     if (route !== menu.id || url.pathname.split('/').length > 3 || (tab && url.searchParams.has('tab') && url.searchParams.get('tab') !== tab.id)) {
       window.location.replace(adminHref({ label: '', menu: menu.id, tab: tab?.id ?? '' }))
     }
-  }, [route, menu.id, tab, url.pathname, url.searchParams])
+  }, [rawRoute, route, legacyRoute, menu.id, tab, url.pathname, url.searchParams])
   const listParams = new URLSearchParams(url.searchParams)
   listParams.delete('id')
   listParams.delete('mode')
@@ -91,13 +99,15 @@ export default function AdminPortal({ hash }: { hash: string }) {
     </aside>
     <main className="adm-main">
       <div className="adm-heading"><div><div className="adm-breadcrumb">운영 관리 / {menu.label}{row ? ` / ${row.id}` : ''}</div><h1 ref={heading} tabIndex={-1}>{editing ? `${recordKind} ${mode === 'new' ? '등록' : '수정'}` : row ? row.title : menu.label}</h1></div><span className="adm-mode">관리자 시안</span></div>
-      {menu.id === 'categories' ? <CategoryManager categories={categories} items={items} assets={assets} params={url.searchParams} onSave={(category) => { setCategories((current) => current.some((entry) => entry.id === category.id) ? current.map((entry) => entry.id === category.id ? category : entry) : [...current, category]); window.location.hash = `/admin/categories?tab=tree&id=${category.id}` }} /> : menu.id === 'dashboard' ? <Dashboard views={views} /> : <>
+      {menu.id === 'dashboard' ? <Dashboard views={views} /> : <>
         <nav className="adm-tabs" aria-label={`${menu.label} 보기`}>{menu.tabs.map((item) => <a key={item.id} href={adminHref({ label: item.label, menu: menu.id, tab: item.id })} aria-current={item.id === tab?.id ? 'page' : undefined}>{item.label}</a>)}</nav>
+        {categoryManagement ? <CategoryManager categories={categories} items={items} assets={assets} params={url.searchParams} onSave={(category) => { setCategories((current) => current.some((entry) => entry.id === category.id) ? current.map((entry) => entry.id === category.id ? category : entry) : [...current, category]); window.location.hash = `/admin/basic?tab=categories&id=${category.id}` }} /> : <>
         {notice.scope === noticeScope && !editing && <p className="adm-note" role="status">{notice.text}</p>}
         {statusTab && <p className="adm-note">상태는 임시 저장되며 새로고침·고객 포털 이동 시 초기화됩니다. 실제 판매·발송·재고 차감·정산은 실행하지 않습니다.</p>}
-        {editing && campaignEditing ? <CampaignEditor key={`${mode}/${id}`} campaign={mode === 'edit' ? market.campaigns.find((entry) => entry.id === id) : undefined} campaigns={market.campaigns} categories={categories} cancelHref={cancelHref} onSave={(campaign) => { setMarket((current) => ({ ...current, campaigns: current.campaigns.some((entry) => entry.id === campaign.id) ? current.campaigns.map((entry) => entry.id === campaign.id ? campaign : entry) : [...current.campaigns, campaign] })); setNotice({ scope: `market/campaigns/${campaign.id}`, text: '기획전이 임시 저장되었습니다.' }); saved(campaign.id) }} /> : editing && locationEditing ? <LocationEditor key={`${mode}/${id}`} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSave={(location) => { setLocationRecords((current) => current.some((entry) => entry.id === location.id) ? current.map((entry) => entry.id === location.id ? location : entry) : [...current, location]); setNotice({ scope: `inventory/locations/${location.id}`, text: `${location.id} 로케이션이 임시 저장되었습니다.` }); saved(location.id) }} /> : editing ? <InventoryEditor key={`${menu.id}/${mode}/${id}`} kind={menu.id === 'items' ? 'items' : 'inventory'} items={items} assets={assets} categories={categories} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSaveItem={(item) => { setItems((current) => current.some((entry) => entry.id === item.id) ? current.map((entry) => entry.id === item.id ? item : entry) : [...current, item]); saved(item.id) }} onSaveAsset={(asset) => { setAssets((current) => current.some((entry) => entry.id === asset.id) ? current.map((entry) => entry.id === asset.id ? asset : entry) : [...current, asset]); saved(asset.id) }} /> : <>
+        {editing && campaignEditing ? <CampaignEditor key={`${mode}/${id}`} campaign={mode === 'edit' ? market.campaigns.find((entry) => entry.id === id) : undefined} campaigns={market.campaigns} categories={categories} cancelHref={cancelHref} onSave={(campaign) => { setMarket((current) => ({ ...current, campaigns: current.campaigns.some((entry) => entry.id === campaign.id) ? current.campaigns.map((entry) => entry.id === campaign.id ? campaign : entry) : [...current.campaigns, campaign] })); setNotice({ scope: `market/campaigns/${campaign.id}`, text: '기획전이 임시 저장되었습니다.' }); saved(campaign.id) }} /> : editing && locationEditing ? <LocationEditor key={`${mode}/${id}`} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSave={(location) => { setLocationRecords((current) => current.some((entry) => entry.id === location.id) ? current.map((entry) => entry.id === location.id ? location : entry) : [...current, location]); setNotice({ scope: `inventory/locations/${location.id}`, text: `${location.id} 로케이션이 임시 저장되었습니다.` }); saved(location.id) }} /> : editing ? <InventoryEditor key={`${menu.id}/${mode}/${id}`} kind={itemManagement ? 'items' : 'inventory'} items={items} assets={assets} categories={categories} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSaveItem={(item) => { setItems((current) => current.some((entry) => entry.id === item.id) ? current.map((entry) => entry.id === item.id ? item : entry) : [...current, item]); saved(item.id) }} onSaveAsset={(asset) => { setAssets((current) => current.some((entry) => entry.id === asset.id) ? current.map((entry) => entry.id === asset.id ? asset : entry) : [...current, asset]); saved(asset.id) }} /> : <>
           {editable && (!id || row) && <div className="adm-management-actions"><span className="adm-note">새로고침·고객 포털 이동 시 변경 내용 초기화</span><a className="adm-button adm-primary" href={editHref}>{row ? <Pencil size={16} /> : <Plus size={16} />}{recordKind} {row ? '수정' : '등록'}</a></div>}
           {view && (id ? <><a className="adm-button adm-back" href={listHref}><ArrowLeft size={15} />목록으로</a>{row ? <>{receivingRequest && <ReceivingStatusEditor key={`${row.id}/${row.status}`} currentStatus={row.status as ReceivingStatus} onChange={(status) => updateReceivingStatus(row.id, status)} />}{inspectionStage && <InspectionAction row={row} stage={inspectionStage} />}{statusTab && <MarketStatusEditor key={`${row.id}/${row.status}`} tab={statusTab} ids={[row.id]} currentStatus={row.status} onChange={updateStatus} />}{memberApplication && <MemberApproval onApprove={() => { setMembers((current) => current.map((member) => member.id === row.id ? { ...member, status: '이용 중' } : member)); setNotice({ scope: `members/applications/${row.id}`, text: `${row.id} 회원 가입을 승인했습니다.` }); window.location.hash = `/admin/members?tab=list&id=${row.id}` }} />}<RecordDetail row={row} /></> : <div className="adm-empty"><h2>내역을 찾을 수 없습니다</h2><p>선택한 메뉴에 해당 번호가 없습니다.</p></div>}</> : <RecordList key={`${menu.id}/${tab?.id}`} view={view} params={url.searchParams} path={menu.id} categories={categories} statusTab={statusTab} onStatusChange={updateStatus} />)}
+        </>}
         </>}
       </>}
       <footer className="adm-footer">MRS 운영 관리 · 예시 데이터 / 실제 승인·발송·청구 없음</footer>
@@ -169,17 +179,17 @@ function RecordList({ view, params, path, categories, statusTab, onStatusChange 
     {(view.rows.some((row) => row.categoryId) || categoryId) && <div className="adm-category-filter"><CategorySelect categories={categories} value={categoryId} onChange={(value) => update('category', value)} /></div>}
     <div className="adm-filterbar">
       <label className="adm-search"><span>검색</span><div><Search size={16} /><input type="search" value={query} onChange={(event) => update('q', event.target.value)} placeholder="번호, 이름, 고객사" /></div></label>
-      <label><span>{path === 'items' ? '사용 구분' : extraFilters.length ? '보관 상태' : '상태'}</span><select value={status} onChange={(event) => update('status', event.target.value)}><option value="">전체 상태</option>{status && !statuses.includes(status) && <option value={status}>{status}</option>}{statuses.map((value) => <option key={value}>{value}</option>)}</select></label>
+      <label><span>{path === 'basic' ? '사용 구분' : extraFilters.length ? '보관 상태' : '상태'}</span><select value={status} onChange={(event) => update('status', event.target.value)}><option value="">전체 상태</option>{status && !statuses.includes(status) && <option value={status}>{status}</option>}{statuses.map((value) => <option key={value}>{value}</option>)}</select></label>
       {extraFilters.map(([key, label]) => { const values = [...new Set(view.rows.flatMap((row) => row[key] ? [row[key]!] : []))]; const selected = params.get(key) ?? ''; return <label key={key}><span>{label}</span><select value={selected} onChange={(event) => update(key, event.target.value)}><option value="">전체</option>{selected && !values.includes(selected) && <option value={selected}>{selected}</option>}{values.map((value) => <option key={value}>{value}</option>)}</select></label> })}
       {availableCustomers.length > 0 && <label><span>고객사</span><select value={customer} onChange={(event) => update('customer', event.target.value)}><option value="">전체 고객사</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
       {periods.length > 0 && <label><span>{path === 'billing' ? '대상 기간' : '기록 월'}</span><select value={period} onChange={(event) => update('period', event.target.value)}><option value="">전체 기간</option>{period && !periods.includes(period) && <option value={period}>{period}</option>}{periods.map((value) => <option key={value}>{value}</option>)}</select></label>}
       <a className="adm-button" href={resetHref}>초기화</a>
     </div>
     {path === 'billing' && <div className="adm-billing-summary"><span>조회 결과 청구·정산 합계<strong>{money(billed.reduce((sum, invoice) => sum + (invoiceAmount(invoice) ?? 0), 0))}</strong></span><small>미청구 예상액 제외 · 부가세 포함 예시</small></div>}
-    <div className="adm-list-heading"><h2>{view.title} <span>{filtered.length}건</span></h2><label className="adm-sort"><span>정렬</span><select value={sort} onChange={(event) => update('sort', event.target.value)}><option value="recent">{path === 'items' || extraFilters.length ? '코드순' : '최근 기록순'}</option><option value="name">이름순</option></select></label></div>
+    <div className="adm-list-heading"><h2>{view.title} <span>{filtered.length}건</span></h2><label className="adm-sort"><span>정렬</span><select value={sort} onChange={(event) => update('sort', event.target.value)}><option value="recent">{path === 'basic' || extraFilters.length ? '코드순' : '최근 기록순'}</option><option value="name">이름순</option></select></label></div>
     {view.note && <p className="adm-note">{view.note}</p>}
     {bulk && statusTab && selectedIds.length > 0 && <MarketStatusEditor key={`${scope}/${selectedIds.join(',')}`} tab={statusTab} ids={selectedIds} bulk onChange={onStatusChange} onDone={() => setSelection({ scope, ids: [] })} />}
-    <div className="adm-table-scroll" tabIndex={0} role="region" aria-label={`${view.title} 표`}><table><caption className="adm-sr-only">{view.title}</caption><thead><tr>{bulk && <th scope="col"><label className="adm-row-check"><input type="checkbox" aria-label="현재 페이지 전체 선택" checked={allSelected} disabled={!shown.length} ref={(element) => { if (element) element.indeterminate = selectedIds.length > 0 && !allSelected }} onChange={(event) => setSelection({ scope, ids: event.target.checked ? shown.map((row) => row.id) : [] })} /></label></th>}{path === 'items' && <th scope="col">대표 이미지</th>}{view.headers.map((header) => <th key={header} scope="col">{header}</th>)}<th scope="col">상세</th></tr></thead><tbody>{shown.map((row) => <tr key={row.id}>{bulk && <td><label className="adm-row-check"><input type="checkbox" aria-label={`${row.id} 선택`} checked={selectedIds.includes(row.id)} onChange={(event) => setSelection({ scope, ids: event.target.checked ? [...selectedIds, row.id] : selectedIds.filter((id) => id !== row.id) })} /></label></td>}{path === 'items' && <td>{row.images?.[0] ? <img className="adm-thumbnail" src={row.images[0].url} alt={`${row.title} 대표 이미지`} /> : <span className="adm-no-image" title="이미지 미등록"><ImageOff size={18} aria-label="이미지 미등록" /></span>}</td>}{row.cells.map((cell, index) => <td key={index}>{cell === row.status || cell === row.saleStatus || cell === row.inspectionStatus ? <Status value={cell} /> : cell}</td>)}<td><a className="adm-detail-link" href={detailHref(row.id)} aria-label={`${row.id} 상세보기`}>상세보기<ChevronRight size={14} /></a></td></tr>)}</tbody></table></div>
+    <div className="adm-table-scroll" tabIndex={0} role="region" aria-label={`${view.title} 표`}><table><caption className="adm-sr-only">{view.title}</caption><thead><tr>{bulk && <th scope="col"><label className="adm-row-check"><input type="checkbox" aria-label="현재 페이지 전체 선택" checked={allSelected} disabled={!shown.length} ref={(element) => { if (element) element.indeterminate = selectedIds.length > 0 && !allSelected }} onChange={(event) => setSelection({ scope, ids: event.target.checked ? shown.map((row) => row.id) : [] })} /></label></th>}{path === 'basic' && <th scope="col">대표 이미지</th>}{view.headers.map((header) => <th key={header} scope="col">{header}</th>)}<th scope="col">상세</th></tr></thead><tbody>{shown.map((row) => <tr key={row.id}>{bulk && <td><label className="adm-row-check"><input type="checkbox" aria-label={`${row.id} 선택`} checked={selectedIds.includes(row.id)} onChange={(event) => setSelection({ scope, ids: event.target.checked ? [...selectedIds, row.id] : selectedIds.filter((id) => id !== row.id) })} /></label></td>}{path === 'basic' && <td>{row.images?.[0] ? <img className="adm-thumbnail" src={row.images[0].url} alt={`${row.title} 대표 이미지`} /> : <span className="adm-no-image" title="이미지 미등록"><ImageOff size={18} aria-label="이미지 미등록" /></span>}</td>}{row.cells.map((cell, index) => <td key={index}>{cell === row.status || cell === row.saleStatus || cell === row.inspectionStatus ? <Status value={cell} /> : cell}</td>)}<td><a className="adm-detail-link" href={detailHref(row.id)} aria-label={`${row.id} 상세보기`}>상세보기<ChevronRight size={14} /></a></td></tr>)}</tbody></table></div>
     {!filtered.length && <div className="adm-empty"><Search size={24} /><h2>조회 결과가 없습니다</h2><a href={resetHref}>검색 조건 초기화</a></div>}
     <div className="adm-pagination"><span>{filtered.length ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, filtered.length)} / ${filtered.length}건` : '0건'}</span><div><button className="adm-icon" title="이전 페이지" aria-label="이전 페이지" disabled={page <= 1} onClick={() => update('page', String(page - 1))}><ChevronLeft size={18} /></button><span aria-live="polite">{page} / {pageCount}</span><button className="adm-icon" title="다음 페이지" aria-label="다음 페이지" disabled={page >= pageCount} onClick={() => update('page', String(page + 1))}><ChevronRight size={18} /></button></div></div>
   </>
