@@ -66,13 +66,13 @@ export const locations: Location[] = [
 ]
 export const masterItems: MasterItem[] = [
   { id: 'ITM-000001', name: '콘크리트 블록', category: 'CAT-015', specification: '390 × 190 × 190 mm', brand: '', unit: 'EA', inboundPrice: null, outboundPrice: 850, standardPrice: 780, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
-  { id: 'ITM-000002', name: '회수 참나무 구조목', category: 'CAT-009', specification: '38 × 89 mm, 2.4 m', brand: '', unit: 'M', inboundPrice: null, outboundPrice: 43500, standardPrice: 43500, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
+  { id: 'ITM-000002', name: '회수 참나무 구조목', category: 'CAT-010', specification: '38 × 89 mm, 2.4 m', brand: '', unit: 'M', inboundPrice: null, outboundPrice: 43500, standardPrice: 43500, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
   { id: 'ITM-000003', name: '폴리에틸렌 파이프 DN100', category: 'CAT-012', specification: 'DN100, SDR17, 6 m', brand: '', unit: 'M', inboundPrice: null, outboundPrice: 3490, standardPrice: 3490, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
   { id: 'ITM-000004', name: '알루미늄 프레임', category: 'CAT-006', specification: '40 × 40 mm', brand: '', unit: '본', inboundPrice: null, outboundPrice: null, standardPrice: null, enabled: false, note: '미사용 품목 예시', images: [] },
 ]
 export const inventory: Inventory[] = [
   { id: 'AST-001', itemId: 'ITM-000001', receivingId: 'REQ-0907-01', customerId: 'CUS-001', receiptId: 'RCV-0908', locationId: 'LOC-B08', name: '콘크리트 블록', category: 'CAT-015', brand: '', grade: 'B', quantity: 500, unit: 'EA', appraisal: 390000, status: '보관중', saleStatus: '판매대기', specification: '390 × 190 × 190 mm', images: [], history: [] },
-  { id: 'AST-002', itemId: 'ITM-000002', receivingId: 'REQ-0901-01', customerId: 'CUS-002', receiptId: 'RCV-0902', locationId: 'LOC-A03', name: '회수 참나무 구조목', category: 'CAT-009', brand: '', grade: 'S', quantity: 80, unit: 'M', appraisal: 3480000, status: '보관중', saleStatus: '판매중', specification: '38 × 89 mm, 2.4 m', images: [], history: [] },
+  { id: 'AST-002', itemId: 'ITM-000002', receivingId: 'REQ-0901-01', customerId: 'CUS-002', receiptId: 'RCV-0902', locationId: 'LOC-A03', name: '회수 참나무 구조목', category: 'CAT-010', brand: '', grade: 'S', quantity: 80, unit: 'M', appraisal: 3480000, status: '보관중', saleStatus: '판매중', specification: '38 × 89 mm, 2.4 m', images: [], history: [] },
   { id: 'AST-003', itemId: 'ITM-000003', receivingId: 'REQ-0826-01', customerId: 'CUS-001', receiptId: 'RCV-0827', locationId: 'LOC-C07', name: '폴리에틸렌 파이프 DN100', category: 'CAT-012', brand: '', grade: 'A', quantity: 200, unit: 'M', appraisal: 698000, status: '보관중', saleStatus: '판매중', specification: 'DN100, SDR17, 6 m', images: [], history: [] },
 ]
 export const saleRequests: SaleRequest[] = [
@@ -89,9 +89,9 @@ export const quotes: Quote[] = [
   { id: 'QUO-0911', customerId: 'CUS-002', date: '2026-09-11T10:00:00+09:00', dueAt: '2026-09-18T09:00:00+09:00', status: '견적 회신', lines: [{ productId: 'PRD-003', name: '폴리에틸렌 파이프 DN100', quantity: 20, unit: 'M', unitPrice: 3490 }], address: '서울 성동구 · 예시 납품지', note: '자재 금액 69,800원 · 운반비 별도' },
 ]
 export const campaigns: Campaign[] = [
-  { id: 'CAM-001', name: '다시 쓰는 목재 기획전', category: 'CAT-007', description: '규격과 등급별 회수 목재', enabled: true, order: 1, startsAt: '2026-09-01T00:00:00+09:00', endsAt: '2026-09-16T00:00:00+09:00' },
-  { id: 'CAM-002', name: '배관 자재 모음전', category: 'CAT-010', description: '현장 규격별 배관 자재', enabled: true, order: 2, startsAt: '2026-09-20T00:00:00+09:00', endsAt: '2026-10-01T00:00:00+09:00' },
-  { id: 'CAM-003', name: '철강 기획전', category: 'CAT-001', description: '철강 자재 편성 준비', enabled: false, order: 3, startsAt: '2026-09-01T00:00:00+09:00', endsAt: '2026-10-01T00:00:00+09:00' },
+  { id: 'CAM-001', name: '배관자재(전기) 기획전', category: 'CAT-001', description: '트레이부터 후렉시블까지 전기 배관자재', enabled: true, order: 1, startsAt: '2026-09-01T00:00:00+09:00', endsAt: '2026-09-26T00:00:00+09:00' },
+  { id: 'CAM-002', name: '케이블 자재 모음전', category: 'CAT-008', description: '전선과 용도별 케이블 자재', enabled: true, order: 2, startsAt: '2026-09-20T00:00:00+09:00', endsAt: '2026-10-01T00:00:00+09:00' },
+  { id: 'CAM-003', name: '전기기구 기획전', category: 'CAT-017', description: '배선·조명·배전 기구 편성 준비', enabled: false, order: 3, startsAt: '2026-09-01T00:00:00+09:00', endsAt: '2026-10-01T00:00:00+09:00' },
 ]
 export const invoices: Invoice[] = [
   { id: 'BILL-0801', customerId: 'CUS-001', type: '보관료', date: '2026-08-29T16:45:00+09:00', period: '2026-08', status: '수납 완료', estimate: null, lines: [{ label: 'C-07 야적장 보관료 · 8월분', amount: 45000 }], locationId: 'LOC-C07' },

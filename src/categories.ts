@@ -1,25 +1,30 @@
 export type MaterialCategory = { id: string; parentId: string | null; name: string; enabled: boolean; order: number }
 
 export const materialCategories: MaterialCategory[] = [
-  { id: 'CAT-001', parentId: null, name: '철강 / 금속', enabled: true, order: 1 },
-  { id: 'CAT-002', parentId: 'CAT-001', name: '구조용 강재', enabled: true, order: 1 },
-  { id: 'CAT-003', parentId: 'CAT-002', name: '철근', enabled: true, order: 1 },
-  { id: 'CAT-004', parentId: 'CAT-002', name: 'H빔', enabled: true, order: 2 },
-  { id: 'CAT-005', parentId: 'CAT-001', name: '비철금속', enabled: true, order: 2 },
-  { id: 'CAT-006', parentId: 'CAT-005', name: '알루미늄 프레임', enabled: true, order: 1 },
-  { id: 'CAT-007', parentId: null, name: '목재 / 합판', enabled: true, order: 2 },
-  { id: 'CAT-008', parentId: 'CAT-007', name: '구조목', enabled: true, order: 1 },
-  { id: 'CAT-009', parentId: 'CAT-008', name: '참나무 구조목', enabled: true, order: 1 },
-  { id: 'CAT-010', parentId: null, name: '배관 / 파이프', enabled: true, order: 3 },
-  { id: 'CAT-011', parentId: 'CAT-010', name: '수지 배관', enabled: true, order: 1 },
-  { id: 'CAT-012', parentId: 'CAT-011', name: '폴리에틸렌 파이프', enabled: true, order: 1 },
-  { id: 'CAT-013', parentId: null, name: '콘크리트 / 시멘트', enabled: true, order: 4 },
-  { id: 'CAT-014', parentId: 'CAT-013', name: '콘크리트 제품', enabled: true, order: 1 },
-  { id: 'CAT-015', parentId: 'CAT-014', name: '블록', enabled: true, order: 1 },
-  { id: 'CAT-016', parentId: 'CAT-014', name: '타일', enabled: true, order: 2 },
-  { id: 'CAT-017', parentId: null, name: '기타', enabled: true, order: 5 },
-  { id: 'CAT-018', parentId: 'CAT-017', name: '기타 자재', enabled: true, order: 1 },
-  { id: 'CAT-019', parentId: 'CAT-018', name: '기타 자재', enabled: true, order: 1 },
+  { id: 'CAT-001', parentId: null, name: '배관자재(전기)', enabled: true, order: 1 },
+  { id: 'CAT-002', parentId: 'CAT-001', name: '트레이', enabled: true, order: 1 },
+  { id: 'CAT-003', parentId: 'CAT-001', name: '닥트', enabled: true, order: 2 },
+  { id: 'CAT-004', parentId: 'CAT-001', name: '시스템찬넬', enabled: true, order: 3 },
+  { id: 'CAT-005', parentId: 'CAT-001', name: '후렉시블', enabled: true, order: 4 },
+  { id: 'CAT-006', parentId: 'CAT-005', name: '방수형', enabled: true, order: 1 },
+  { id: 'CAT-007', parentId: 'CAT-005', name: '비방수형', enabled: true, order: 2 },
+  { id: 'CAT-008', parentId: null, name: '케이블', enabled: true, order: 2 },
+  { id: 'CAT-009', parentId: 'CAT-008', name: '전선', enabled: true, order: 1 },
+  { id: 'CAT-010', parentId: 'CAT-009', name: '일반전선', enabled: true, order: 1 },
+  { id: 'CAT-011', parentId: 'CAT-009', name: '삼사전선', enabled: true, order: 2 },
+  { id: 'CAT-012', parentId: 'CAT-009', name: '기타전선', enabled: true, order: 3 },
+  { id: 'CAT-013', parentId: 'CAT-008', name: '강전CABLE', enabled: true, order: 2 },
+  { id: 'CAT-014', parentId: 'CAT-008', name: '제어CABLE', enabled: true, order: 3 },
+  { id: 'CAT-015', parentId: 'CAT-008', name: '통신CABLE', enabled: true, order: 4 },
+  { id: 'CAT-016', parentId: 'CAT-008', name: '배선부속재', enabled: true, order: 5 },
+  { id: 'CAT-017', parentId: null, name: '전기기구', enabled: true, order: 3 },
+  { id: 'CAT-018', parentId: 'CAT-017', name: '배선기구', enabled: true, order: 1 },
+  { id: 'CAT-019', parentId: 'CAT-018', name: '매입콘센트', enabled: true, order: 1 },
+  { id: 'CAT-020', parentId: 'CAT-018', name: '스위치', enabled: true, order: 2 },
+  { id: 'CAT-021', parentId: 'CAT-017', name: '조명기구', enabled: true, order: 2 },
+  { id: 'CAT-022', parentId: 'CAT-017', name: '차단기, M/C', enabled: true, order: 3 },
+  { id: 'CAT-023', parentId: 'CAT-017', name: '배전함', enabled: true, order: 4 },
+  { id: 'CAT-024', parentId: 'CAT-017', name: '기타기구', enabled: true, order: 5 },
 ]
 
 export function categoryChain(categories: MaterialCategory[], id: string): MaterialCategory[] {
@@ -57,6 +62,6 @@ export function validateCategory(category: MaterialCategory, categories: Materia
 }
 
 export function validateLeafCategory(categories: MaterialCategory[], id: string, previousId?: string) {
-  if (categoryChain(categories, id).length !== 3) throw new Error('카테고리는 3차 분류까지 선택해 주세요.')
+  if (!categoryChain(categories, id).length || categoryChildren(categories, id).length) throw new Error('카테고리는 최종 분류까지 선택해 주세요.')
   if (id !== previousId && !categoryEnabled(categories, id)) throw new Error('사용 중인 카테고리를 선택해 주세요.')
 }

@@ -13,7 +13,7 @@ export default function CategoryManager({ categories, items, assets, params, onS
   const createHref = (parent: string | null) => `#/admin/basic?tab=categories&mode=new${parent ? `&parent=${encodeURIComponent(parent)}` : ''}`
   const invalidParent = creating && parentId !== null && (!categories.some((category) => category.id === parentId) || categoryChain(categories, parentId).length >= 3)
   return <>
-    <p className="adm-note">3차 분류 기준 · 상위 분류 미사용 시 하위 분류 신규 선택 제한 · 새로고침·고객 포털 이동 시 초기화</p>
+    <p className="adm-note">최대 3차 분류 · 상위 분류 미사용 시 하위 분류 신규 선택 제한 · 새로고침·고객 포털 이동 시 초기화</p>
     <div className="adm-category-columns">{[0, 1, 2].map((depth) => {
       const parent = depth === 0 ? null : chain[depth - 1]?.id
       const children = parent === undefined ? [] : categoryChildren(categories, parent)
