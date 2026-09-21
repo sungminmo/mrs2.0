@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { createApp } from '../src/app.js'
 import { hashPassword } from '../src/auth.js'
 import { AppError, ErrorCode } from '../src/http.js'
-import { databaseUrl, readConfig } from '../src/config.js'
+import { databaseUrl, readConfig, readDatabaseConfig } from '../src/config.js'
 import { createDatabase, databaseOptions } from '../src/database.js'
 
 const environment = {
@@ -145,6 +145,7 @@ test('configuration requires connection values without exposing their contents',
   for (const name of ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']) {
     assert.throws(() => readConfig({ ...environment, [name]: '' }), new RegExp(`${name} is required`))
   }
+  assert.equal(readDatabaseConfig({ ...environment, JWT_SECRET: '' }).name, 'b2b_mall')
   assert.equal(readConfig(environment).database.port, 3306)
   assert.equal(readConfig(environment).database.poolMax, 5)
   assert.throws(() => readConfig({ ...environment, JWT_SECRET: 'too-short' }), /JWT_SECRET must be at least 32 characters/)
@@ -164,7 +165,8 @@ test('database module loads in ESM and creates a lazy bounded pool', async () =>
   assert.equal(options.connectionLimit, 5)
   assert.equal(options.minimumIdle, 0)
   assert.equal(options.acquireTimeout, 2000)
-  assert.equal(options.queryTimeout, 2000)
+  assert.equal(options.socketTimeout, 2000)
+  assert.equal('queryTimeout' in options, false)
   const database = createDatabase(config)
   assert.equal(typeof database.client.$queryRaw, 'function')
   await database.close()
@@ -176,4 +178,19 @@ test('Prisma CLI URL escapes special characters in credentials', () => {
   assert.equal(decodeURIComponent(url.password), password)
   assert.equal(url.hostname, 'db')
   assert.equal(url.pathname, '/b2b_mall')
+})
+
+test('Prisma CLI URL supports an RDS endpoint and hyphenated database name', () => {
+  const endpoint = 'ls-4d8314fe62c21831055666ba9a240b70849af398.c54u0ugkgzq5.ap-northeast-2.rds.amazonaws.com'
+  const url = new URL(databaseUrl(readConfig({
+    ...environment,
+    DB_HOST: endpoint,
+    DB_PORT: '3306',
+    DB_NAME: 'mrs-db',
+    DB_USER: 'dbmasteruser',
+  }).database))
+  assert.equal(url.hostname, endpoint)
+  assert.equal(url.port, '3306')
+  assert.equal(url.pathname, '/mrs-db')
+  assert.equal(url.username, 'dbmasteruser')
 })

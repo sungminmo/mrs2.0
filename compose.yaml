@@ -1,32 +1,6 @@
 name: mrs
 
 services:
-  db:
-    image: mariadb:11.8@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62
-    restart: unless-stopped
-    environment:
-      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}
-      MARIADB_DATABASE: b2b_mall
-      MARIADB_USER: b2b_app
-      MARIADB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
-      TZ: UTC
-    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--default-time-zone=+00:00"]
-    volumes:
-      - db-data:/var/lib/mysql
-    networks:
-      - data
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
-    logging: &logging
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
   backend:
     build:
       context: ./backend
@@ -35,22 +9,18 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3000"
-      DB_HOST: db
-      DB_PORT: "3306"
-      DB_NAME: b2b_mall
-      DB_USER: b2b_app
+      DB_HOST: ${DB_HOST:?Set DB_HOST in .env}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:?Set DB_NAME in .env}
+      DB_USER: ${DB_USER:?Set DB_USER in .env}
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
-      DB_POOL_MAX: "5"
-      DB_TIMEOUT_MS: "2000"
+      DB_POOL_MAX: ${DB_POOL_MAX:-5}
+      DB_TIMEOUT_MS: ${DB_TIMEOUT_MS:-5000}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
       TZ: UTC
     networks:
       - app
-      - data
-    depends_on:
-      db:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "--input-type=module", "-e", "const response = await fetch('http://127.0.0.1:3000/api/health/ready', { signal: AbortSignal.timeout(5500) }); process.exit(response.ok ? 0 : 1)"]
       interval: 10s
@@ -62,7 +32,11 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    logging: *logging
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   frontend:
     build:
@@ -85,8 +59,3 @@ services:
 
 networks:
   app:
-  data:
-    internal: true
-
-volumes:
-  db-data:

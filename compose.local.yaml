@@ -1,0 +1,43 @@
+services:
+  db:
+    image: mysql:8.4.11
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${DB_NAME:-mrs-db}
+      MYSQL_USER: ${DB_USER:-dbmasteruser}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      TZ: UTC
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--default-time-zone=+00:00"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping --host=127.0.0.1 --user=root --password=$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    environment:
+      DB_HOST: db
+      DB_TIMEOUT_MS: "5000"
+    networks:
+      - data
+    depends_on:
+      db:
+        condition: service_healthy
+
+networks:
+  data:
+    internal: true
+
+volumes:
+  mysql-data:

@@ -19,7 +19,7 @@ model MasterItem {
   outboundPrice Decimal? @db.Decimal(19, 0)
   standardPrice Decimal? @db.Decimal(19, 0)
   enabled       Boolean  @default(true)
-  note          String   @default("") @db.Text
+  note          String   @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

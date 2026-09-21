@@ -21,7 +21,7 @@ CREATE TABLE `master_items` (
     `outboundPrice` DECIMAL(19, 0) NULL,
     `standardPrice` DECIMAL(19, 0) NULL,
     `enabled` BOOLEAN NOT NULL DEFAULT true,
-    `note` TEXT NOT NULL DEFAULT '',
+    `note` TEXT NOT NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 

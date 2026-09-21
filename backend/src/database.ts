@@ -16,7 +16,6 @@ export function databaseOptions(config: Config['database']) {
     connectTimeout: config.timeoutMs,
     acquireTimeout: config.timeoutMs,
     socketTimeout: config.timeoutMs,
-    queryTimeout: config.timeoutMs,
     multipleStatements: false,
   }
 }

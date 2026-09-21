@@ -6,7 +6,7 @@
 
 ## Docker 백엔드 개발 환경
 
-Ubuntu 24.04 서버에서 MariaDB, Hono/Node.js, React/Nginx를 함께 실행합니다.
+Ubuntu 24.04 서버에서 외부 MySQL 8.4, Hono/Node.js, React/Nginx를 사용합니다.
 Mac에서 수정한 소스를 Git으로 전달하고 서버에서 이미지를 빌드합니다.
 프론트엔드는 루트에 유지하며 `backend/`는 독립 npm 패키지입니다.
 백엔드는 상태 확인과 JWT 로그인 API를 제공합니다. 회원가입, 승인, 품목 및 자산 업무 API는 아직 구현하지 않았습니다.
@@ -14,13 +14,17 @@ Mac에서 수정한 소스를 Git으로 전달하고 서버에서 이미지를 �
 | 구성 | 역할 | 호스트 공개 포트 |
 | --- | --- | --- |
 | Nginx | `/mrs2.0/` 화면과 `/api/` 프록시 | `127.0.0.1:8080`만 |
-| Hono / Node.js 24 | 상태 API, JWT 인증, Prisma/MariaDB 연결 | 없음 |
-| MariaDB 11.8 | `b2b_mall`, `b2b_app` 전용 계정 | 없음 |
+| Hono / Node.js 24 | 상태 API, JWT 인증, Prisma/MySQL 연결 | 없음 |
+| 외부 MySQL 8.4.11 | `mrs-db`, `dbmasteruser` | 배포 서버에서만 3306 허용 |
 
-DB는 별도의 내부 네트워크에 있으며 Nginx에서 직접 접근할 수 없습니다.
-비밀번호는 루트 `.env`에서만 관리하고 backend에는 앱 계정 비밀번호만 전달합니다.
+MySQL 보안 그룹은 배포 서버의 주소만 허용하고 일반 인터넷에 3306을 공개하지 않습니다.
+Nginx에서 DB에 직접 접근하지 않으며 비밀번호는 루트 `.env`에서만 관리합니다.
 이미지는 다중 아키텍처 다이제스트, npm 의존성은 lockfile로 고정했습니다.
 보안 업데이트 적용 시 이미지 다이제스트도 검토하고 갱신해야 합니다.
+
+현재는 최초 연결을 위해 `dbmasteruser`를 마이그레이션과 런타임에 함께 사용합니다.
+운영 안정화 전에는 SELECT/INSERT/UPDATE/DELETE 권한만 가진 전용 앱 계정으로 분리하세요.
+TLS가 선택 사항이어도 외부 네트워크를 통과한다면 AWS CA 인증서를 사용한 검증 연결을 권장합니다.
 
 ### 서버 최초 실행
 
@@ -45,22 +49,34 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-`.env`의 `DB_ROOT_PASSWORD`, `DB_PASSWORD`, `JWT_SECRET`에 서로 다른 긴 임의 값을 설정하세요.
-각 값은 `openssl rand -hex 32`로 생성할 수 있습니다. `JWT_SECRET`은 최소 32자여야 합니다. 값은 서버 터미널에서만 취급하고
-채팅, Git, 로그에 공유하지 마세요. 파일에 값을 넣은 뒤 다음을 실행합니다.
-빈 비밀번호는 Compose가 거부합니다. 실제 `.env`는 Git 및 이미지 빌드에서 제외됩니다.
+`.env`에서 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`를 확인하고 `DB_PASSWORD`와
+`JWT_SECRET`을 설정하세요. `JWT_SECRET`은 `openssl rand -hex 32`로 생성할 수 있으며 최소
+32자여야 합니다. 비밀번호는 서버 터미널에서만 취급하고 채팅, Git, 로그에 공유하지 마세요.
+빈 비밀번호는 Compose가 거부하며 실제 `.env`는 Git 및 이미지 빌드에서 제외됩니다.
+
+배포 전에 DB 엔진과 네트워크 접근을 확인합니다. 버전이 8.4.11과 다르거나 TCP 연결이
+실패하면 마이그레이션을 실행하지 마세요.
+
+```sh
+getent hosts ls-4d8314fe62c21831055666ba9a240b70849af398.c54u0ugkgzq5.ap-northeast-2.rds.amazonaws.com
+nc -zvw5 ls-4d8314fe62c21831055666ba9a240b70849af398.c54u0ugkgzq5.ap-northeast-2.rds.amazonaws.com 3306
+```
+
+파일에 값을 넣은 뒤 다음을 실행합니다.
 
 ```sh
 docker compose config --quiet
 docker compose build
-docker compose up -d --wait db
 docker compose run --rm --no-deps backend npm run db:migrate
+docker compose run --rm --no-deps backend npm run db:status
 docker compose up -d --wait
 docker compose ps
 curl --fail http://127.0.0.1:8080/api/health/ready
 ```
 
 최초 마이그레이션은 Prisma가 관리하며 사용자, 카테고리, 품목, 자산 관련 테이블을 생성합니다. 샘플 데이터는 만들지 않습니다.
+연결 직후 `SELECT VERSION()`, `@@character_set_server`, `@@collation_server`, `@@time_zone`을
+확인해 MySQL 8.4.11, utf8mb4, UTC 설정이 맞는지 점검하세요.
 상태 API는 `/api/health/live`가 프로세스 생존을, `/api/health/ready`가 실제 `SELECT 1`
 성공 여부를 확인합니다. DB 장애나 제한 시간 초과 시 readiness는 `503`을 반환합니다.
 DB 복구 후에는 같은 연결 풀에서 자동으로 재연결합니다. Docker의 unhealthy 상태 자체는
@@ -98,17 +114,29 @@ npx tsc -b
 npx oxlint src backend/src backend/test
 ```
 
-상태 API 단위 테스트는 DB 없이 실행됩니다. 전체 환경은 Mac에서도 Docker와 루트 `.env`를
-사용해 위 최초 실행 절차로 검증할 수 있으며, 이때는 SSH 터널 없이 루프백 주소로 접근합니다.
-호스트에서 실행하는 `npm --prefix backend run dev`는 별도로 접근 가능한 DB 환경변수를
-주입해야 합니다. 기본 구성은 DB를 호스트에 공개하지 않으므로 컨테이너 빌드로 통합 검증합니다.
-
-새 마이그레이션은 MariaDB를 실행한 상태에서 Prisma 스키마를 변경한 뒤 생성합니다.
+상태 API 단위 테스트는 DB 없이 실행됩니다. Mac에서 로컬 MySQL 8.4.11을 포함한 전체 환경은
+두 Compose 파일을 함께 사용합니다. 로컬 DB는 `mysql-data` 볼륨을 사용하며 기존 MariaDB
+`db-data` 볼륨을 재사용하지 않습니다.
 
 ```sh
-docker compose build backend
-docker compose up -d --wait db
-docker compose run --rm --no-deps backend npm run db:dev -- --name 변경_설명
+docker compose -f compose.yaml -f compose.local.yaml config --quiet
+docker compose -f compose.yaml -f compose.local.yaml build
+docker compose -f compose.yaml -f compose.local.yaml up -d --wait db
+docker compose -f compose.yaml -f compose.local.yaml run --rm --no-deps backend npm run db:migrate
+docker compose -f compose.yaml -f compose.local.yaml up -d --wait
+curl --fail http://127.0.0.1:8080/api/health/ready
+```
+
+이때는 SSH 터널 없이 루프백 주소로 접근합니다.
+호스트에서 실행하는 `npm --prefix backend run dev`는 별도로 접근 가능한 DB 환경변수를
+주입해야 합니다. 로컬 override는 DB를 호스트에 공개하지 않으므로 컨테이너 빌드로 통합 검증합니다.
+
+새 마이그레이션은 로컬 MySQL을 실행한 상태에서 Prisma 스키마를 변경한 뒤 생성합니다.
+
+```sh
+docker compose -f compose.yaml -f compose.local.yaml build backend
+docker compose -f compose.yaml -f compose.local.yaml up -d --wait db
+docker compose -f compose.yaml -f compose.local.yaml run --rm --no-deps backend npm run db:dev -- --name 변경_설명
 ```
 
 스키마 파일은 `backend/prisma/schema/`에 도메인별로 분리되어 있고, 생성된 SQL은
@@ -119,8 +147,8 @@ docker compose run --rm --no-deps backend npm run db:dev -- --name 변경_설명
 ```sh
 git pull --ff-only
 docker compose build
-docker compose up -d --wait db
 docker compose run --rm --no-deps backend npm run db:migrate
+docker compose run --rm --no-deps backend npm run db:status
 docker compose up -d --wait
 curl --fail http://127.0.0.1:8080/api/health/ready
 ```
@@ -133,27 +161,27 @@ curl --fail http://127.0.0.1:8080/api/health/ready
 
 ```sh
 docker compose ps
-docker compose logs --tail=100 backend db frontend
+docker compose logs --tail=100 backend frontend
 docker compose exec frontend nginx -t
 docker compose down
 docker compose up -d --wait
 ```
 
-`docker compose down`은 컨테이너만 제거하며 `db-data` 볼륨의 데이터는 보존합니다.
-**`docker compose down -v`와 볼륨 삭제 명령은 DB를 삭제하므로 사용하지 마세요.**
-Compose 프로젝트 이름을 바꾸면 별도 볼륨이 생성되므로 서버에서는 프로젝트 이름을 유지하세요.
-DB 초기화 후 `.env`의 비밀번호만 바꿔도 기존 DB 계정은 바뀌지 않습니다.
-비밀번호 변경은 DB 사용자 변경 절차와 앱 설정 갱신을 함께 수행해야 합니다.
+운영 Compose의 `down`은 외부 MySQL 데이터를 삭제하지 않습니다. 로컬 환경에서
+`docker compose -f compose.yaml -f compose.local.yaml down`은 컨테이너만 제거하고
+`mysql-data` 볼륨을 보존합니다. **로컬에서 `down -v`와 볼륨 삭제 명령은 DB를 삭제하므로
+사용하지 마세요.** 기존 MariaDB의 `db-data` 볼륨은 자동 변환되지 않으며 MySQL 컨테이너에
+연결하면 안 됩니다. 필요한 데이터가 있다면 논리 백업과 복구 절차를 별도로 수행하세요.
 
-볼륨은 백업이 아닙니다. 중요 데이터를 넣기 전 백업·복구 절차를 마련하세요.
-아래 예시는 DB 외부 공개 없이 서버의 저장소 밖에 논리 백업을 만듭니다.
+관리형 DB 백업 정책과 별개로 복구 가능한 논리 백업 절차를 마련하세요. 아래 예시는 `.env`를
+컨테이너에 직접 주입하고 저장소 밖에 MySQL 논리 백업을 만듭니다. 명령줄에 비밀번호를 넣지 않습니다.
 
 ```sh
 umask 077
 mkdir -p "$HOME/mrs-backups"
-docker compose exec -T db sh -c \
-  'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb-dump -uroot --single-transaction --routines --events --triggers b2b_mall' \
-  > "$HOME/mrs-backups/b2b_mall-$(date +%Y%m%d-%H%M%S).sql"
+docker run --rm --env-file .env mysql:8.4.11 sh -c \
+  'MYSQL_PWD="$DB_PASSWORD" exec mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" --single-transaction --routines --events --triggers --set-gtid-purged=OFF "$DB_NAME"' \
+  > "$HOME/mrs-backups/mrs-db-$(date +%Y%m%d-%H%M%S).sql"
 ```
 
 명령 종료 성공 여부를 확인하고 별도 환경에서 복구 테스트를 수행하세요. 백업에는 민감한
