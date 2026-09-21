@@ -16,7 +16,8 @@
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate deploy",
     "db:status": "prisma migrate status",
-    "db:dev": "prisma migrate dev"
+    "db:dev": "prisma migrate dev",
+    "db:seed": "node --env-file=../.env --import tsx src/seed.ts"
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",
