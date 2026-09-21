@@ -7,7 +7,8 @@ import AdminShell from './AdminShell'
 import ShopifyAssetDetail from './ShopifyAssetDetail'
 import MarketRegistrationConfirm from './MarketRegistrationConfirm'
 import { materialPhotos } from './assetPhotos'
-import { categoryChain, materialCategories } from './categories'
+import { categoryChain, categoryMatches, materialCategories } from './categories'
+import CategorySelect from './CategorySelect'
 import PageBanner from './PageBanner'
 
 const amount = (value: string) => Number(value.replaceAll(',', ''))
@@ -116,14 +117,14 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
   const [status, setStatus] = useState<string>('전체')
   const [location, setLocation] = useState('전체 위치')
   const [grade, setGrade] = useState('전체')
-  const [category, setCategory] = useState('전체')
+  const [category, setCategory] = useState('')
   const [receivedFrom, setReceivedFrom] = useState('')
   const [receivedTo, setReceivedTo] = useState('')
   const [storageDaysFrom, setStorageDaysFrom] = useState('')
   const [storageDaysTo, setStorageDaysTo] = useState('')
   const [draftQuery, setDraftQuery] = useState('')
   const [draftGrade, setDraftGrade] = useState('전체')
-  const [draftCategory, setDraftCategory] = useState('전체')
+  const [draftCategory, setDraftCategory] = useState('')
   const [draftLocation, setDraftLocation] = useState('전체 위치')
   const [draftReceivedFrom, setDraftReceivedFrom] = useState('')
   const [draftReceivedTo, setDraftReceivedTo] = useState('')
@@ -156,27 +157,27 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
     (status === '전체' || asset.status === status) &&
     (location === '전체 위치' || asset.location === location) &&
     (grade === '전체' || asset.grade === grade) &&
-    (category === '전체' || rootCategory(asset) === category) &&
+    (!category || categoryMatches(materialCategories, asset.categoryId, category)) &&
     (!receivedFrom || asset.receivedAt.replaceAll('.', '-') >= receivedFrom) &&
     (!receivedTo || asset.receivedAt.replaceAll('.', '-') <= receivedTo) &&
     (!storageDaysFrom || storageDays(asset) >= Number(storageDaysFrom)) &&
     (!storageDaysTo || storageDays(asset) <= Number(storageDaysTo)) &&
     `${asset.name} ${asset.code} ${asset.brand}`.toLowerCase().includes(query.trim().toLowerCase()),
   ).sort((first, second) => sort === 'value' ? amount(second.appraisalValue) - amount(first.appraisalValue) : sort === 'name' ? first.name.localeCompare(second.name, 'ko') : second.receivedAt.localeCompare(first.receivedAt))
-  const advancedFilterCount = [grade !== '전체', category !== '전체', location !== '전체 위치', !!receivedFrom, !!receivedTo, !!storageDaysFrom, !!storageDaysTo].filter(Boolean).length
+  const advancedFilterCount = [grade !== '전체', !!category, location !== '전체 위치', !!receivedFrom, !!receivedTo, !!storageDaysFrom, !!storageDaysTo].filter(Boolean).length
   const selectedVisible = visible.filter((asset) => selected.includes(asset.code))
   const allSelected = visible.length > 0 && selectedVisible.length === visible.length
   const toggleSelection = (code: string) => setSelected((current) => current.includes(code) ? current.filter((item) => item !== code) : [...current, code])
   const syncDraft = () => { setDraftQuery(query); setDraftGrade(grade); setDraftCategory(category); setDraftLocation(location); setDraftReceivedFrom(receivedFrom); setDraftReceivedTo(receivedTo); setDraftStorageDaysFrom(storageDaysFrom); setDraftStorageDaysTo(storageDaysTo) }
   const applySearch = () => { setQuery(draftQuery); setGrade(draftGrade); setCategory(draftCategory); setLocation(draftLocation); setReceivedFrom(draftReceivedFrom); setReceivedTo(draftReceivedTo); setStorageDaysFrom(draftStorageDaysFrom); setStorageDaysTo(draftStorageDaysTo) }
   const resetSearch = () => {
-    setQuery(''); setStatus('전체'); setLocation('전체 위치'); setGrade('전체'); setCategory('전체'); setReceivedFrom(''); setReceivedTo(''); setStorageDaysFrom(''); setStorageDaysTo('')
-    setDraftQuery(''); setDraftGrade('전체'); setDraftCategory('전체'); setDraftLocation('전체 위치'); setDraftReceivedFrom(''); setDraftReceivedTo(''); setDraftStorageDaysFrom(''); setDraftStorageDaysTo('')
+    setQuery(''); setStatus('전체'); setLocation('전체 위치'); setGrade('전체'); setCategory(''); setReceivedFrom(''); setReceivedTo(''); setStorageDaysFrom(''); setStorageDaysTo('')
+    setDraftQuery(''); setDraftGrade('전체'); setDraftCategory(''); setDraftLocation('전체 위치'); setDraftReceivedFrom(''); setDraftReceivedTo(''); setDraftStorageDaysFrom(''); setDraftStorageDaysTo('')
   }
   const openDetail = (asset: Asset) => setDetail(asset)
   const openList = (item: string) => {
-    setQuery(''); setStatus(item); setLocation('전체 위치'); setGrade('전체'); setCategory('전체'); setReceivedFrom(''); setReceivedTo(''); setStorageDaysFrom(''); setStorageDaysTo('')
-    setDraftQuery(''); setDraftGrade('전체'); setDraftCategory('전체'); setDraftLocation('전체 위치'); setDraftReceivedFrom(''); setDraftReceivedTo(''); setDraftStorageDaysFrom(''); setDraftStorageDaysTo('')
+    setQuery(''); setStatus(item); setLocation('전체 위치'); setGrade('전체'); setCategory(''); setReceivedFrom(''); setReceivedTo(''); setStorageDaysFrom(''); setStorageDaysTo('')
+    setDraftQuery(''); setDraftGrade('전체'); setDraftCategory(''); setDraftLocation('전체 위치'); setDraftReceivedFrom(''); setDraftReceivedTo(''); setDraftStorageDaysFrom(''); setDraftStorageDaysTo('')
     setAssetListActive(true)
   }
 
@@ -308,23 +309,19 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
           </div>
           <div id="sa-filter-panel" className={`sa-filter-panel${filtersExpanded ? ' is-open' : ''}`} inert={!filtersExpanded}>
             <div className="sa-filter-panel-inner">
-              <fieldset className="sa-filter-group"><legend>분류</legend>
+              <CategorySelect categories={materialCategories} value={draftCategory} onChange={setDraftCategory} />
+              <div className="sa-filter-fields">
                 <label><span>등급</span><select value={draftGrade} onChange={(event) => setDraftGrade(event.target.value)}>{['전체', 'S', 'A', 'B'].map((item) => <option key={item}>{item}</option>)}</select></label>
-                <label><span>카테고리</span><select value={draftCategory} onChange={(event) => setDraftCategory(event.target.value)}>{['전체', ...new Set(inventory.map(rootCategory))].map((item) => <option key={item}>{item}</option>)}</select></label>
-              </fieldset>
-              <fieldset className="sa-filter-group"><legend>위치</legend>
                 <label><span>보관 위치</span><select value={draftLocation} onChange={(event) => setDraftLocation(event.target.value)}>{['전체 위치', ...new Set(inventory.map((asset) => asset.location))].map((item) => <option key={item}>{item}</option>)}</select></label>
-              </fieldset>
-              <fieldset className="sa-filter-group sa-filter-group-wide"><legend>기간</legend>
                 <label><span>입고 기간</span><div className="sa-date-range"><input aria-label="입고 시작일" type="date" value={draftReceivedFrom} onChange={(event) => setDraftReceivedFrom(event.target.value)} /><i>~</i><input aria-label="입고 종료일" type="date" value={draftReceivedTo} onChange={(event) => setDraftReceivedTo(event.target.value)} /></div></label>
                 <label><span>보관 일수</span><div className="sa-day-range"><input aria-label="최소 보관 일수" type="number" min="0" placeholder="최소" value={draftStorageDaysFrom} onChange={(event) => setDraftStorageDaysFrom(event.target.value)} /><i>~</i><input aria-label="최대 보관 일수" type="number" min="0" placeholder="최대" value={draftStorageDaysTo} onChange={(event) => setDraftStorageDaysTo(event.target.value)} /><em>일</em></div></label>
-              </fieldset>
+              </div>
             </div>
           </div>
         </form>
         <div className="sa-asset-grid">
           <div className="sa-table-toolbar"><div className="sa-tabs" aria-label="자산 상태">{statuses.map((item) => <button key={item} aria-pressed={status === item} onClick={() => setStatus(item)}>{item}<span>{item === '전체' ? inventory.length : inventory.filter((asset) => asset.status === item).length}</span></button>)}</div><div className="sa-table-controls"><label className="sa-sort"><ArrowUpDown size={14} /><select aria-label="자산 정렬" value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">최근 입고순</option><option value="value">평가 가치순</option><option value="name">자산명순</option></select></label></div></div>
-          {(query || status !== '전체' || location !== '전체 위치' || grade !== '전체' || category !== '전체' || receivedFrom || receivedTo || storageDaysFrom || storageDaysTo || selectedVisible.length > 0) && <div className="sa-results"><span>{selectedVisible.length > 0 ? `${selectedVisible.length}건 선택됨 · ${money(selectedVisible.reduce((sum, asset) => sum + amount(asset.appraisalValue), 0))}` : `${query ? `“${query}” · ` : ''}${visible.length}건의 자산`}</span>{selectedVisible.length > 0 ? <><div className="sa-bulk-actions" role="group" aria-label="선택 자산 마켓 등록"><button className="sa-button" disabled={!canRegisterMarket} onClick={registerSelectedMarket}><ShoppingCart size={15} />마켓에 등록하기</button></div><button className="sa-text-button" onClick={() => setSelected([])}>선택 해제</button></> : <button className="sa-text-button" onClick={resetSearch}>초기화<X size={13} /></button>}</div>}
+          {(query || status !== '전체' || location !== '전체 위치' || grade !== '전체' || category || receivedFrom || receivedTo || storageDaysFrom || storageDaysTo || selectedVisible.length > 0) && <div className="sa-results"><span>{selectedVisible.length > 0 ? `${selectedVisible.length}건 선택됨 · ${money(selectedVisible.reduce((sum, asset) => sum + amount(asset.appraisalValue), 0))}` : `${query ? `“${query}” · ` : ''}${visible.length}건의 자산`}</span>{selectedVisible.length > 0 ? <><div className="sa-bulk-actions" role="group" aria-label="선택 자산 마켓 등록"><button className="sa-button" disabled={!canRegisterMarket} onClick={registerSelectedMarket}><ShoppingCart size={15} />마켓에 등록하기</button></div><button className="sa-text-button" onClick={() => setSelected([])}>선택 해제</button></> : <button className="sa-text-button" onClick={resetSearch}>초기화<X size={13} /></button>}</div>}
           <div className="sa-table-scroll"><table className="sa-table"><thead><tr><th className="sa-check-cell"><input type="checkbox" aria-label="표시된 자산 모두 선택" checked={allSelected} ref={(element) => { if (element) element.indeterminate = selectedVisible.length > 0 && !allSelected }} onChange={() => setSelected((current) => allSelected ? current.filter((code) => !visible.some((asset) => asset.code === code)) : [...new Set([...current, ...visible.map((asset) => asset.code)])])} /></th><th>자산</th><th>상태</th><th>등급</th><th className="sa-numeric">재고 수량</th><th className="sa-numeric">평가 가치</th><th>입고일</th></tr></thead><tbody>{visible.map((asset) => <tr key={asset.code} className={selected.includes(asset.code) ? 'is-selected' : ''}><td className="sa-check-cell"><input type="checkbox" aria-label={`${asset.name} 선택`} checked={selected.includes(asset.code)} onChange={() => toggleSelection(asset.code)} /></td><td><button className="sa-asset-link" onClick={() => openDetail(asset)}><span className="sa-thumbnail"><AssetImage asset={asset} /></span><span><b>{asset.name}</b><small>{asset.code}</small></span></button></td><td><span className={`sa-badge ${statusClass(asset.status)}`}><span />{asset.status}</span></td><td><span className={`sa-grade grade-${asset.grade.toLowerCase()}`}>{asset.grade}</span></td><td className="sa-numeric">{number(Number(asset.quantity))}<span className="sa-unit"> {asset.unit}</span></td><td className="sa-numeric sa-value">{money(amount(asset.appraisalValue))}</td><td className="sa-date">{asset.receivedAt.slice(2)}</td></tr>)}</tbody></table></div>
           {visible.length === 0 && <div className="sa-empty"><Search size={26} /><h2>일치하는 자산이 없습니다</h2><button className="sa-button" onClick={resetSearch}>필터 초기화</button></div>}
           <div className="sa-table-footer"><span>총 {inventory.length}건 중 {visible.length}건 표시</span><span>평가 가치 합계 <b>{money(visible.reduce((sum, asset) => sum + amount(asset.appraisalValue), 0))}</b></span></div>
