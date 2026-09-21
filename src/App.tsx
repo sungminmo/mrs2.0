@@ -15,6 +15,7 @@ import InspectionDisposals from './InspectionDisposals'
 import { demoDisposals, updateDisposal, type DisposalAction } from './disposals'
 import QuoteHistory from './QuoteHistory'
 import type { QuoteRequestRecord } from './QuoteRequestPage'
+import { readAuthSession, signIn } from './authSession'
 
 type Tab = 'assets' | 'market' | 'settlements' | 'faq' | 'profile' | 'notifications'
 
@@ -36,7 +37,7 @@ const assets = [
 export type Asset = typeof assets[number]
 
 export default function App() {
-  const [access, setAccess] = useState<'login' | 'member' | 'guest'>('login')
+  const [access, setAccess] = useState<'login' | 'member' | 'guest'>(() => readAuthSession() ? 'member' : 'login')
   const [tab, setTab] = useState<Tab>('assets')
   const [inventory, setInventory] = useState(() => prepareAssets(assets))
   const assetValueSnapshot = useRef<AssetValueSnapshot | null>(null)
@@ -55,7 +56,15 @@ export default function App() {
   const [settlementKind, setSettlementKind] = useState('전체')
   const openInspection = (id: string) => { setInspectionId(id); setInspectionActive(true); setTab('assets') }
   const changeDisposal = (id: string, action: DisposalAction) => setDisposals((current) => current.map((record) => record.id === id ? updateDisposal(record, action) : record))
-  if (access === 'login') return <ReceivingRequestProvider contact={contact}><LoginPage onLogin={() => { setAccess('member'); setTab('assets') }} onBrowse={() => { setAccess('guest'); setTab('market') }} /></ReceivingRequestProvider>
+  if (access === 'login') return <ReceivingRequestProvider contact={contact}><LoginPage onLogin={async (email, password) => {
+    const session = await signIn(email, password)
+    if (session.user.role === 'ADMIN') {
+      window.location.hash = '/admin/dashboard'
+      return
+    }
+    setAccess('member')
+    setTab('assets')
+  }} onBrowse={() => { setAccess('guest'); setTab('market') }} /></ReceivingRequestProvider>
   if (access === 'guest') return <ShopifyMarket products={products} navigation={<><Nav active icon={<ShoppingCart />} label="마켓" onClick={() => setTab('market')} /><Nav active={false} icon={<UserRound />} label="로그인" onClick={() => setAccess('login')} /></>} basket={{}} onBasketChange={setMarketBasket} isGuest onLogin={() => setAccess('login')} />
   const navigation = <>
     <Nav active={tab === 'assets'} icon={<Archive />} label="내 자산" onClick={() => setTab('assets')} />

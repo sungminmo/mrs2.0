@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutDashboard, ListChecks, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutDashboard, ListChecks, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
+import { signOut } from '../authSession'
 import { campaigns, customers, dateText, inventory, invoiceAmount, invoices, locations, masterItems, memberAccounts, money, products, quotes, receivings, receivingStatuses, referenceDate, saleRequests, type ReceivingStatus } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
 import { materialPhotos } from '../assetPhotos'
@@ -92,6 +93,7 @@ export default function AdminPortal({ hash }: { hash: string }) {
       <a className="adm-brand" href="#/admin/dashboard">MRS <span>ADMIN</span></a>
       <span className="adm-prototype">독립 예시 · 관리자 데이터 임시 편집</span>
       <a className="adm-customer-link" href="#">고객 포털<ArrowUpRight size={16} /></a>
+      <button type="button" className="adm-icon" title="로그아웃" aria-label="로그아웃" onClick={signOut}><LogOut size={17} /></button>
     </header>
     <aside className={`adm-sidebar ${menuOpen ? 'is-open' : ''}`}>
       <nav id="admin-navigation" aria-label="관리자 메뉴">{menus.map((item) => { const Icon = icons[item.id]; return <a key={item.id} href={adminHref({ label: item.label, menu: item.id, tab: item.tabs[0]?.id ?? '' })} aria-current={menu.id === item.id ? 'page' : undefined} onClick={() => setMenuOpen(false)}><Icon size={17} />{item.label}</a> })}</nav>

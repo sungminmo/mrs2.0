@@ -83,11 +83,12 @@ function MaterialValueGrid() {
   </div></section>
 }
 
-export default function LoginPage({ onLogin, onBrowse }: { onLogin: () => void; onBrowse: () => void }) {
+export default function LoginPage({ onLogin, onBrowse }: { onLogin: (email: string, password: string) => Promise<void>; onBrowse: () => void }) {
   const receivingRequest = useReceivingRequest()
   const [receivingFloatVisible, setReceivingFloatVisible] = useState(true)
   const [visible, setVisible] = useState(false)
   const [notice, setNotice] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const page = useRef<HTMLDivElement>(null)
   const loginDialog = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -131,15 +132,27 @@ export default function LoginPage({ onLogin, onBrowse }: { onLogin: () => void; 
         <article className="login-service-card" data-scroll-reveal><div className="login-service-top"><ReceiptText size={25} /><span>03 / SETTLEMENT</span></div><h3>보관 비용·판매 정산</h3><p>보관에 든 비용과 판매로 회수한 금액을 함께 살펴보세요. 거래별 명세를 확인하고 다음 자재 운영 계획에 활용할 수 있습니다.</p><ul><li>판매 수익과 비용 내역</li><li>로케이션 단위 보관료 명세</li><li>기간별 조회와 내역 다운로드</li></ul><button onClick={openLogin} aria-haspopup="dialog">정산 관리 시작하기<ArrowRight size={17} /></button></article>
       </div></section>
       <dialog ref={loginDialog} className="login-dialog" aria-labelledby="login-dialog-title" onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); closeLogin() } }} onCancel={(event) => { event.preventDefault(); closeLogin() }} onClose={() => { loginDialog.current?.querySelector('form')?.reset(); setVisible(false); setNotice('') }}><button type="button" className="login-dialog-close" aria-label="로그인 닫기" onClick={closeLogin}><X size={20} /></button><div className="login-form-inner"><span className="login-eyebrow">MRS 고객포탈</span><h2 id="login-dialog-title">로그인</h2><p>자재와 거래 현황을 한곳에서 관리하세요.</p>
-        <form onSubmit={(event) => { event.preventDefault(); onLogin() }}>
-          <label>아이디 (이메일)<input type="email" name="email" autoComplete="username" placeholder="name@company.com" /></label>
-          <label>비밀번호<span className="login-password"><input type={visible ? 'text' : 'password'} name="password" autoComplete="current-password" placeholder="비밀번호 입력" /><button type="button" aria-label={visible ? '비밀번호 숨기기' : '비밀번호 표시'} title={visible ? '비밀번호 숨기기' : '비밀번호 표시'} onClick={() => setVisible(!visible)}>{visible ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
+        <form onSubmit={async (event) => {
+          event.preventDefault()
+          const form = new FormData(event.currentTarget)
+          setSubmitting(true)
+          setNotice('')
+          try {
+            await onLogin(String(form.get('email') ?? ''), String(form.get('password') ?? ''))
+          } catch (error) {
+            setNotice(error instanceof Error ? error.message : '로그인 처리 중 오류가 발생했습니다.')
+          } finally {
+            setSubmitting(false)
+          }
+        }}>
+          <label>아이디 (이메일)<input type="email" name="email" autoComplete="username" placeholder="name@company.com" required disabled={submitting} /></label>
+          <label>비밀번호<span className="login-password"><input type={visible ? 'text' : 'password'} name="password" autoComplete="current-password" placeholder="비밀번호 입력" required minLength={8} disabled={submitting} /><button type="button" aria-label={visible ? '비밀번호 숨기기' : '비밀번호 표시'} title={visible ? '비밀번호 숨기기' : '비밀번호 표시'} onClick={() => setVisible(!visible)} disabled={submitting}>{visible ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
           <div className="login-links"><button type="button" onClick={() => setNotice('아이디 찾기는 계정 서비스 연결 후 이용할 수 있습니다.')}>아이디 찾기</button><button type="button" onClick={() => setNotice('비밀번호 찾기는 계정 서비스 연결 후 이용할 수 있습니다.')}>비밀번호 찾기</button></div>
-          <button type="submit" className="login-primary"><LogIn size={17} />로그인</button>
+          <button type="submit" className="login-primary" disabled={submitting}><LogIn size={17} />{submitting ? '로그인 중...' : '로그인'}</button>
         </form>
         <button className="login-browse" onClick={onBrowse}>둘러보기<ArrowRight size={17} /></button>
         <div className="login-register">아직 회원이 아니신가요? <a href="#/register" onClick={closeLogin}>회원가입</a></div>
-        <p className="login-demo">시제품에서는 계정 입력 없이 로그인할 수 있습니다. 입력한 비밀번호는 저장하거나 전송하지 않습니다.</p>
+        <p className="login-demo">등록된 계정 정보로 로그인해 주세요.</p>
         {notice && <div className="login-notice" role="status"><span>{notice}</span><button aria-label="안내 닫기" onClick={() => setNotice('')}><X size={16} /></button></div>}
       </div></dialog>
       <section id="contact" className="login-contact-section" aria-labelledby="contact-title"><div className="login-contact-inner">

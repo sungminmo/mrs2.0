@@ -1,5 +1,6 @@
 import { useContext, useState, type ReactNode } from 'react'
-import { Bell, CircleHelp, Leaf, Menu, Warehouse } from 'lucide-react'
+import { Bell, CircleHelp, Leaf, LogOut, Menu, Warehouse } from 'lucide-react'
+import { signOut } from './authSession'
 import { NotificationNavigation } from './notificationNavigation'
 import { ReceivingRequestButton } from './ReceivingRequest'
 import './AdminAssets.css'
@@ -17,6 +18,7 @@ export default function AdminShell({ navigation, search, children, className = '
         {!isGuest && <ReceivingRequestButton />}
         {!isGuest && notifications && <button type="button" className="sa-icon sa-notification-button" title="알림" aria-label={`알림${notifications.unread ? `, 읽지 않은 알림 ${notifications.unread}건` : ''}`} aria-current={notifications.active ? 'page' : undefined} onClick={() => { setMenuOpen(false); notifications.onOpen() }}><Bell size={20} />{notifications.unread > 0 && <span className="sa-notification-count" aria-hidden="true">{notifications.unread > 99 ? '99+' : notifications.unread}</span>}</button>}
         <div className="sa-account"><span className="sa-avatar">{isGuest ? 'G' : 'HC'}</span><b>{isGuest ? '비회원' : '현대건설(주)'}</b></div>
+        {!isGuest && <button type="button" className="sa-icon" title="로그아웃" aria-label="로그아웃" onClick={signOut}><LogOut size={19} /></button>}
       </div>
     </div>
     <aside className={`sa-sidebar ${menuOpen ? 'is-open' : ''}`}>

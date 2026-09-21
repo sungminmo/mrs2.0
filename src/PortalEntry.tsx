@@ -1,5 +1,6 @@
 import { lazy, Suspense, useSyncExternalStore } from 'react'
 import App from './App'
+import { readAuthSession } from './authSession'
 
 const AdminPortal = lazy(() => import('./admin/AdminPortal'))
 const ServiceInquiryPage = lazy(() => import('./ServiceInquiryPage'))
@@ -16,7 +17,9 @@ export default function PortalEntry() {
   if (hash === '#/contact') return <Suspense fallback={<p role="status">문의 화면 불러오는 중...</p>}><ServiceInquiryPage /></Suspense>
   if (hash === '#/privacy') return <Suspense fallback={<p role="status">개인정보처리방침 불러오는 중...</p>}><PrivacyPolicyPage /></Suspense>
   if (hash === '#/register') return <Suspense fallback={<p role="status">회원가입 화면 불러오는 중...</p>}><RegistrationPage /></Suspense>
-  return /^#\/admin(?:[/?]|$)/.test(hash)
+  const adminRequested = /^#\/admin(?:[/?]|$)/.test(hash)
+  const isAdmin = readAuthSession()?.user.role === 'ADMIN'
+  return adminRequested && isAdmin
     ? <Suspense fallback={<p role="status">관리자 화면 불러오는 중...</p>}><AdminPortal hash={hash} /></Suspense>
     : <App />
 }
