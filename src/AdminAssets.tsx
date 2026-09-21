@@ -112,7 +112,7 @@ function CategoryShare({ rows, label }: { rows: ReturnType<typeof categoryShares
   </>
 }
 
-export default function AdminAssets({ assets: inventory, onAssetsChange: setInventory, navigation, onValuesObserved, inspectionActive, onInspectionView, inspectionContent, inspectionCount }: { assets: Asset[]; onAssetsChange: Dispatch<SetStateAction<Asset[]>>; navigation: ReactNode; onValuesObserved: ObserveAssetValues; inspectionActive: boolean; onInspectionView: (active: boolean) => void; inspectionContent: ReactNode; inspectionCount: number }) {
+export default function AdminAssets({ assets: inventory, onAssetsChange: setInventory, navigation, onValuesObserved, inspectionActive, onInspectionView, inspectionContent, inspectionCount, onFaq }: { assets: Asset[]; onAssetsChange: Dispatch<SetStateAction<Asset[]>>; navigation: ReactNode; onValuesObserved: ObserveAssetValues; inspectionActive: boolean; onInspectionView: (active: boolean) => void; inspectionContent: ReactNode; inspectionCount: number; onFaq: () => void }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<string>('전체')
   const [location, setLocation] = useState('전체 위치')
@@ -244,7 +244,7 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
   return <AdminShell navigation={navigation} search={detail || inspectionActive ? undefined : search}>
     {marketConfirmOpen && <MarketRegistrationConfirm subject={`선택한 자산 ${selectedVisible.length}건`} onCancel={() => setMarketConfirmOpen(false)} onConfirm={confirmSelectedMarket} />}
     <main ref={overview} className="sa-main sa-assets-main">
-      {detail ? <ShopifyAssetDetail key={detail.code} asset={inventory[detailIndex]} previous={inventory[detailIndex - 1]} next={inventory[detailIndex + 1]} onBack={() => setDetail(null)} onNavigate={setDetail} onSave={(updated) => setInventory((current) => current.map((asset) => asset.code === updated.code ? updated : asset))} /> : <>
+      {detail ? <ShopifyAssetDetail key={detail.code} asset={inventory[detailIndex]} previous={inventory[detailIndex - 1]} next={inventory[detailIndex + 1]} onBack={() => setDetail(null)} onNavigate={setDetail} onSave={(updated) => setInventory((current) => current.map((asset) => asset.code === updated.code ? updated : asset))} onFaq={onFaq} /> : <>
       <div className="sa-heading"><div><div className="sa-breadcrumb">워크스페이스 <span>/</span> 자산</div><h1>내 자산 <span>{inventory.length}</span></h1></div>{!inspectionActive && <div className="sa-heading-actions"><button className="sa-button" onClick={exportAssets} disabled={!visible.length}><ArrowDownToLine size={15} />내보내기</button><button className="sa-button sa-primary" onClick={() => addDialog.current?.showModal()}><PackagePlus size={16} />자산 등록</button></div>}</div>
       <div className="inspection-tabs" role="group" aria-label="내 자산 보기"><button className="sa-button" aria-pressed={!inspectionActive && !assetListActive} onClick={() => { setAssetListActive(false); onInspectionView(false) }}>자산 현황</button><button className="sa-button" aria-pressed={assetListActive} onClick={() => { syncDraft(); setAssetListActive(true); onInspectionView(false) }}>자산 목록</button><button className="sa-button" aria-pressed={inspectionActive} onClick={() => { setAssetListActive(false); onInspectionView(true) }}>검수·폐기 내역</button></div>
       {inspectionActive ? inspectionContent : <>

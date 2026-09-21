@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowDownToLine, Box, Check, ChevronLeft, ChevronRight, MapPin, Save, ShoppingCart, Warehouse } from 'lucide-react'
+import { ArrowLeft, ArrowDownToLine, Box, Check, ChevronLeft, ChevronRight, CircleHelp, Info, MapPin, Save, ShoppingCart, Warehouse } from 'lucide-react'
 import './ShopifyAssetDetail.css'
 import SaleRegistration from './SaleRegistration'
 import MarketRegistrationConfirm from './MarketRegistrationConfirm'
@@ -12,13 +12,14 @@ type Asset = {
 }
 type Props = {
   asset: Asset; previous?: Asset; next?: Asset; onBack: () => void;
-  onSave: (asset: Asset) => void; onNavigate: (asset: Asset) => void;
+  onSave: (asset: Asset) => void; onNavigate: (asset: Asset) => void; onFaq: () => void;
 }
 const numeric = (value: string) => Number(value.replaceAll(',', ''))
 const money = (value: number) => `₩${value.toLocaleString('ko-KR')}`
 const stateClass = (status: string) => status === '판매 중' ? 'selling' : status === '대기 중' ? 'pending' : 'stored'
+const gradeDiscounts: Record<string, number> = { S: 0.1, A: 0.3, B: 0.5 }
 
-export default function ShopifyAssetDetail({ asset, previous, next, onBack, onSave, onNavigate }: Props) {
+export default function ShopifyAssetDetail({ asset, previous, next, onBack, onSave, onNavigate, onFaq }: Props) {
   const [note, setNote] = useState(asset.note)
   const [message, setMessage] = useState('')
   const [imageFailed, setImageFailed] = useState(false)
@@ -26,7 +27,10 @@ export default function ShopifyAssetDetail({ asset, previous, next, onBack, onSa
   const [marketConfirmOpen, setMarketConfirmOpen] = useState(false)
   const heading = useRef<HTMLHeadingElement>(null)
   const changed = note.trim() !== asset.note
-  const difference = numeric(asset.salePrice) - numeric(asset.appraisalValue)
+  const discountRate = gradeDiscounts[asset.grade] ?? 0
+  const discountedSalePrice = Math.round(numeric(asset.salePrice) * (1 - discountRate))
+  const difference = discountedSalePrice - numeric(asset.appraisalValue)
+  const beforeInspection = asset.status === '보관 중'
 
   useEffect(() => { heading.current?.focus({ preventScroll: true }); window.scrollTo(0, 0) }, [])
   useEffect(() => {
@@ -49,7 +53,7 @@ export default function ShopifyAssetDetail({ asset, previous, next, onBack, onSa
   }
   function exportAsset() {
     const escape = (value: string) => `"${(/^[=+\-@\t\r]/.test(value) ? `'${value}` : value).replaceAll('"', '""')}"`
-    const rows = [['자산 코드', '자산명', '상태', '등급', '수량', '단위', '평가 가치', '판매 가격', '보관 위치', '입고일', '메모'], [asset.code, asset.name, asset.status, asset.grade, asset.quantity, asset.unit, asset.appraisalValue, asset.salePrice, asset.location, asset.receivedAt, asset.note]]
+    const rows = [['자산 코드', '자산명', '상태', '등급', '수량', '단위', '평가 가치', '판매 가격', '등급 할인율', '보관 위치', '입고일', '메모'], [asset.code, asset.name, asset.status, asset.grade, asset.quantity, beforeInspection ? 'lot' : asset.unit, asset.appraisalValue, String(discountedSalePrice), `${Math.round(discountRate * 100)}%`, asset.location, asset.receivedAt, asset.note]]
     const url = URL.createObjectURL(new Blob(['\uFEFF', rows.map((row) => row.map(escape).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8;' }))
     const link = document.createElement('a')
     link.href = url
@@ -67,8 +71,8 @@ export default function ShopifyAssetDetail({ asset, previous, next, onBack, onSa
     <div className="sd-layout"><div className="sd-primary-column">
       <section className="sd-section"><div className="sd-section-heading"><h3>자산 정보</h3><span className="sd-grade">{asset.grade}등급</span></div><dl className="sd-fields"><div className="sd-wide"><dt>자산명</dt><dd>{asset.name}</dd></div><div><dt>자산 코드</dt><dd>{asset.code}</dd></div><div><dt>브랜드</dt><dd>{asset.brand}</dd></div><div className="sd-wide"><dt>규격</dt><dd>{asset.specification}</dd></div></dl></section>
       <section className="sd-section"><div className="sd-section-heading"><h3>미디어</h3><span>{asset.image && !imageFailed ? '이미지 1개' : '이미지 없음'}</span></div><figure className="sd-media"><div>{asset.image && !imageFailed ? <img src={asset.image} alt={asset.name} onError={() => setImageFailed(true)} /> : <span className="sd-no-image"><Box size={32} />{imageFailed ? '이미지를 불러올 수 없습니다' : '등록된 이미지가 없습니다'}</span>}</div><figcaption>자재 종류 참고 이미지</figcaption></figure></section>
-      <section className="sd-section"><div className="sd-section-heading"><h3>평가 및 판매</h3><span>KRW</span></div><dl className="sd-fields sd-prices"><div><dt>평가 가치</dt><dd>{money(numeric(asset.appraisalValue))}</dd></div><div><dt>판매 가격</dt><dd>{money(numeric(asset.salePrice))}</dd></div></dl><div className="sd-price-summary"><span>평가 가치 대비 판매 가격</span><b>{difference >= 0 ? '+' : '-'}{money(Math.abs(difference))}</b></div></section>
-      <section className="sd-section"><div className="sd-section-heading"><h3>재고 및 출고</h3><span><MapPin size={13} />{asset.location}</span></div><div className="sd-stock"><div><span>입고 수량</span><strong>{Number(asset.quantity).toLocaleString('ko-KR')}<small>{asset.unit}</small></strong></div><dl><div><dt>출고 단위</dt><dd>{asset.shipmentUnit}</dd></div><div><dt>입고일</dt><dd>{asset.receivedAt}</dd></div></dl></div></section>
+      <section className="sd-section"><div className="sd-section-heading"><h3>평가 및 판매</h3><span>KRW</span></div><dl className="sd-fields sd-prices"><div><dt>평가 가치</dt><dd>{money(numeric(asset.appraisalValue))}</dd></div><div><dt>판매 가격</dt><dd>{money(discountedSalePrice)}</dd><small className="sd-price-rule">기준 판매가 {money(numeric(asset.salePrice))} · {asset.grade}등급 {Math.round(discountRate * 100)}% 일괄 할인 적용</small></div></dl><div className="sd-price-summary"><span>평가 가치 대비 할인 적용 판매 가격</span><b>{difference >= 0 ? '+' : '-'}{money(Math.abs(difference))}</b></div>{beforeInspection && <PolicyNotice>표시된 평가 가치는 검수 전 자산 정보로 산정한 예상가치입니다.</PolicyNotice>}</section>
+      <section className="sd-section"><div className="sd-section-heading"><h3>재고 및 출고</h3><span><MapPin size={13} />{asset.location}</span></div><div className="sd-stock"><div><span>입고 수량</span><strong>{Number(asset.quantity).toLocaleString('ko-KR')}<small>{beforeInspection ? 'lot' : asset.unit}</small></strong></div><dl><div><dt>출고 단위</dt><dd>{asset.shipmentUnit}</dd></div><div><dt>입고일</dt><dd>{asset.receivedAt}</dd></div></dl></div>{beforeInspection && <PolicyNotice>검수 전 입고 정보를 기준으로 파악한 대략적인 lot 수량입니다.</PolicyNotice>}</section>
     </div><aside className="sd-secondary-column" aria-label="자산 관리">
       <section className="sd-section"><div className="sd-section-heading"><h3>자산 상태</h3><span className={`sd-badge ${stateClass(asset.status)}`}><i />{asset.status}</span></div><button className="sd-button" disabled={asset.status !== '보관 중'} onClick={requestMarketRegistration}><ShoppingCart size={15} />마켓에 등록하기</button><p className="sd-status-caption">{asset.status === '판매 중' ? '마켓에 등록된 자산은 등록을 취소할 수 없습니다.' : asset.status === '대기 중' ? '검수 대기 중입니다. 마켓 등록은 검수 후 관리자 승인이 필요합니다.' : '마켓 등록 신청 후 검수 및 관리자 승인이 진행됩니다.'}</p></section>
       <section className="sd-section"><div className="sd-section-heading"><h3>보관 정보</h3><Warehouse size={16} /></div><dl className="sd-side-fields"><div><dt>보관 위치</dt><dd>{asset.location}</dd></div><div><dt>보관 기간</dt><dd>{asset.storageDays}</dd></div><div><dt>입고일</dt><dd>{asset.receivedAt}</dd></div></dl></section>
@@ -82,4 +86,8 @@ export default function ShopifyAssetDetail({ asset, previous, next, onBack, onSa
       setMessage('판매 등록 요청이 접수되었습니다. 검수 후 관리자가 승인하면 판매 중 상태로 전환되어 마켓에 등록됩니다.')
     }} />}
   </div>
+
+  function PolicyNotice({ children }: { children: string }) {
+    return <div className="sd-policy-notice"><Info size={15} /><p>{children} 가치 금액 판정과 수량 파악에 대한 상세 정책은 <button type="button" onClick={() => leave(onFaq)}>F&amp;Q</button>를 참고해 주세요.</p><CircleHelp size={14} aria-hidden="true" /></div>
+  }
 }

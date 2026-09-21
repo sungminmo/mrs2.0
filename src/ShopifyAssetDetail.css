@@ -43,8 +43,13 @@
 .sd-media figcaption { margin-top: 9px; color: #707070; font-size: 10px; }
 .sd-no-image { display: grid; justify-items: center; gap: 12px; color: #707070; font-size: 11px; }
 .sd-prices dd { font-size: 23px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.sd-price-rule { display: block; margin-top: 7px; color: #707770; font-size: 10px; line-height: 1.55; }
 .sd-price-summary { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #ededed; font-size: 11px; color: #707070; }
 .sd-price-summary b { color: #454545; font-weight: 600; }
+.sd-policy-notice { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 8px; margin-top: 17px; padding: 12px 13px; border-left: 3px solid #58826a; background: #f1f6f2; color: #4d5f54; }
+.sd-policy-notice > svg { margin-top: 1px; color: #397052; }
+.sd-policy-notice p { margin: 0; font-size: 10px; line-height: 1.7; }
+.sd-policy-notice button { padding: 0; border: 0; background: none; color: #21613d; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .sd-stock { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .sd-stock > div > span { color: #707070; font-size: 11px; }
 .sd-stock strong { display: block; margin-top: 7px; font-size: 26px; font-weight: 650; }
