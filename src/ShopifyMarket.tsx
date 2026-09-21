@@ -4,7 +4,7 @@ import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpDown, Box, Check, Chevro
 import AdminShell from './AdminShell'
 import MarketCampaigns, { marketCampaigns } from './MarketCampaigns'
 import QuoteRequestPage from './QuoteRequestPage'
-import type { QuoteItem } from './QuoteRequestPage'
+import type { QuoteItem, QuoteRequestRecord } from './QuoteRequestPage'
 import CategorySelect from './CategorySelect'
 import { categoryChain, categoryMatches, categoryPath, materialCategories } from './categories'
 import './AdminAssets.css'
@@ -40,7 +40,7 @@ function ProductGrade({ grade }: { grade: Product['grade'] }) {
   return <span className={`sm-grade sm-grade-${grade?.toLowerCase() ?? 'unknown'}`}>{grade ? `${grade}등급` : '등급 미확인'}</span>
 }
 
-export default function ShopifyMarket({ products, navigation, basket, onBasketChange, isGuest = false, onLogin = () => {} }: { products: string[][]; navigation: ReactNode; basket: Basket; onBasketChange: Dispatch<SetStateAction<Basket>>; isGuest?: boolean; onLogin?: () => void }) {
+export default function ShopifyMarket({ products, navigation, basket, onBasketChange, isGuest = false, onLogin = () => {}, onQuoteSubmitted }: { products: string[][]; navigation: ReactNode; basket: Basket; onBasketChange: Dispatch<SetStateAction<Basket>>; isGuest?: boolean; onLogin?: () => void; onQuoteSubmitted?: (record: QuoteRequestRecord) => void }) {
   const catalog: Product[] = products.map(([name, price, original, unit, badge, categoryId, grade]) => {
     const currentPrice = Number(price.replaceAll(',', ''))
     const originalPrice = Number(original.replaceAll(',', ''))
@@ -133,7 +133,7 @@ export default function ShopifyMarket({ products, navigation, basket, onBasketCh
 
   return <AdminShell navigation={navigation} className="sm-market">
     <main className="sa-main">
-      {quote ? <QuoteRequestPage items={quote.items} onBack={closeQuote} backLabel={quote.source === 'basket' ? '장바구니로 돌아가기' : '상품 상세로 돌아가기'} /> : detail ? <MarketDetail key={detail.name} product={detail} initialQuantity={detailQuantity} onBack={closeProduct} onAdd={(quantity) => { setDetailQuantity(quantity); addProduct(detail, quantity) }} onRequest={(quantity) => { setDetailQuantity(quantity); openQuote([{ product: detail, quantity }], 'product') }} /> : <>
+      {quote ? <QuoteRequestPage items={quote.items} onBack={closeQuote} backLabel={quote.source === 'basket' ? '장바구니로 돌아가기' : '상품 상세로 돌아가기'} onSubmitted={onQuoteSubmitted} /> : detail ? <MarketDetail key={detail.name} product={detail} initialQuantity={detailQuantity} onBack={closeProduct} onAdd={(quantity) => { setDetailQuantity(quantity); addProduct(detail, quantity) }} onRequest={(quantity) => { setDetailQuantity(quantity); openQuote([{ product: detail, quantity }], 'product') }} /> : <>
       <div className="sa-heading"><div><div className="sa-breadcrumb">워크스페이스 <span>/</span> 마켓</div><h1>자재 마켓 <span>{catalog.length}</span></h1></div><button className="sa-button sa-primary" onClick={() => { setBasketOpen(true); window.scrollTo(0, 0) }}><ShoppingCart size={16} />장바구니 <span className="sm-cart-count">{basketCount}</span></button></div>
       <MarketCampaigns renderImage={(category) => <ProductImage key={category} product={{ name: '', category }} />} onSelect={(selectedCampaign) => { reset(); setCampaign(selectedCampaign.id); setDraftCampaign(selectedCampaign.id); setSort('recommended'); focusCatalog() }} />
       <form className="sa-detail-search sm-market-search" onSubmit={(event) => { event.preventDefault(); applySearch() }}>

@@ -3,9 +3,22 @@ import type { FormEvent } from 'react'
 import { ArrowDownToLine, ArrowLeft, Box, Check, FileText } from 'lucide-react'
 
 export type QuoteItem = { name: string; category: string; price: number; unit: string; quantity: number; image?: string }
+export type QuoteRequestRecord = {
+  id: string
+  requestedAt: string
+  status: '접수 완료' | '검토 중' | '견적 회신'
+  items: QuoteItem[]
+  company: string
+  name: string
+  phone: string
+  email: string
+  address: string
+  deliveryDate: string
+  note: string
+}
 const money = (value: number) => `₩${value.toLocaleString('ko-KR')}`
 
-export default function QuoteRequestPage({ items, onBack, backLabel }: { items: QuoteItem[]; onBack: () => void; backLabel: string }) {
+export default function QuoteRequestPage({ items, onBack, backLabel, onSubmitted }: { items: QuoteItem[]; onBack: () => void; backLabel: string; onSubmitted?: (record: QuoteRequestRecord) => void }) {
   const [draft, setDraft] = useState({ company: '', name: '', phone: '', email: '', address: '', deliveryDate: '', note: '' })
   const [request, setRequest] = useState<typeof draft | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
@@ -26,7 +39,9 @@ export default function QuoteRequestPage({ items, onBack, backLabel }: { items: 
       }
     }
     submitted.current = true
-    setRequest({ company: draft.company.trim(), name: draft.name.trim(), phone: draft.phone.trim(), email: draft.email.trim(), address: draft.address.trim(), deliveryDate: draft.deliveryDate, note: draft.note.trim() })
+    const completed = { company: draft.company.trim(), name: draft.name.trim(), phone: draft.phone.trim(), email: draft.email.trim(), address: draft.address.trim(), deliveryDate: draft.deliveryDate, note: draft.note.trim() }
+    setRequest(completed)
+    onSubmitted?.({ id: `QUO-${Date.now().toString().slice(-8)}`, requestedAt: new Date().toISOString(), status: '접수 완료', items: items.map((item) => ({ ...item })), ...completed })
   }
 
   function downloadQuote() {
@@ -50,7 +65,7 @@ export default function QuoteRequestPage({ items, onBack, backLabel }: { items: 
         <div className="sm-quote-total"><span>예상 자재 금액</span><strong>{money(total)}</strong></div>
         <p className="sa-form-note">배송비·부가세 별도 확인. 주문이나 결제는 진행되지 않습니다.</p>
       </section>
-      {request ? <section className="sm-quote-result" aria-label="견적 요청 작성 결과"><h3 tabIndex={-1} ref={(element) => element?.focus()}><Check size={18} />견적 요청서 작성 완료</h3><dl>{[['업체명', request.company], ['담당자명', request.name], ['연락처', request.phone], ['이메일', request.email], ['주소', request.address], ['희망 납기일', request.deliveryDate], ['요청사항', request.note]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '-'}</dd></div>)}</dl><p role="status">요청서가 이 화면에 작성되었습니다. 현재는 시제품으로 공급사에 전송되지 않으며, 페이지를 나가면 초기화됩니다.</p><button className="sa-button sa-primary" onClick={downloadQuote}><ArrowDownToLine size={16} />요청서 다운로드</button><button className="sa-button" onClick={() => { submitted.current = false; setRequest(null); requestAnimationFrame(() => companyInput.current?.focus()) }}>요청 내용 수정</button></section> : <form onSubmit={submitQuote} onInput={(event) => { if (event.target instanceof HTMLInputElement) event.target.setCustomValidity('') }}>
+      {request ? <section className="sm-quote-result" aria-label="견적 요청 작성 결과"><h3 tabIndex={-1} ref={(element) => element?.focus()}><Check size={18} />견적 요청서 작성 완료</h3><dl>{[['업체명', request.company], ['담당자명', request.name], ['연락처', request.phone], ['이메일', request.email], ['주소', request.address], ['희망 납기일', request.deliveryDate], ['요청사항', request.note]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '-'}</dd></div>)}</dl><p role="status">작성한 요청서는 마이페이지의 견적 요청 내역에서 확인할 수 있습니다. 현재는 시제품으로 공급사에 전송되지 않습니다.</p><button className="sa-button sa-primary" onClick={downloadQuote}><ArrowDownToLine size={16} />요청서 다운로드</button></section> : <form onSubmit={submitQuote} onInput={(event) => { if (event.target instanceof HTMLInputElement) event.target.setCustomValidity('') }}>
         <div className="sm-quote-fields"><h2>견적 요청 사항</h2>
           <label>업체명 <span>필수</span><input ref={companyInput} name="company" autoComplete="organization" placeholder="예: 에코건설" required maxLength={120} value={draft.company} onChange={(event) => setDraft({ ...draft, company: event.target.value })} /></label>
           <label>담당자명 <span>필수</span><input name="contact" autoComplete="name" placeholder="예: 홍길동" required maxLength={80} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>

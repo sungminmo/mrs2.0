@@ -13,6 +13,8 @@ import { Settlements } from './Settlements'
 import LoginPage from './LoginPage'
 import InspectionDisposals from './InspectionDisposals'
 import { demoDisposals, updateDisposal, type DisposalAction } from './disposals'
+import QuoteHistory from './QuoteHistory'
+import type { QuoteRequestRecord } from './QuoteRequestPage'
 
 type Tab = 'assets' | 'market' | 'settlements' | 'faq' | 'profile' | 'notifications'
 
@@ -44,6 +46,7 @@ export default function App() {
     return previous
   }, [])
   const [marketBasket, setMarketBasket] = useState<Record<string, number>>({})
+  const [quoteRequests, setQuoteRequests] = useState<QuoteRequestRecord[]>([])
   const [contact, setContact] = useState({ name: '홍길동', email: 'hong@hyundai.co.kr', phone: '010-1234-5678' })
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([])
   const [disposals, setDisposals] = useState(demoDisposals)
@@ -90,11 +93,11 @@ export default function App() {
   const unread = notifications.filter((item) => !item.read).length
   const markRead = (ids: string[]) => setReadNotificationIds((current) => [...new Set([...current, ...ids])])
   const page = tab === 'assets' ? <AdminAssets assets={inventory} onAssetsChange={setInventory} navigation={navigation} onValuesObserved={observeAssetValues} inspectionActive={inspectionActive} onInspectionView={(active) => { setInspectionActive(active); setInspectionId(null) }} inspectionCount={disposals.filter((record) => record.status === '고객 확인 대기').length} inspectionContent={<InspectionDisposals records={disposals} selectedId={inspectionId} onSelect={setInspectionId} onUpdate={changeDisposal} />} />
-    : tab === 'market' ? <ShopifyMarket products={products} navigation={navigation} basket={marketBasket} onBasketChange={setMarketBasket} />
+    : tab === 'market' ? <ShopifyMarket products={products} navigation={navigation} basket={marketBasket} onBasketChange={setMarketBasket} onQuoteSubmitted={(record) => setQuoteRequests((current) => [record, ...current])} />
     : tab === 'settlements' ? <Settlements key={settlementKind} navigation={navigation} transactions={transactions} assets={inventory} disposals={disposals} onInspection={openInspection} initialKind={settlementKind} />
     : tab === 'faq' ? <Faq navigation={navigation} />
     : tab === 'notifications' ? <Notifications navigation={navigation} items={notifications} onRead={markRead} onAssets={() => { setInspectionActive(false); setTab('assets') }} onSales={() => setTab('profile')} onSettlements={() => setTab('settlements')} onInspection={openInspection} />
-    : <Profile navigation={navigation} contact={contact} onContactChange={setContact} />
+    : <Profile navigation={navigation} contact={contact} onContactChange={setContact} quoteRequests={quoteRequests} />
   return <ReceivingRequestProvider contact={contact}><NotificationNavigation value={{ unread, active: tab === 'notifications', onOpen: () => setTab('notifications') }}>{page}</NotificationNavigation></ReceivingRequestProvider>
 }
 
@@ -109,7 +112,9 @@ const transactions = [
 ]
 type Contact = { name: string; email: string; phone: string }
 
-function Profile({ navigation, contact, onContactChange }: { navigation: ReactNode; contact: Contact; onContactChange: (contact: Contact) => void }) {
+function Profile({ navigation, contact, onContactChange, quoteRequests }: { navigation: ReactNode; contact: Contact; onContactChange: (contact: Contact) => void; quoteRequests: QuoteRequestRecord[] }) {
+  const [section, setSection] = useState<'account' | 'quotes'>('account')
+  const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null)
   const [filter, setFilter] = useState('전체')
   const [message, setMessage] = useState('')
   const editDialog = useRef<HTMLDialogElement>(null)
@@ -134,14 +139,17 @@ function Profile({ navigation, contact, onContactChange }: { navigation: ReactNo
   }
   return <AdminShell navigation={navigation}>
     <main className="sa-main sp-profile">
-      <div className="sa-heading"><div><div className="sa-breadcrumb">워크스페이스 <span>/</span> 계정</div><h1>마이페이지</h1></div><button className="sa-button" onClick={exportTransactions} disabled={!shown.length}><ArrowDownToLine size={15} />거래 내역 내보내기</button></div>
-      <section className="sp-company" aria-label="회사 정보"><span className="sa-avatar">HC</span><div><h2>현대건설(주)</h2><p>사업자 등록번호 123-45-67890</p></div><span className="sa-badge selling">ECO 파트너</span></section>
-      <section className="sp-metrics" aria-label="거래 요약">{[['이번 달 거래', '142건', '지난달보다 18건 증가'], ['누적 거래액', '4.2억원', '올해 누적 기준'], ['진행 중 문의', '1건', '확인 필요']].map(([label, value, caption]) => <div key={label}><span>{label}</span><strong>{value}</strong><small>{caption}</small></div>)}</section>
-      <div className="sp-details">
-        <section><div className="sa-section-title"><h2>담당자 정보</h2><button className="sa-button" onClick={() => editDialog.current?.showModal()}><Pencil size={14} />수정</button></div><dl>{[['담당자', contact.name], ['이메일', contact.email], ['연락처', contact.phone]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '미등록'}</dd></div>)}</dl></section>
-        <section><div className="sa-section-title"><h2>파트너 혜택</h2><span>계정 누적 기준</span></div><dl><div><dt>보유 에코 포인트</dt><dd className="sp-positive">3,200 P</dd></div><div><dt>누적 CO₂ 절감</dt><dd>8.4 ton</dd></div><div><dt>계정 상태</dt><dd><span className="sa-badge selling">활성</span></dd></div></dl></section>
-      </div>
-      <section className="sp-transactions" aria-label="최근 거래 내역"><div className="sa-section-title"><h2>최근 거래 내역</h2><span>{shown.length}건</span></div><div className="sa-tabs" aria-label="거래 유형">{['전체', '구매', '판매', '보관'].map((item) => <button key={item} aria-pressed={filter === item} onClick={() => setFilter(item)}>{item}</button>)}</div><div className="sa-table-scroll"><table className="sa-table"><thead><tr><th>거래일시</th><th>유형</th><th>내용</th><th className="sa-numeric">금액</th><th>상태</th></tr></thead><tbody>{shown.map(([date, type, title, value, status]) => <tr key={date}><td>{date}</td><td>{type}</td><td><b>{title}</b></td><td className={`sa-numeric ${type === '판매' ? 'sp-positive' : ''}`}>{value}</td><td><span className={`sa-badge ${type === '판매' ? 'selling' : 'stored'}`}>{status}</span></td></tr>)}</tbody></table></div></section>
+      <div className="sa-heading"><div><div className="sa-breadcrumb">워크스페이스 <span>/</span> {section === 'account' ? '계정' : '견적 요청 내역'}</div><h1>마이페이지</h1></div>{section === 'account' && <button className="sa-button" onClick={exportTransactions} disabled={!shown.length}><ArrowDownToLine size={15} />거래 내역 내보내기</button>}</div>
+      <div className="sa-tabs sp-section-tabs" aria-label="마이페이지 메뉴"><button aria-pressed={section === 'account'} onClick={() => { setSection('account'); setSelectedQuoteId(null) }}>계정 정보</button><button aria-pressed={section === 'quotes'} onClick={() => setSection('quotes')}>견적 요청 내역 <span>{quoteRequests.length}</span></button></div>
+      {section === 'quotes' ? <QuoteHistory records={quoteRequests} selectedId={selectedQuoteId} onSelect={setSelectedQuoteId} onBack={() => setSelectedQuoteId(null)} /> : <>
+        <section className="sp-company" aria-label="회사 정보"><span className="sa-avatar">HC</span><div><h2>현대건설(주)</h2><p>사업자 등록번호 123-45-67890</p></div><span className="sa-badge selling">ECO 파트너</span></section>
+        <section className="sp-metrics" aria-label="거래 요약">{[['이번 달 거래', '142건', '지난달보다 18건 증가'], ['누적 거래액', '4.2억원', '올해 누적 기준'], ['진행 중 문의', '1건', '확인 필요']].map(([label, value, caption]) => <div key={label}><span>{label}</span><strong>{value}</strong><small>{caption}</small></div>)}</section>
+        <div className="sp-details">
+          <section><div className="sa-section-title"><h2>담당자 정보</h2><button className="sa-button" onClick={() => editDialog.current?.showModal()}><Pencil size={14} />수정</button></div><dl>{[['담당자', contact.name], ['이메일', contact.email], ['연락처', contact.phone]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '미등록'}</dd></div>)}</dl></section>
+          <section><div className="sa-section-title"><h2>파트너 혜택</h2><span>계정 누적 기준</span></div><dl><div><dt>보유 에코 포인트</dt><dd className="sp-positive">3,200 P</dd></div><div><dt>누적 CO₂ 절감</dt><dd>8.4 ton</dd></div><div><dt>계정 상태</dt><dd><span className="sa-badge selling">활성</span></dd></div></dl></section>
+        </div>
+        <section className="sp-transactions" aria-label="최근 거래 내역"><div className="sa-section-title"><h2>최근 거래 내역</h2><span>{shown.length}건</span></div><div className="sa-tabs" aria-label="거래 유형">{['전체', '구매', '판매', '보관'].map((item) => <button key={item} aria-pressed={filter === item} onClick={() => setFilter(item)}>{item}</button>)}</div><div className="sa-table-scroll"><table className="sa-table"><thead><tr><th>거래일시</th><th>유형</th><th>내용</th><th className="sa-numeric">금액</th><th>상태</th></tr></thead><tbody>{shown.map(([date, type, title, value, status]) => <tr key={date}><td>{date}</td><td>{type}</td><td><b>{title}</b></td><td className={`sa-numeric ${type === '판매' ? 'sp-positive' : ''}`}>{value}</td><td><span className={`sa-badge ${type === '판매' ? 'selling' : 'stored'}`}>{status}</span></td></tr>)}</tbody></table></div></section>
+      </>}
       {message && <div className="sa-notice" role="status"><Check size={17} /><span>{message}</span><button className="sa-icon" aria-label="알림 닫기" onClick={() => setMessage('')}><X size={16} /></button></div>}
     </main>
     <dialog ref={editDialog} className="sa-dialog" aria-label="담당자 정보 수정"><form onSubmit={saveContact}><div className="sa-dialog-heading"><h2>담당자 정보 수정</h2><button type="button" className="sa-icon" aria-label="수정 닫기" onClick={() => editDialog.current?.close()}><X size={18} /></button></div><div className="sa-form-fields"><label className="sa-full-field">담당자<input name="name" defaultValue={contact.name} required maxLength={80} autoComplete="name" /></label><label className="sa-full-field">이메일<input name="email" type="email" defaultValue={contact.email} required autoComplete="email" /></label><label className="sa-full-field">연락처<input name="phone" type="tel" defaultValue={contact.phone} maxLength={30} autoComplete="tel" /></label></div><div className="sa-dialog-actions"><button type="button" className="sa-button" onClick={() => { editDialog.current?.querySelector('form')?.reset(); editDialog.current?.close() }}>취소</button><button className="sa-button sa-primary" type="submit">저장</button></div></form></dialog>
