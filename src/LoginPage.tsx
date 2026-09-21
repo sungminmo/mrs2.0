@@ -83,7 +83,7 @@ function MaterialValueGrid() {
   </div></section>
 }
 
-export default function LoginPage({ onLogin, onBrowse }: { onLogin: (email: string, password: string) => Promise<void>; onBrowse: () => void }) {
+export default function LoginPage({ onLogin, onBrowse, onCustomerAccess }: { onLogin: (email: string, password: string) => Promise<void>; onBrowse: () => void; onCustomerAccess: () => void }) {
   const receivingRequest = useReceivingRequest()
   const [receivingFloatVisible, setReceivingFloatVisible] = useState(true)
   const [visible, setVisible] = useState(false)
@@ -150,7 +150,8 @@ export default function LoginPage({ onLogin, onBrowse }: { onLogin: (email: stri
           <div className="login-links"><button type="button" onClick={() => setNotice('아이디 찾기는 계정 서비스 연결 후 이용할 수 있습니다.')}>아이디 찾기</button><button type="button" onClick={() => setNotice('비밀번호 찾기는 계정 서비스 연결 후 이용할 수 있습니다.')}>비밀번호 찾기</button></div>
           <button type="submit" className="login-primary" disabled={submitting}><LogIn size={17} />{submitting ? '로그인 중...' : '로그인'}</button>
         </form>
-        <button className="login-browse" onClick={onBrowse}>둘러보기<ArrowRight size={17} /></button>
+        <button className="login-browse" onClick={onCustomerAccess}>고객 포털로 계속<ArrowRight size={17} /></button>
+        <button className="login-browse" onClick={onBrowse}>마켓 둘러보기<ArrowRight size={17} /></button>
         <div className="login-register">아직 회원이 아니신가요? <a href="#/register" onClick={closeLogin}>회원가입</a></div>
         <p className="login-demo">등록된 계정 정보로 로그인해 주세요.</p>
         {notice && <div className="login-notice" role="status"><span>{notice}</span><button aria-label="안내 닫기" onClick={() => setNotice('')}><X size={16} /></button></div>}

@@ -64,7 +64,7 @@ export default function App() {
     }
     setAccess('member')
     setTab('assets')
-  }} onBrowse={() => { setAccess('guest'); setTab('market') }} /></ReceivingRequestProvider>
+  }} onBrowse={() => { setAccess('guest'); setTab('market') }} onCustomerAccess={() => { setAccess('member'); setTab('assets') }} /></ReceivingRequestProvider>
   if (access === 'guest') return <ShopifyMarket products={products} navigation={<><Nav active icon={<ShoppingCart />} label="마켓" onClick={() => setTab('market')} /><Nav active={false} icon={<UserRound />} label="로그인" onClick={() => setAccess('login')} /></>} basket={{}} onBasketChange={setMarketBasket} isGuest onLogin={() => setAccess('login')} />
   const navigation = <>
     <Nav active={tab === 'assets'} icon={<Archive />} label="내 자산" onClick={() => setTab('assets')} />
