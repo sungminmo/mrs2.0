@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { z } from 'zod'
 import { createApp } from '../src/app.js'
-import { hashPassword } from '../src/auth.js'
+import { hashPassword, type AuthUser, type RegistrationInput } from '../src/auth.js'
 import { AppError, ErrorCode } from '../src/http.js'
 import { databaseUrl, readConfig, readDatabaseConfig } from '../src/config.js'
 import { createDatabase, databaseOptions } from '../src/database.js'
@@ -75,6 +75,9 @@ test('JWT login issues tokens only for approved users and protects account APIs'
       repository: {
         findByEmail: async (email) => users.find((user) => user.email === email) ?? null,
         findById: async (id) => users.find((user) => user.id === id) ?? null,
+        createRegistration: async () => { throw new Error('Not used') },
+        listMembers: async () => users,
+        approveMember: async () => null,
       },
       secret: environment.JWT_SECRET,
       expiresIn: '1h',
@@ -100,6 +103,58 @@ test('JWT login issues tokens only for approved users and protects account APIs'
   const unauthorizedResponse = await app.request('/api/auth/me')
   assert.equal(unauthorizedResponse.status, 401)
   assert.deepEqual(await unauthorizedResponse.json(), { success: false, error: { code: 'UNAUTHORIZED', message: 'Bearer token is required' } })
+})
+
+test('registration requires administrator approval before login', async () => {
+  const adminPasswordHash = await hashPassword('admin-password')
+  const customerPasswordHash = await hashPassword('customer-password')
+  const users: AuthUser[] = [
+    { id: '11111111-1111-4111-8111-111111111111', email: 'admin@example.com', passwordHash: adminPasswordHash, companyName: 'MRS', managerName: '관리자', managerPhone: '010-0000-0000', role: 'ADMIN', status: 'ACTIVE', createdAt: new Date('2026-09-01T00:00:00Z') },
+    { id: '22222222-2222-4222-8222-222222222222', email: 'customer@example.com', passwordHash: customerPasswordHash, companyName: '고객사', managerName: '고객', managerPhone: '010-0000-0001', role: 'CUSTOMER', status: 'ACTIVE', createdAt: new Date('2026-09-02T00:00:00Z') },
+  ]
+  const repository = {
+    findByEmail: async (email: string) => users.find((user) => user.email === email) ?? null,
+    findById: async (id: string) => users.find((user) => user.id === id) ?? null,
+    createRegistration: async (input: RegistrationInput) => {
+      const user: AuthUser = { ...input, id: '33333333-3333-4333-8333-333333333333', role: 'CUSTOMER', status: 'PENDING', createdAt: new Date('2026-09-22T00:00:00Z') }
+      users.push(user)
+      return user
+    },
+    listMembers: async () => [...users].reverse(),
+    approveMember: async (id: string, approvedAt: Date) => {
+      const user = users.find((candidate) => candidate.id === id && candidate.status === 'PENDING')
+      if (!user) return null
+      user.status = 'ACTIVE'
+      user.approvedAt = approvedAt
+      return user
+    },
+  }
+  const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository, secret: environment.JWT_SECRET, expiresIn: '1h' } })
+  const jsonHeaders = { 'Content-Type': 'application/json' }
+  const login = (email: string, password: string) => app.request('/api/auth/login', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email, password }) })
+
+  const registrationResponse = await app.request('/api/auth/register', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: ' New@Example.com ', password: 'new-password', companyName: '새 회사', managerName: '신청자', managerPhone: '010-1234-5678' }) })
+  assert.equal(registrationResponse.status, 201)
+  assert.equal(users.at(-1)?.email, 'new@example.com')
+  assert.equal((await login('new@example.com', 'new-password')).status, 403)
+
+  const customerLogin = await login('customer@example.com', 'customer-password')
+  const customerToken = (await customerLogin.json() as { data: { accessToken: string } }).data.accessToken
+  assert.equal((await app.request('/api/admin/members', { headers: { Authorization: `Bearer ${customerToken}` } })).status, 403)
+
+  const adminLogin = await login('admin@example.com', 'admin-password')
+  const adminToken = (await adminLogin.json() as { data: { accessToken: string } }).data.accessToken
+  const authorization = { Authorization: `Bearer ${adminToken}` }
+  const membersResponse = await app.request('/api/admin/members', { headers: authorization })
+  assert.equal(membersResponse.status, 200)
+  assert.match(JSON.stringify(await membersResponse.json()), /new@example.com/)
+
+  const approvalResponse = await app.request('/api/admin/members/33333333-3333-4333-8333-333333333333/approve', { method: 'POST', headers: authorization })
+  assert.equal(approvalResponse.status, 200)
+  assert.equal((await login('new@example.com', 'new-password')).status, 200)
+
+  const duplicateResponse = await app.request('/api/auth/register', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: 'new@example.com', password: 'new-password', companyName: '중복', managerName: '중복', managerPhone: '010-9999-9999' }) })
+  assert.equal(duplicateResponse.status, 409)
 })
 
 test('global error handler normalizes business, validation, and unexpected errors', async () => {

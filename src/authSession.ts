@@ -50,6 +50,14 @@ export async function signIn(email: string, password: string) {
   return body.data
 }
 
+export async function authenticatedFetch(path: string, init: RequestInit = {}) {
+  const session = readAuthSession()
+  if (!session) throw new Error('관리자 로그인이 필요합니다.')
+  const headers = new Headers(init.headers)
+  headers.set('Authorization', `Bearer ${session.accessToken}`)
+  return fetch(path, { ...init, headers })
+}
+
 export function signOut() {
   window.sessionStorage.removeItem(sessionKey)
   window.location.hash = ''

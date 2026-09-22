@@ -16,16 +16,44 @@ export type AuthUser = {
   managerName: string
   role: 'CUSTOMER' | 'ADMIN'
   status: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
+  companyPhone?: string | null
+  managerPhone?: string
+  address?: string | null
+  approvedAt?: Date | null
+  createdAt?: Date
+}
+
+export type RegistrationInput = {
+  email: string
+  passwordHash: string
+  companyName: string
+  companyPhone?: string
+  managerName: string
+  managerPhone: string
+  address?: string
 }
 
 export type AuthRepository = {
   findByEmail: (email: string) => Promise<AuthUser | null>
   findById: (id: string) => Promise<AuthUser | null>
+  createRegistration: (input: RegistrationInput) => Promise<AuthUser>
+  listMembers: () => Promise<AuthUser[]>
+  approveMember: (id: string, approvedAt: Date) => Promise<AuthUser | null>
 }
 
 export const loginSchema = z.object({
-  email: z.email().transform((value) => value.trim().toLowerCase()),
+  email: z.string().trim().pipe(z.email()).transform((value) => value.toLowerCase()),
   password: z.string().min(8).max(128),
+})
+
+export const registrationSchema = z.object({
+  email: z.string().trim().pipe(z.email()).transform((value) => value.toLowerCase()),
+  password: z.string().min(8).max(128),
+  companyName: z.string().trim().min(1).max(160),
+  companyPhone: z.string().trim().max(30).optional(),
+  managerName: z.string().trim().min(1).max(80),
+  managerPhone: z.string().trim().min(1).max(30),
+  address: z.string().trim().max(500).optional(),
 })
 
 export async function hashPassword(password: string) {
@@ -71,6 +99,21 @@ export function authRoutes(repository: AuthRepository, secret: string, expiresIn
   }
 }
 
+export function register(repository: AuthRepository) {
+  return async (context: Context) => {
+    const input = registrationSchema.parse(await context.req.json())
+    if (await repository.findByEmail(input.email)) {
+      throw new AppError(409, ErrorCode.CONFLICT, 'Email is already registered')
+    }
+    const { password, ...profile } = input
+    const user = await repository.createRegistration({
+      ...profile,
+      passwordHash: await hashPassword(password),
+    })
+    return success(context, { id: user.id, email: user.email, status: user.status, createdAt: user.createdAt }, 201)
+  }
+}
+
 export function requireAuth(repository: AuthRepository, secret: string): MiddlewareHandler {
   return async (context, next) => {
     const authorization = context.req.header('Authorization')
@@ -86,6 +129,44 @@ export function requireAuth(repository: AuthRepository, secret: string): Middlew
       if (error instanceof AppError) throw error
       throw new AppError(401, ErrorCode.UNAUTHORIZED, 'Invalid or expired access token')
     }
+  }
+}
+
+export const requireAdmin: MiddlewareHandler = async (context, next) => {
+  const user = context.get('authUser') as AuthUser
+  if (user.role !== 'ADMIN') throw new AppError(403, ErrorCode.FORBIDDEN, 'Administrator access is required')
+  await next()
+}
+
+function memberProfile(user: AuthUser) {
+  return {
+    id: user.id,
+    email: user.email,
+    companyName: user.companyName,
+    companyPhone: user.companyPhone ?? null,
+    managerName: user.managerName,
+    managerPhone: user.managerPhone ?? '',
+    address: user.address ?? null,
+    role: user.role,
+    status: user.status,
+    approvedAt: user.approvedAt ?? null,
+    createdAt: user.createdAt,
+  }
+}
+
+export function listMembers(repository: AuthRepository) {
+  return async (context: Context) => success(context, { members: (await repository.listMembers()).map(memberProfile) })
+}
+
+export function approveMember(repository: AuthRepository) {
+  return async (context: Context) => {
+    const id = z.string().uuid().parse(context.req.param('id'))
+    const user = await repository.findById(id)
+    if (!user) throw new AppError(404, ErrorCode.NOT_FOUND, 'Member application was not found')
+    if (user.status !== 'PENDING') throw new AppError(409, ErrorCode.CONFLICT, 'Member application is not pending')
+    const approved = await repository.approveMember(user.id, new Date())
+    if (!approved) throw new AppError(409, ErrorCode.CONFLICT, 'Member application status changed')
+    return success(context, { member: memberProfile(approved) })
   }
 }
 

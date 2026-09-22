@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutDashboard, ListChecks, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
-import { signOut } from '../authSession'
-import { campaigns, customers, dateText, inventory, invoiceAmount, invoices, locations, masterItems, memberAccounts, money, products, quotes, receivings, receivingStatuses, referenceDate, saleRequests, type ReceivingStatus } from './adminData'
+import { authenticatedFetch, signOut } from '../authSession'
+import { campaigns, customers, dateText, inventory, invoiceAmount, invoices, locations, masterItems, money, products, quotes, receivings, receivingStatuses, referenceDate, saleRequests, type MemberAccount, type ReceivingStatus } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
 import { materialPhotos } from '../assetPhotos'
 import InventoryEditor from './InventoryEditor'
@@ -21,10 +21,22 @@ export default function AdminPortal({ hash }: { hash: string }) {
   const [items, setItems] = useState(() => structuredClone(masterItems))
   const [categories, setCategories] = useState(() => structuredClone(materialCategories))
   const [market, setMarket] = useState(() => structuredClone({ sales: saleRequests, products, quotes, campaigns }))
-  const [members, setMembers] = useState(() => structuredClone(memberAccounts))
+  const [members, setMembers] = useState<MemberAccount[]>([])
   const [locationRecords, setLocationRecords] = useState(() => structuredClone(locations))
   const [receivingRecords, setReceivingRecords] = useState(() => structuredClone(receivings))
   const [notice, setNotice] = useState({ scope: '', text: '' })
+  useEffect(() => {
+    let active = true
+    authenticatedFetch('/api/admin/members').then(async (response) => {
+      if (!response.ok) throw new Error('회원 정보를 불러오지 못했습니다.')
+      const body = await response.json() as { data: { members: Array<{ id: string; email: string; companyName: string; companyPhone: string | null; managerName: string; managerPhone: string; role: 'CUSTOMER' | 'ADMIN'; status: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'; createdAt: string }> } }
+      if (!active) return
+      setMembers(body.data.members.filter((member) => member.role !== 'ADMIN').map((member) => ({ id: member.id, type: '기업회원', email: member.email, companyName: member.companyName, businessNumber: '', representativeName: '', managerName: member.managerName, managerPhone: member.managerPhone, companyPhone: member.companyPhone ?? '', faxNumber: '', lastLoginAt: null, joinedAt: member.createdAt, status: member.status === 'PENDING' ? '가입 승인 대기' : member.status === 'ACTIVE' ? '이용 중' : '승인 반려' })))
+    }).catch((error) => {
+      if (active) setNotice({ scope: 'members/applications/', text: error instanceof Error ? error.message : '회원 정보를 불러오지 못했습니다.' })
+    })
+    return () => { active = false }
+  }, [])
   const views = createAdminViews(assets, items, categories, market, members, locationRecords, receivingRecords)
   const url = new URL(hash.slice(1), 'https://mrs.example')
   const rawRoute = url.pathname.split('/')[2] || 'dashboard'
@@ -108,7 +120,7 @@ export default function AdminPortal({ hash }: { hash: string }) {
         {statusTab && <p className="adm-note">상태는 임시 저장되며 새로고침·고객 포털 이동 시 초기화됩니다. 실제 판매·발송·재고 차감·정산은 실행하지 않습니다.</p>}
         {editing && campaignEditing ? <CampaignEditor key={`${mode}/${id}`} campaign={mode === 'edit' ? market.campaigns.find((entry) => entry.id === id) : undefined} campaigns={market.campaigns} categories={categories} cancelHref={cancelHref} onSave={(campaign) => { setMarket((current) => ({ ...current, campaigns: current.campaigns.some((entry) => entry.id === campaign.id) ? current.campaigns.map((entry) => entry.id === campaign.id ? campaign : entry) : [...current.campaigns, campaign] })); setNotice({ scope: `market/campaigns/${campaign.id}`, text: '기획전이 임시 저장되었습니다.' }); saved(campaign.id) }} /> : editing && locationEditing ? <LocationEditor key={`${mode}/${id}`} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSave={(location) => { setLocationRecords((current) => current.some((entry) => entry.id === location.id) ? current.map((entry) => entry.id === location.id ? location : entry) : [...current, location]); setNotice({ scope: `inventory/locations/${location.id}`, text: `${location.id} 로케이션이 임시 저장되었습니다.` }); saved(location.id) }} /> : editing ? <InventoryEditor key={`${menu.id}/${mode}/${id}`} kind={itemManagement ? 'items' : 'inventory'} items={items} assets={assets} categories={categories} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSaveItem={(item) => { setItems((current) => current.some((entry) => entry.id === item.id) ? current.map((entry) => entry.id === item.id ? item : entry) : [...current, item]); saved(item.id) }} onSaveAsset={(asset) => { setAssets((current) => current.some((entry) => entry.id === asset.id) ? current.map((entry) => entry.id === asset.id ? asset : entry) : [...current, asset]); saved(asset.id) }} /> : <>
           {editable && (!id || row) && <div className="adm-management-actions"><span className="adm-note">새로고침·고객 포털 이동 시 변경 내용 초기화</span><a className="adm-button adm-primary" href={editHref}>{row ? <Pencil size={16} /> : <Plus size={16} />}{recordKind} {row ? '수정' : '등록'}</a></div>}
-          {view && (id ? <><a className="adm-button adm-back" href={listHref}><ArrowLeft size={15} />목록으로</a>{row ? <>{receivingRequest && <ReceivingStatusEditor key={`${row.id}/${row.status}`} currentStatus={row.status as ReceivingStatus} onChange={(status) => updateReceivingStatus(row.id, status)} />}{inspectionStage && <InspectionAction row={row} stage={inspectionStage} />}{statusTab && <MarketStatusEditor key={`${row.id}/${row.status}`} tab={statusTab} ids={[row.id]} currentStatus={row.status} onChange={updateStatus} />}{memberApplication && <MemberApproval onApprove={() => { setMembers((current) => current.map((member) => member.id === row.id ? { ...member, status: '이용 중' } : member)); setNotice({ scope: `members/applications/${row.id}`, text: `${row.id} 회원 가입을 승인했습니다.` }); window.location.hash = `/admin/members?tab=list&id=${row.id}` }} />}<RecordDetail row={row} /></> : <div className="adm-empty"><h2>내역을 찾을 수 없습니다</h2><p>선택한 메뉴에 해당 번호가 없습니다.</p></div>}</> : <RecordList key={`${menu.id}/${tab?.id}`} view={view} params={url.searchParams} path={menu.id} categories={categories} statusTab={statusTab} onStatusChange={updateStatus} />)}
+          {view && (id ? <><a className="adm-button adm-back" href={listHref}><ArrowLeft size={15} />목록으로</a>{row ? <>{receivingRequest && <ReceivingStatusEditor key={`${row.id}/${row.status}`} currentStatus={row.status as ReceivingStatus} onChange={(status) => updateReceivingStatus(row.id, status)} />}{inspectionStage && <InspectionAction row={row} stage={inspectionStage} />}{statusTab && <MarketStatusEditor key={`${row.id}/${row.status}`} tab={statusTab} ids={[row.id]} currentStatus={row.status} onChange={updateStatus} />}{memberApplication && <MemberApproval onApprove={async () => { const response = await authenticatedFetch(`/api/admin/members/${row.id}/approve`, { method: 'POST' }); if (!response.ok) throw new Error('회원 가입 승인에 실패했습니다.'); setMembers((current) => current.map((member) => member.id === row.id ? { ...member, status: '이용 중' } : member)); setNotice({ scope: `members/list/${row.id}`, text: `${row.id} 회원 가입을 승인했습니다.` }); window.location.hash = `/admin/members?tab=list&id=${row.id}` }} />}<RecordDetail row={row} /></> : <div className="adm-empty"><h2>내역을 찾을 수 없습니다</h2><p>선택한 메뉴에 해당 번호가 없습니다.</p></div>}</> : <RecordList key={`${menu.id}/${tab?.id}`} view={view} params={url.searchParams} path={menu.id} categories={categories} statusTab={statusTab} onStatusChange={updateStatus} />)}
         </>}
         </>}
       </>}
@@ -117,9 +129,11 @@ export default function AdminPortal({ hash }: { hash: string }) {
   </div>
 }
 
-function MemberApproval({ onApprove }: { onApprove: () => void }) {
+function MemberApproval({ onApprove }: { onApprove: () => Promise<void> }) {
   const [confirming, setConfirming] = useState(false)
-  return <section className="adm-member-approval" aria-label="회원 가입 승인">{confirming ? <><span>이 회원의 가입을 승인하시겠습니까? 승인 후 즉시 로그인할 수 있습니다.</span><button className="adm-button adm-primary" onClick={onApprove}><Check size={16} />승인 확정</button><button className="adm-button" onClick={() => setConfirming(false)}><X size={16} />취소</button></> : <><span>가입 신청 정보를 확인한 후 승인 처리해 주세요.</span><button className="adm-button adm-primary" onClick={() => setConfirming(true)}><Check size={16} />가입 승인</button></>}</section>
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  return <section className="adm-member-approval" aria-label="회원 가입 승인">{error && <span role="alert">{error}</span>}{confirming ? <><span>이 회원의 가입을 승인하시겠습니까? 승인 후 즉시 로그인할 수 있습니다.</span><button className="adm-button adm-primary" disabled={submitting} onClick={() => { setSubmitting(true); setError(''); void onApprove().catch((reason) => { setError(reason instanceof Error ? reason.message : '회원 가입 승인에 실패했습니다.'); setSubmitting(false) }) }}><Check size={16} />{submitting ? '승인 처리 중' : '승인 확정'}</button><button className="adm-button" disabled={submitting} onClick={() => setConfirming(false)}><X size={16} />취소</button></> : <><span>가입 신청 정보를 확인한 후 승인 처리해 주세요.</span><button className="adm-button adm-primary" onClick={() => setConfirming(true)}><Check size={16} />가입 승인</button></>}</section>
 }
 
 function ReceivingStatusEditor({ currentStatus, onChange }: { currentStatus: ReceivingStatus; onChange: (status: ReceivingStatus) => void }) {

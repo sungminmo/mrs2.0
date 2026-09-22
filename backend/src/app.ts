@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { authRoutes, currentUser, requireAuth, type AuthRepository } from './auth.js'
+import { approveMember, authRoutes, currentUser, listMembers, register, requireAdmin, requireAuth, type AuthRepository } from './auth.js'
 import { ErrorCode, failure, handleError, success } from './http.js'
 
 type Dependencies = {
@@ -15,7 +15,10 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth }: Dependenc
 
   if (auth) {
     app.post('/api/auth/login', authRoutes(auth.repository, auth.secret, auth.expiresIn))
+    app.post('/api/auth/register', register(auth.repository))
     app.get('/api/auth/me', requireAuth(auth.repository, auth.secret), currentUser)
+    app.get('/api/admin/members', requireAuth(auth.repository, auth.secret), requireAdmin, listMembers(auth.repository))
+    app.post('/api/admin/members/:id/approve', requireAuth(auth.repository, auth.secret), requireAdmin, approveMember(auth.repository))
   }
 
   app.get('/api/health/live', (context) => success(context, { status: 'ok' }))

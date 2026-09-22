@@ -21,20 +21,48 @@ export default function RegistrationPage() {
   const [marketingAgreed, setMarketingAgreed] = useState(false)
   const [openTerm, setOpenTerm] = useState<keyof typeof termContents | null>(null)
   const [passwordError, setPasswordError] = useState('')
+  const [submitError, setSubmitError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const termsAgreed = serviceTermsAgreed && privacyTermsAgreed && businessTermsAgreed
   const allTermsAgreed = termsAgreed && marketingAgreed
 
-  function submitProfile(event: FormEvent<HTMLFormElement>) {
+  async function submitProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget
-    const password = String(new FormData(form).get('password'))
-    const confirmation = String(new FormData(form).get('passwordConfirmation'))
+    const formData = new FormData(form)
+    const password = String(formData.get('password'))
+    const confirmation = String(formData.get('passwordConfirmation'))
     if (password !== confirmation) {
       setPasswordError('비밀번호가 일치하지 않습니다.')
       return
     }
     setPasswordError('')
-    setStep(3)
+    setSubmitError('')
+    setSubmitting(true)
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.get('email'),
+          password,
+          companyName: formData.get('company'),
+          companyPhone: formData.get('companyPhone') || undefined,
+          managerName: formData.get('manager'),
+          managerPhone: formData.get('managerPhone'),
+          address: formData.get('address') || undefined,
+        }),
+      })
+      const body = await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | null
+      if (!response.ok) {
+        throw new Error(body?.error?.code === 'CONFLICT' ? '이미 가입 신청된 아이디입니다.' : '회원가입 신청을 처리하지 못했습니다. 입력 내용을 확인해 주세요.')
+      }
+      setStep(3)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : '회원가입 신청 중 오류가 발생했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return <main className="registration-page">
@@ -48,7 +76,7 @@ export default function RegistrationPage() {
 
       {step === 1 && <section className="registration-panel" aria-labelledby="terms-title"><div className="registration-panel-heading"><div><span>STEP 01</span><h2 id="terms-title">약관 동의</h2></div><p>가입을 진행하려면 필수 약관에 동의해 주세요.</p></div><div className="registration-terms"><label className="registration-agree-all"><input type="checkbox" checked={allTermsAgreed} onChange={(event) => { setServiceTermsAgreed(event.target.checked); setPrivacyTermsAgreed(event.target.checked); setBusinessTermsAgreed(event.target.checked); setMarketingAgreed(event.target.checked) }} /><span><b>회원가입의 모든 약관을 확인하고 전체 동의합니다.</b><small>필수 및 선택 항목을 포함합니다.</small></span></label><TermRow term="service" required checked={serviceTermsAgreed} open={openTerm === 'service'} onChange={setServiceTermsAgreed} onToggle={() => setOpenTerm(openTerm === 'service' ? null : 'service')} /><TermRow term="privacy" required checked={privacyTermsAgreed} open={openTerm === 'privacy'} onChange={setPrivacyTermsAgreed} onToggle={() => setOpenTerm(openTerm === 'privacy' ? null : 'privacy')} /><TermRow term="business" required checked={businessTermsAgreed} open={openTerm === 'business'} onChange={setBusinessTermsAgreed} onToggle={() => setOpenTerm(openTerm === 'business' ? null : 'business')} /><TermRow term="marketing" checked={marketingAgreed} open={openTerm === 'marketing'} onChange={setMarketingAgreed} onToggle={() => setOpenTerm(openTerm === 'marketing' ? null : 'marketing')} /></div><div className="registration-actions"><a href="#">취소</a><button className="registration-primary" disabled={!termsAgreed} onClick={() => setStep(2)}>다음<ChevronRight size={17} /></button></div></section>}
 
-      {step === 2 && <section className="registration-panel" aria-labelledby="profile-title"><div className="registration-panel-heading"><div><span>STEP 02</span><h2 id="profile-title">회원정보 입력</h2></div><p><em>*</em> 필수 입력 항목</p></div><form className="registration-form" onSubmit={submitProfile} noValidate={false}><div className="registration-fields"><label>아이디 <em>*</em><input name="email" type="email" required autoComplete="email" placeholder="name@company.com" /></label><label>비밀번호 <em>*</em><input name="password" type="password" required minLength={8} autoComplete="new-password" placeholder="8자 이상 입력" onChange={() => setPasswordError('')} /></label><label>비밀번호 확인 <em>*</em><input name="passwordConfirmation" type="password" required minLength={8} autoComplete="new-password" placeholder="비밀번호를 다시 입력" onChange={() => setPasswordError('')} /></label>{passwordError && <p className="registration-error" role="alert">{passwordError}</p>}<label>회사 <em>*</em><input name="company" required autoComplete="organization" placeholder="회사명을 입력해 주세요" /></label><label>회사 번호<input name="companyPhone" type="tel" autoComplete="tel" placeholder="02-0000-0000" /></label><label>담당자명 <em>*</em><input name="manager" required autoComplete="name" placeholder="담당자명을 입력해 주세요" /></label><label>담당자 연락처 <em>*</em><input name="managerPhone" type="tel" required autoComplete="tel" placeholder="010-0000-0000" /></label><label className="registration-field-wide">주소<input name="address" autoComplete="street-address" placeholder="주소를 입력해 주세요" /></label></div><div className="registration-actions"><button type="button" onClick={() => setStep(1)}>이전</button><button className="registration-primary" type="submit">회원가입 신청<ChevronRight size={17} /></button></div></form></section>}
+      {step === 2 && <section className="registration-panel" aria-labelledby="profile-title"><div className="registration-panel-heading"><div><span>STEP 02</span><h2 id="profile-title">회원정보 입력</h2></div><p><em>*</em> 필수 입력 항목</p></div><form className="registration-form" onSubmit={submitProfile} noValidate={false}><div className="registration-fields"><label>아이디 <em>*</em><input name="email" type="email" required autoComplete="email" placeholder="name@company.com" /></label><label>비밀번호 <em>*</em><input name="password" type="password" required minLength={8} autoComplete="new-password" placeholder="8자 이상 입력" onChange={() => setPasswordError('')} /></label><label>비밀번호 확인 <em>*</em><input name="passwordConfirmation" type="password" required minLength={8} autoComplete="new-password" placeholder="비밀번호를 다시 입력" onChange={() => setPasswordError('')} /></label>{passwordError && <p className="registration-error" role="alert">{passwordError}</p>}<label>회사 <em>*</em><input name="company" required autoComplete="organization" placeholder="회사명을 입력해 주세요" /></label><label>회사 번호<input name="companyPhone" type="tel" autoComplete="tel" placeholder="02-0000-0000" /></label><label>담당자명 <em>*</em><input name="manager" required autoComplete="name" placeholder="담당자명을 입력해 주세요" /></label><label>담당자 연락처 <em>*</em><input name="managerPhone" type="tel" required autoComplete="tel" placeholder="010-0000-0000" /></label><label className="registration-field-wide">주소<input name="address" autoComplete="street-address" placeholder="주소를 입력해 주세요" /></label>{submitError && <p className="registration-error" role="alert">{submitError}</p>}</div><div className="registration-actions"><button type="button" disabled={submitting} onClick={() => setStep(1)}>이전</button><button className="registration-primary" type="submit" disabled={submitting}>{submitting ? '신청 처리 중' : '회원가입 신청'}<ChevronRight size={17} /></button></div></form></section>}
 
       {step === 3 && <section className="registration-panel registration-complete" aria-labelledby="complete-title"><span className="registration-complete-icon"><ShieldCheck size={32} /></span><span className="registration-eyebrow">APPLICATION RECEIVED</span><h2 id="complete-title">회원가입 신청이 완료되었습니다.</h2><p>관리자 승인 후 서비스 이용이 가능합니다.<br />승인 결과는 등록한 이메일로 안내해 드립니다.</p><a className="registration-primary" href="#">홈으로 돌아가기<ArrowLeft size={17} /></a></section>}
     </section>

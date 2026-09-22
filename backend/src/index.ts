@@ -8,6 +8,12 @@ const database = createDatabase(config.database)
 const authRepository = {
   findByEmail: (email: string) => database.client.user.findUnique({ where: { email } }),
   findById: (id: string) => database.client.user.findUnique({ where: { id } }),
+  createRegistration: (input: Parameters<typeof database.client.user.create>[0]['data']) => database.client.user.create({ data: input }),
+  listMembers: () => database.client.user.findMany({ orderBy: { createdAt: 'desc' } }),
+  approveMember: async (id: string, approvedAt: Date) => {
+    const result = await database.client.user.updateMany({ where: { id, status: 'PENDING' }, data: { status: 'ACTIVE', approvedAt } })
+    return result.count === 1 ? database.client.user.findUnique({ where: { id } }) : null
+  },
 }
 const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt } })
 const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: config.port }, (info) => {
