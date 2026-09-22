@@ -11,6 +11,49 @@ const valueMetrics = [
 ]
 
 const companyLogo = `${import.meta.env.BASE_URL}logo.png`
+const heroSlides = [
+  {
+    image: `${import.meta.env.BASE_URL}banner1.jpg`,
+    eyebrow: '보관에서 거래까지, 자재의 새로운 순환',
+    title: 'MRS',
+    subtitle: '건설자재 보관·거래 플랫폼',
+    description: <>현장에 남은 자재를 보관하고, 필요한 곳으로 연결합니다.<br />입고부터 판매와 정산까지 한곳에서 관리하세요.</>,
+  },
+  {
+    image: `${import.meta.env.BASE_URL}banner2.jpg`,
+    eyebrow: '입고부터 출고까지, 현장을 움직이는 운영',
+    title: 'MRS CENTER',
+    subtitle: '안전하고 정확한 자재 운영',
+    description: <>전문 인력이 자재를 확인하고 체계적으로 보관합니다.<br />필요한 순간, 필요한 현장으로 신속하게 연결합니다.</>,
+  },
+]
+
+function HeroCarousel({ onBrowse, onLogin }: { onBrowse: () => void; onLogin: () => void }) {
+  const [activeSlide, setActiveSlide] = useState(0)
+  const [paused, setPaused] = useState(false)
+
+  useEffect(() => {
+    if (paused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const timer = window.setInterval(() => setActiveSlide((current) => (current + 1) % heroSlides.length), 6000)
+    return () => window.clearInterval(timer)
+  }, [paused])
+
+  const slide = heroSlides[activeSlide]
+  return <section className="login-hero" aria-label="MRS 주요 서비스" aria-roledescription="carousel" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false) }}>
+    <div className="login-hero-images" aria-hidden="true">{heroSlides.map((item, index) => <img key={item.image} className={`login-hero-image ${index === activeSlide ? 'is-active' : ''}`} src={item.image} alt="" fetchPriority={index === 0 ? 'high' : 'auto'} loading="eager" />)}</div>
+    <div className="login-hero-inner">
+      <div key={activeSlide} className="login-hero-content">
+        <span className="login-eyebrow">{slide.eyebrow}</span>
+        <h1>{slide.title}<span>{slide.subtitle}</span></h1>
+        <p>{slide.description}</p>
+        <div className="login-hero-actions"><button className="login-primary" onClick={onBrowse}>마켓 둘러보기<ArrowRight size={18} /></button><button className="login-hero-login" onClick={onLogin} aria-haspopup="dialog">로그인<LogIn size={17} /></button></div>
+        <a className="login-hero-more" href="#services">MRS 제공 서비스<ArrowDown size={16} /></a>
+      </div>
+      <div className="login-hero-indicators" aria-label="배너 선택">{heroSlides.map((item, index) => <button key={item.image} type="button" aria-label={`${index + 1}번 배너: ${item.subtitle}`} aria-current={index === activeSlide ? 'true' : undefined} onClick={() => setActiveSlide(index)}><span>{String(index + 1).padStart(2, '0')}</span></button>)}</div>
+    </div>
+    <p className="login-sr-only" aria-live="polite">{activeSlide + 1}번 배너, {slide.subtitle}</p>
+  </section>
+}
 
 function ScrollProgress() {
   const bar = useRef<HTMLDivElement>(null)
@@ -115,7 +158,7 @@ export default function LoginPage({ onLogin, onBrowse, onCustomerAccess }: { onL
     </div>}
     <header className="login-header"><a href="#" aria-label="MRS 홈"><Leaf size={24} />MRS <span>Material Recycling Service</span></a><nav aria-label="홈페이지 메뉴"><a className="login-header-phone" href="tel:0312981191"><Phone size={15} />031-298-1191</a><a className="login-header-contact" href="#/contact"><MessageSquare size={15} />서비스 사용 문의</a><button onClick={openLogin} aria-haspopup="dialog">로그인<ArrowRight size={15} /></button></nav></header>
     <main className="login-main">
-      <section className="login-hero" aria-labelledby="home-title"><img className="login-hero-image" src="https://thumb.wikimedia.org/wikipedia/commons/thumb/5/59/A_bunch_of_rebar_up_close.jpg/1280px-A_bunch_of_rebar_up_close.jpg" alt="보관 중인 건설용 철근 자재" fetchPriority="high" /><div className="login-hero-inner"><span className="login-eyebrow">보관에서 거래까지, 자재의 새로운 순환</span><h1 id="home-title">MRS<span>건설자재 보관·거래 플랫폼</span></h1><p>현장에 남은 자재를 보관하고, 필요한 곳으로 연결합니다.<br />입고부터 판매와 정산까지 한곳에서 관리하세요.</p><div className="login-hero-actions"><button className="login-primary" onClick={onBrowse}>마켓 둘러보기<ArrowRight size={18} /></button><button className="login-hero-login" onClick={openLogin} aria-haspopup="dialog">로그인<LogIn size={17} /></button></div><a className="login-hero-more" href="#services">MRS 제공 서비스<ArrowDown size={16} /></a></div></section>
+      <HeroCarousel onBrowse={onBrowse} onLogin={openLogin} />
       <section id="material-challenges" className="login-problem-section" aria-labelledby="problem-title"><div className="login-problem-inner">
         <div className="login-section-heading" data-scroll-reveal><div><span className="login-eyebrow">AFTER THE PROJECT</span><h2 id="problem-title">공사는 끝났는데,<br />남은 자재는 어디로 가나요?</h2></div><p>다시 쓸 수 있는 자재도 관리가 끊기면 짐이 됩니다.<br />현장을 정리하는 순간, 다음 고민이 시작됩니다.</p></div>
         <div className="login-problem-grid">
