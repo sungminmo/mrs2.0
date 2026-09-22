@@ -212,6 +212,6 @@ export default function LoginPage({ onLogin, onBrowse, onCustomerAccess }: { onL
         <p><span>공동대표이사 : 이율범, 조청오</span><i aria-hidden="true">|</i><span>사업자등록번호 : 124-87-01984</span></p>
         <p>본사 : 경기도 화성시 효행구 융건로 84-25. <a href="tel:0312981191">Tel: 031-298-1191</a> <span>Fax: 031-297-4460</span></p>
       </address>
-    </div><div className="login-footer-bottom"><span>© 2026 MRS. All rights reserved.</span><a href="#/admin/dashboard">관리자 시안</a><a href="https://commons.wikimedia.org/wiki/File:A_bunch_of_rebar_up_close.jpg" target="_blank" rel="noreferrer">사진: W.carter · CC BY-SA 4.0</a></div></footer>
+    </div><div className="login-footer-bottom"><span>© 2026 MRS. All rights reserved.</span><a href="/admin/#/admin/dashboard">관리자 시안</a><a href="https://commons.wikimedia.org/wiki/File:A_bunch_of_rebar_up_close.jpg" target="_blank" rel="noreferrer">사진: W.carter · CC BY-SA 4.0</a></div></footer>
   </div>
 }

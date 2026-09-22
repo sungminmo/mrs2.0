@@ -58,8 +58,7 @@ export async function authenticatedFetch(path: string, init: RequestInit = {}) {
   return fetch(path, { ...init, headers })
 }
 
-export function signOut() {
+export function signOut(destination = '/mrs2.0/') {
   window.sessionStorage.removeItem(sessionKey)
-  window.location.hash = ''
-  window.location.reload()
+  window.location.replace(destination)
 }

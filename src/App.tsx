@@ -60,7 +60,7 @@ export default function App() {
   if (access === 'login') return <ReceivingRequestProvider contact={contact}><LoginPage onLogin={async (email, password) => {
     const session = await signIn(email, password)
     if (session.user.role === 'ADMIN') {
-      window.location.hash = '/admin/dashboard'
+      window.location.href = '/admin/#/admin/dashboard'
       return
     }
     setAccess('member')

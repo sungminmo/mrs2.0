@@ -1,4 +1,4 @@
-# React + TypeScript + Vite
+# MRS
 
 ## 서비스 정책
 
@@ -7,14 +7,14 @@
 ## Docker 백엔드 개발 환경
 
 Ubuntu 24.04 서버에서 외부 MySQL 8.4, Hono/Node.js, React/Nginx를 사용합니다.
-Mac에서 수정한 소스를 Git으로 전달하고 서버에서 이미지를 빌드합니다.
-프론트엔드는 루트에 유지하며 `backend/`는 독립 npm 패키지입니다.
-백엔드는 상태 확인과 JWT 로그인 API를 제공합니다. 회원가입, 승인, 품목 및 자산 업무 API는 아직 구현하지 않았습니다.
+고객 포털, 관리자 포털, 백엔드는 private GHCR 이미지로 각각 빌드·배포됩니다.
+백엔드는 상태 확인, JWT 로그인, 회원가입 및 관리자 회원 승인 API를 제공합니다.
 
 | 구성 | 역할 | 호스트 공개 포트 |
 | --- | --- | --- |
-| Nginx | `/mrs2.0/` 화면과 `/api/` 프록시 | 기본 `127.0.0.1:8080`, `HTTP_BIND`로 변경 |
-| Hono / Node.js 24 | 상태 API, JWT 인증, Prisma/MySQL 연결 | 없음 |
+| customer / Nginx | `/mrs2.0/`, `/admin/`, `/api/` 공개 gateway | 기본 `127.0.0.1:8080`, `HTTP_BIND`로 변경 |
+| admin / Nginx | `/admin/` 관리자 정적 화면 | 없음 |
+| backend / Hono | 상태 API, JWT 인증, Prisma/MySQL 연결 | 없음 |
 | 외부 MySQL 8.4.11 | `mrs-db`, `dbmasteruser` | 배포 서버에서만 3306 허용 |
 
 MySQL 보안 그룹은 배포 서버의 주소만 허용하고 일반 인터넷에 3306을 공개하지 않습니다.
@@ -46,7 +46,9 @@ git clone <저장소_URL> MRS
 cd MRS
 umask 077
 cp .env.example .env
+cp .deploy.env.example .deploy.env
 chmod 600 .env
+chmod 600 .deploy.env
 ```
 
 `.env`에서 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`를 확인하고 `DB_PASSWORD`와
@@ -101,14 +103,14 @@ ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
 
 - 화면: http://localhost:8080/mrs2.0/
 - 준비 상태: http://localhost:8080/api/health/ready
-- 데모 관리자: http://localhost:8080/mrs2.0/#/admin/dashboard
+- 관리자: http://localhost:8080/admin/#/admin/dashboard
 
 Mac의 8080이 사용 중이면 `-L 127.0.0.1:8081:127.0.0.1:8080`으로 바꾸고
 브라우저에서는 8081로 접속합니다. 서버의 `HTTP_PORT`를 바꿨다면 마지막 포트도 맞춰주세요.
 80, 443, 3000, 3306의 방화벽 개방은 필요하지 않습니다. 서버 공인 IP로는 화면에 접근할 수 없습니다.
 서버의 다른 로컬 사용자도 루프백 주소에 접근할 수 있으므로 신뢰하는 서버에서만 사용하세요.
 
-### Mac 개발 및 재배포
+### Mac 개발
 
 Node.js 24 LTS를 권장합니다. 프론트엔드와 백엔드 의존성은 별도로 설치합니다.
 
@@ -120,6 +122,14 @@ npm --prefix backend test
 npm --prefix backend run build
 npx tsc -b
 npx oxlint src backend/src backend/test
+```
+
+프런트 전체 빌드는 고객과 관리자 산출물을 각각 `dist/customer`, `dist/admin`에 생성합니다.
+
+```sh
+npm run build
+npm run build:customer
+npm run build:admin
 ```
 
 상태 API 단위 테스트는 DB 없이 실행됩니다. Mac에서 로컬 MySQL 8.4.11을 포함한 전체 환경은
@@ -150,27 +160,59 @@ docker compose -f compose.yaml -f compose.local.yaml run --rm --no-deps backend 
 스키마 파일은 `backend/prisma/schema/`에 도메인별로 분리되어 있고, 생성된 SQL은
 `backend/prisma/migrations/`에 저장됩니다. 이미 배포한 마이그레이션 파일은 수정하지 마세요.
 
-소스를 커밋·푸시한 뒤 **서버의 같은 저장소 디렉터리**에서 재배포합니다.
+### GitHub Actions 자동 배포
+
+`main` push 시 변경 경로에 따라 고객, 관리자, 백엔드 workflow가 각각 private GHCR 이미지를
+commit SHA 태그로 발행하고 Lightsail에서 해당 서비스만 교체합니다. 고객 데모는 별도의 Pages
+workflow가 `dist/customer`만 배포합니다. GitHub 저장소의 `production` Environment에 아래
+secret을 등록하세요.
+
+| Secret | 값 |
+| --- | --- |
+| `DEPLOY_HOST` | Lightsail 공인 IP 또는 호스트명 |
+| `DEPLOY_USER` | SSH 사용자, 기본 구성은 `ubuntu` |
+| `DEPLOY_SSH_KEY` | 배포 전용 SSH 개인키 |
+| `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -H <호스트>` 결과를 별도 신뢰 경로에서 검증한 값 |
+
+서버 저장소는 `/home/ubuntu/MRS`에 있어야 하며 `main`을 `git pull --ff-only` 할 수 있어야
+합니다. private GHCR pull 권한이 있는 classic PAT(`read:packages`)를 서버 터미널에서만 입력해
+최초 1회 로그인합니다. 토큰을 명령 인수나 저장소 파일에 넣지 마세요.
 
 ```sh
-git pull --ff-only
-docker compose build
-docker compose run --rm --no-deps backend npm run db:migrate
-docker compose run --rm --no-deps backend npm run db:status
-docker compose up -d --wait
-curl --fail http://127.0.0.1:8080/api/health/ready
+docker login ghcr.io -u <GitHub_사용자>
+cd /home/ubuntu/MRS
+cp -n .deploy.env.example .deploy.env
+chmod 600 .env .deploy.env
 ```
 
-실패한 단계가 있으면 다음 단계로 진행하지 말고 원인을 확인하세요. 향후 스키마 변경은
-기존 실행 중인 버전과 호환되도록 작성해야 합니다. 파괴적 스키마 변경, 자동 롤백, 무중단 배포는
-현재 구성 범위가 아닙니다. 이미 실행된 마이그레이션 파일은 수정하지 마세요.
+workflow는 `scripts/deploy-service.sh <customer|admin|backend> <image-tag>`를 호출합니다.
+스크립트는 배포를 직렬화하고 새 이미지를 pull한 뒤 Compose health와 서비스 경로를 확인합니다.
+실패하면 `.deploy.env`의 이전 이미지 태그로 자동 복귀합니다. 백엔드는 교체 전에 Prisma
+migration을 적용하므로 migration은 이전 애플리케이션과 호환되게 작성해야 하며 DB 스키마
+자체는 자동으로 되돌리지 않습니다.
+
+기존 2-service 구성에서 처음 고객 포털을 배포할 때는 스크립트가 8080을 점유한 구형
+`frontend` 컨테이너를 제거합니다. 이 최초 서비스명 전환만 구형 이미지 자동 복귀가 불가능하며,
+첫 `customer` 배포가 성공한 이후부터 이미지 태그 rollback이 적용됩니다.
+
+서버에서 수동으로 같은 배포를 실행할 수도 있습니다.
+
+```sh
+./scripts/deploy-service.sh customer <commit-sha>
+./scripts/deploy-service.sh admin <commit-sha>
+./scripts/deploy-service.sh backend <commit-sha>
+```
+
+이미 실행된 마이그레이션 파일은 수정하지 마세요. 컨테이너 교체 중 짧은 연결 중단은 있을 수
+있으므로 이 구성은 무중단 배포를 보장하지 않습니다.
 
 ### 진단과 데이터 보존
 
 ```sh
 docker compose ps
-docker compose logs --tail=100 backend frontend
-docker compose exec frontend nginx -t
+docker compose logs --tail=100 backend admin customer
+docker compose exec customer nginx -t
+docker compose exec admin nginx -t
 docker compose down
 docker compose up -d --wait
 ```
@@ -197,20 +239,20 @@ docker run --rm --env-file .env mysql:8.4.11 sh -c \
 확장된 `docker compose config`나 `docker inspect` 출력은 비밀번호를 포함할 수 있습니다.
 설정 확인에는 `docker compose config --quiet`를 사용하고 진단 출력은 공유 전 검토하세요.
 
-현재 화면은 인증·권한 없는 데모입니다. 실제 고객 데이터나 공개 서비스에는 사용하지 마세요.
-운영 전환 시 인증·권한, HTTPS, 계정별 DB 최소 권한, 비밀 관리, 자동 백업과 모니터링이 필요합니다.
+고객·관리자 진입은 JWT 역할로 구분되지만 HTTPS, 계정별 DB 최소 권한, 비밀 관리, 자동 백업과
+모니터링은 운영 전에 별도로 구성해야 합니다.
 
 ## Administrator Prototype
 
-Open `/mrs2.0/#/admin/dashboard` (Vite base path), or use the administrator link in the homepage footer or customer sidebar. The header links back to the customer portal. Hash routes support direct entry, reload, history navigation, tabs, filters, and record detail links without server rewrites. Customer anchors such as `#services` remain unchanged.
+Open `/admin/#/admin/dashboard`, or use the administrator link in the homepage footer or customer sidebar. The header links back to `/mrs2.0/`. Hash routes support direct entry, reload, history navigation, tabs, filters, and record detail links without server rewrites. Customer anchors such as `#services` remain unchanged.
 
-This is an independent prototype with fictional data as of September 14, 2026 (KST). Categories, master items, inventory and market operations support temporary in-memory editing; other menus remain read-only. There is no login, role policy, authorization, persistent storage, real approval processing, email delivery, billing execution, or customer-data synchronization. Never deploy actual customer or financial data into this unprotected prototype. Reloading or switching portals unmounts the previous portal and resets its in-memory edits, images and history.
+This is an independent prototype with fictional data as of September 14, 2026 (KST). JWT login and the ADMIN role protect the entry point, while categories, master items, inventory and market operations still use temporary in-memory editing and other menus remain read-only. Operational persistence, real approval processing, email delivery, billing execution and customer-data synchronization are not implemented. Reloading resets the prototype edits, images and history.
 
 Menus: dashboard; receiving requests and schedules; inspections and disposal; master item management; category management; asset management with inventory and locations; sales requests, products, purchase quotes and campaigns; storage invoices, payouts and disposal invoices; customers, sites and inquiries; reference grades, units, rates and policies.
 
 ### Three-Level Categories
 
-- `/mrs2.0/#/admin/categories?tab=tree` provides first-, second- and third-level browsing, creation, renaming, same-depth parent moves, numeric sibling ordering and active/inactive status. The old `#/admin/settings?tab=categories` route redirects here. Category codes are automatically assigned, immutable references; names are not relation keys. Physical deletion is not supported.
+- `/admin/#/admin/categories?tab=tree` provides first-, second- and third-level browsing, creation, renaming, same-depth parent moves, numeric sibling ordering and active/inactive status. The old `#/admin/settings?tab=categories` route redirects here. Category codes are automatically assigned, immutable references; names are not relation keys. Physical deletion is not supported.
 - [src/categories.ts](src/categories.ts) owns the shared category seed, path resolution and hierarchy policies. Parent references must exist; cycles, fourth-level descendants, depth changes, blank names and duplicate sibling names are rejected. Same names in different branches are allowed. Tied order values use name/code ordering.
 - Master items and inventory must reference a third-level category. An inactive category or ancestor blocks new selections, including new assets linked to items in that branch. Existing references and records remain viewable/editable without forced recategorization. Re-enabling a parent preserves each child's own active/inactive setting.
 - Category names and parent moves update the displayed paths of all referencing admin items, assets, products and campaigns. Item recategorization still does not overwrite existing asset snapshots; an asset's category change is recorded with before/after paths and codes in its own history. Marketplace products derive their category from the linked asset.
@@ -220,10 +262,10 @@ Menus: dashboard; receiving requests and schedules; inspections and disposal; ma
 
 ### Master Items And Assets
 
-- Master items: `/mrs2.0/#/admin/items?tab=master`. Create, view, edit and switch between active/inactive. Codes are automatically assigned and immutable (`ITM-000001` onward). Inactive items cannot be linked to new assets; existing links remain valid. Physical deletion is not supported.
+- Master items: `/admin/#/admin/items?tab=master`. Create, view, edit and switch between active/inactive. Codes are automatically assigned and immutable (`ITM-000001` onward). Inactive items cannot be linked to new assets; existing links remain valid. Physical deletion is not supported.
 - Each item represents a name/category/specification/brand/base-unit combination. Category, specification and brand provide defaults for new asset snapshots. Units use shared codes (EA, Box, kg, ton, m, m³, 본); old inventory `개` is normalized to EA. Units on items with linked assets cannot change; automatic unit conversion is out of scope.
 - Inbound, outbound and standard prices are KRW per base unit, VAT included. Blank means unknown, distinct from zero. These reference prices do not recalculate asset appraisals, marketplace prices or past settlement records.
-- Assets: `/mrs2.0/#/admin/inventory?tab=stock`. The former inventory/location menu is now asset management; old URLs still work. Administrators manually register/edit assets; this does not execute inspection approval or physical receipt. Customer and site come from the linked receiving request. Inventory IDs (`AST-001` onward), receiving references and item references are immutable after registration.
+- Assets: `/admin/#/admin/inventory?tab=stock`. The former inventory/location menu is now asset management; old URLs still work. Administrators manually register/edit assets; this does not execute inspection approval or physical receipt. Customer and site come from the linked receiving request. Inventory IDs (`AST-001` onward), receiving references and item references are immutable after registration.
 - A record tracks a material batch with one owner, receipt request, item, grade and location. Quantity is the expected amount for pending receipt and current remainder for stored assets. Completed outbound records have zero current quantity; their prior quantity remains in change history. EA/Box/본 require integers; other units accept up to three decimal places. Partial shipment, batch splitting and multiple locations per record are out of scope.
 - Grade (S/A/B/F), storage (입고대기/보관중/출고완료) and sale status (판매대기/판매중/판매완료) are independent fields. F-grade and pending-receipt assets cannot be marked selling/sold; selling assets must be stored. Sale approval remains a separate existing request status. Editing these fields does not execute marketplace approval, disposal, shipment or billing.
 - Asset edits require a reason and retain timestamps (displayed in KST), changed fields and before/after values, including photos. Historical inspection quantities remain snapshots. Location occupancy and related inventory links use the current in-memory asset records; completed outbound records do not occupy locations.

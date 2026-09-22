@@ -2,13 +2,14 @@ name: mrs
 
 services:
   backend:
+    image: ghcr.io/sungminmo/mrs-backend:${BACKEND_IMAGE_TAG:-main}
     build:
       context: ./backend
     restart: unless-stopped
     init: true
     environment:
       NODE_ENV: production
-      PORT: "8080:80"
+      PORT: "3000"
       DB_HOST: ${DB_HOST:?Set DB_HOST in .env}
       DB_PORT: ${DB_PORT:-3306}
       DB_NAME: ${DB_NAME:?Set DB_NAME in .env}
@@ -38,7 +39,26 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  frontend:
+  admin:
+    image: ghcr.io/sungminmo/mrs-admin:${ADMIN_IMAGE_TAG:-main}
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    restart: unless-stopped
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/admin/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+
+  customer:
+    image: ghcr.io/sungminmo/mrs-customer:${CUSTOMER_IMAGE_TAG:-main}
     build:
       context: .
     restart: unless-stopped
@@ -48,6 +68,8 @@ services:
       - app
     depends_on:
       backend:
+        condition: service_healthy
+      admin:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/mrs2.0/"]
