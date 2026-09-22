@@ -7,6 +7,7 @@ import QuoteRequestPage from './QuoteRequestPage'
 import type { QuoteItem, QuoteRequestRecord } from './QuoteRequestPage'
 import CategorySelect from './CategorySelect'
 import { categoryChain, categoryMatches, categoryPath, materialCategories } from './categories'
+import { useHistoryState } from './useHistoryState'
 import './AdminAssets.css'
 import './ShopifyMarket.css'
 
@@ -58,10 +59,10 @@ export default function ShopifyMarket({ products, navigation, basket, onBasketCh
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [sort, setSort] = useState('recommended')
   const [view, setView] = useState<'grid' | 'list'>('grid')
-  const [detail, setDetail] = useState<Product | null>(null)
+  const [detailName, setDetailName, closeProductHistory] = useHistoryState<string | null>('market-detail', null)
   const [detailQuantity, setDetailQuantity] = useState(1)
   const [basketOpen, setBasketOpen] = useState(false)
-  const [quote, setQuote] = useState<{ items: QuoteItem[]; source: 'product' | 'basket' } | null>(null)
+  const [quote, setQuote, closeQuoteHistory] = useHistoryState<{ items: QuoteItem[]; source: 'product' | 'basket' } | null>('market-quote', null)
   const [message, setMessage] = useState('')
   const listScroll = useRef(0)
   const basketEditorDialog = useRef<HTMLDialogElement>(null)
@@ -79,13 +80,14 @@ export default function ShopifyMarket({ products, navigation, basket, onBasketCh
     (offer === '전체' || (offer === '40% 이상 할인' ? product.discount >= 40 : product.badge === '재고정리')),
   ).sort((first, second) => sort === 'price' ? first.price - second.price : sort === 'discount' ? second.discount - first.discount : 0)
   const basketProducts = catalog.filter((product) => basket[product.name] > 0)
+  const detail = catalog.find((product) => product.name === detailName) ?? null
   const basketCount = basketProducts.reduce((sum, product) => sum + basket[product.name], 0)
   const activeCampaigns = marketCampaigns.filter((item) => item.enabled && (!item.startsAt || Date.now() >= Date.parse(item.startsAt)) && (!item.endsAt || Date.now() < Date.parse(item.endsAt))).sort((first, second) => first.order - second.order)
   const advancedFilterCount = [category, grade !== '전체', campaign].filter(Boolean).length
   const syncDraft = () => { setDraftQuery(query); setDraftCategory(category); setDraftGrade(grade); setDraftCampaign(campaign) }
   const applySearch = () => { setQuery(draftQuery.trim()); setCategory(draftCategory); setGrade(draftGrade); setCampaign(draftCampaign) }
   const reset = () => { setQuery(''); setCategory(''); setGrade('전체'); setCampaign(''); setOffer('전체'); setDraftQuery(''); setDraftCategory(''); setDraftGrade('전체'); setDraftCampaign('') }
-  const openProduct = (product: Product) => { listScroll.current = window.scrollY; setMessage(''); setDetailQuantity(1); setDetail(product) }
+  const openProduct = (product: Product) => { listScroll.current = window.scrollY; setMessage(''); setDetailQuantity(1); setDetailName(product.name) }
   const openQuote = (items: { product: Product; quantity: number }[], source: 'product' | 'basket') => {
     if (!items.length || items.some((item) => !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 9999)) return
     setBasketOpen(false)
@@ -94,12 +96,12 @@ export default function ShopifyMarket({ products, navigation, basket, onBasketCh
   }
   const closeQuote = () => {
     const source = quote?.source
-    setQuote(null)
+    closeQuoteHistory()
     if (source === 'basket') setBasketOpen(true)
   }
   const closeProduct = () => {
     const name = detail?.name
-    setDetail(null)
+    closeProductHistory()
     requestAnimationFrame(() => {
       const buttons = document.querySelectorAll<HTMLButtonElement>('.sm-product-name, .sm-product-list .sa-asset-link')
       Array.from(buttons).find((button) => button.textContent === name)?.focus({ preventScroll: true })
@@ -210,19 +212,20 @@ function GuestMarket({ products, navigation, onLogin }: { products: PublicProduc
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('')
   const [view, setView] = useState<'grid' | 'list'>('grid')
-  const [detail, setDetail] = useState<PublicProduct | null>(null)
+  const [detailName, setDetailName, closeDetail] = useHistoryState<string | null>('guest-market-detail', null)
+  const detail = products.find((product) => product.name === detailName) ?? null
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => { window.scrollTo(0, 0); heading.current?.focus({ preventScroll: true }) }, [detail])
   const shown = products.filter((product) => `${product.name} ${product.category}`.toLowerCase().includes(query.trim().toLowerCase()) && categoryMatches(materialCategories, product.categoryId, category))
   return <AdminShell navigation={navigation} className="sm-market" isGuest search={detail ? undefined : <label className="sa-global-search"><Search size={18} /><input aria-label="마켓 상품 검색" placeholder="자재명 또는 카테고리 검색" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button className="sa-icon" aria-label="검색 지우기" onClick={() => setQuery('')}><X size={15} /></button>}</label>}>
     <main className="sa-main">
-      {detail ? <article className="sm-detail-page"><div className="sm-detail-title"><button className="sa-icon" aria-label="마켓 목록으로" title="마켓 목록으로" onClick={() => setDetail(null)}><ArrowLeft size={18} /></button><h1 tabIndex={-1} ref={heading}>{detail.name}</h1></div><div className="sm-detail-layout"><div><figure className="sm-material-figure"><div><ProductImage product={detail} /></div><figcaption>자재 종류 참고 이미지</figcaption></figure><section className="sm-material-section"><h2>자재 정보</h2><dl className="sm-material-fields">{[['카테고리', detail.category], ['거래 단위', detail.unit], ['품질 등급', detail.grade ? `${detail.grade}등급` : '등급 미확인'], ['규격', '공급사 확인 필요']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section></div><aside className="sm-quote-panel"><h2>가격 및 견적</h2><p className="sm-guest-price">로그인 후 가격 확인</p><button className="sa-button sa-primary" onClick={onLogin}><FileText size={16} />로그인하고 견적 요청</button></aside></div></article> : <>
+      {detail ? <article className="sm-detail-page"><div className="sm-detail-title"><button className="sa-icon" aria-label="마켓 목록으로" title="마켓 목록으로" onClick={closeDetail}><ArrowLeft size={18} /></button><h1 tabIndex={-1} ref={heading}>{detail.name}</h1></div><div className="sm-detail-layout"><div><figure className="sm-material-figure"><div><ProductImage product={detail} /></div><figcaption>자재 종류 참고 이미지</figcaption></figure><section className="sm-material-section"><h2>자재 정보</h2><dl className="sm-material-fields">{[['카테고리', detail.category], ['거래 단위', detail.unit], ['품질 등급', detail.grade ? `${detail.grade}등급` : '등급 미확인'], ['규격', '공급사 확인 필요']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section></div><aside className="sm-quote-panel"><h2>가격 및 견적</h2><p className="sm-guest-price">로그인 후 가격 확인</p><button className="sa-button sa-primary" onClick={onLogin}><FileText size={16} />로그인하고 견적 요청</button></aside></div></article> : <>
         <div className="sa-heading"><div><div className="sa-breadcrumb">둘러보기 <span>/</span> 마켓</div><h1 ref={heading} tabIndex={-1}>자재 마켓 <span>{products.length}</span></h1></div><button className="sa-button sa-primary" onClick={onLogin}>로그인</button></div>
         <div className="sm-guest-notice"><span>상품 가격은 로그인 후 확인할 수 있습니다.</span><button className="sa-text-button" onClick={onLogin}>로그인<ArrowRight size={15} /></button></div>
         <MarketCampaigns renderImage={(category) => <ProductImage key={category} product={{ name: '', category }} />} onSelect={(campaign) => { setQuery(''); setCategory(campaign.category); focusCatalog() }} />
         <div className="sm-toolbar"><h2 id="market-catalog-title" tabIndex={-1} style={{ scrollMarginTop: 76 }} className="sm-guest-heading">{category ? categoryPath(materialCategories, category) : '전체 자재'} · {shown.length}종</h2><div className="sm-view"><button className="sa-icon" title="카드 보기" aria-label="카드 보기" aria-pressed={view === 'grid'} onClick={() => setView('grid')}><Grid2X2 size={16} /></button><button className="sa-icon" title="목록 보기" aria-label="목록 보기" aria-pressed={view === 'list'} onClick={() => setView('list')}><List size={17} /></button></div></div>
         <div className="sm-filterbar"><CategorySelect categories={materialCategories} value={category} onChange={setCategory} /></div>
-        {!shown.length ? <div className="sa-empty"><Search size={28} /><h2>일치하는 자재가 없습니다</h2><button className="sa-button" onClick={() => { setQuery(''); setCategory('') }}>전체 자재 보기</button></div> : view === 'grid' ? <div className="sm-product-grid">{shown.map((product) => <article className="sm-product" key={product.name}><button className="sm-product-image" aria-label={`${product.name} 상세 보기`} onClick={() => setDetail(product)}><ProductImage product={product} /></button><div className="sm-product-body"><div className="sm-product-meta">{product.category}</div><button className="sm-product-name" onClick={() => setDetail(product)}>{product.name}</button><ProductGrade grade={product.grade} /><p className="sm-guest-price">로그인 후 가격 확인</p><button className="sa-button" onClick={onLogin}>로그인</button></div></article>)}</div> : <div className="sa-inventory"><div className="sa-table-scroll"><table className="sa-table"><thead><tr><th>자재</th><th>카테고리</th><th>등급</th><th>거래 단위</th><th>가격</th></tr></thead><tbody>{shown.map((product) => <tr key={product.name}><td><button className="sa-asset-link" onClick={() => setDetail(product)}><span className="sa-thumbnail"><ProductImage product={product} /></span><b>{product.name}</b></button></td><td>{product.category}</td><td><ProductGrade grade={product.grade} /></td><td>{product.unit}</td><td><button className="sa-text-button" onClick={onLogin}>로그인 후 확인</button></td></tr>)}</tbody></table></div></div>}
+        {!shown.length ? <div className="sa-empty"><Search size={28} /><h2>일치하는 자재가 없습니다</h2><button className="sa-button" onClick={() => { setQuery(''); setCategory('') }}>전체 자재 보기</button></div> : view === 'grid' ? <div className="sm-product-grid">{shown.map((product) => <article className="sm-product" key={product.name}><button className="sm-product-image" aria-label={`${product.name} 상세 보기`} onClick={() => setDetailName(product.name)}><ProductImage product={product} /></button><div className="sm-product-body"><div className="sm-product-meta">{product.category}</div><button className="sm-product-name" onClick={() => setDetailName(product.name)}>{product.name}</button><ProductGrade grade={product.grade} /><p className="sm-guest-price">로그인 후 가격 확인</p><button className="sa-button" onClick={onLogin}>로그인</button></div></article>)}</div> : <div className="sa-inventory"><div className="sa-table-scroll"><table className="sa-table"><thead><tr><th>자재</th><th>카테고리</th><th>등급</th><th>거래 단위</th><th>가격</th></tr></thead><tbody>{shown.map((product) => <tr key={product.name}><td><button className="sa-asset-link" onClick={() => setDetailName(product.name)}><span className="sa-thumbnail"><ProductImage product={product} /></span><b>{product.name}</b></button></td><td>{product.category}</td><td><ProductGrade grade={product.grade} /></td><td>{product.unit}</td><td><button className="sa-text-button" onClick={onLogin}>로그인 후 확인</button></td></tr>)}</tbody></table></div></div>}
       </>}
       <footer className="sa-page-footer"><span><Leaf size={15} />자재의 다음 가치를 연결합니다.</span></footer>
       <details className="sa-photo-credits"><summary>참고 이미지 출처</summary>{[...Object.values(materialImages), beamImage].map((image) => <a key={image.file} href={`https://commons.wikimedia.org/wiki/File:${image.file}`} target="_blank" rel="noreferrer">{image.author} · {image.license} · Wikimedia Commons</a>)}</details>

@@ -16,6 +16,7 @@ import { demoDisposals, updateDisposal, type DisposalAction } from './disposals'
 import QuoteHistory from './QuoteHistory'
 import type { QuoteRequestRecord } from './QuoteRequestPage'
 import { readAuthSession, signIn } from './authSession'
+import { useHistoryState } from './useHistoryState'
 
 type Tab = 'assets' | 'market' | 'settlements' | 'faq' | 'profile' | 'notifications'
 
@@ -38,7 +39,7 @@ export type Asset = typeof assets[number]
 
 export default function App() {
   const [access, setAccess] = useState<'login' | 'member' | 'guest'>(() => readAuthSession() ? 'member' : 'login')
-  const [tab, setTab] = useState<Tab>('assets')
+  const [tab, setTab] = useHistoryState<Tab>('customer-tab', 'assets')
   const [inventory, setInventory] = useState(() => prepareAssets(assets))
   const assetValueSnapshot = useRef<AssetValueSnapshot | null>(null)
   const observeAssetValues = useCallback((snapshot: AssetValueSnapshot) => {
@@ -122,8 +123,8 @@ const transactions = [
 type Contact = { name: string; email: string; phone: string }
 
 function Profile({ navigation, contact, onContactChange, quoteRequests }: { navigation: ReactNode; contact: Contact; onContactChange: (contact: Contact) => void; quoteRequests: QuoteRequestRecord[] }) {
-  const [section, setSection] = useState<'account' | 'quotes'>('account')
-  const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null)
+  const [section, setSection] = useHistoryState<'account' | 'quotes'>('profile-section', 'account')
+  const [selectedQuoteId, setSelectedQuoteId, closeQuoteDetail] = useHistoryState<string | null>('profile-quote-detail', null)
   const [filter, setFilter] = useState('전체')
   const [message, setMessage] = useState('')
   const editDialog = useRef<HTMLDialogElement>(null)
@@ -149,8 +150,8 @@ function Profile({ navigation, contact, onContactChange, quoteRequests }: { navi
   return <AdminShell navigation={navigation}>
     <main className="sa-main sp-profile">
       <div className="sa-heading"><div><div className="sa-breadcrumb">워크스페이스 <span>/</span> {section === 'account' ? '계정' : '견적 요청 내역'}</div><h1>마이페이지</h1></div>{section === 'account' && <button className="sa-button" onClick={exportTransactions} disabled={!shown.length}><ArrowDownToLine size={15} />거래 내역 내보내기</button>}</div>
-      <div className="sa-tabs sp-section-tabs" aria-label="마이페이지 메뉴"><button aria-pressed={section === 'account'} onClick={() => { setSection('account'); setSelectedQuoteId(null) }}>계정 정보</button><button aria-pressed={section === 'quotes'} onClick={() => setSection('quotes')}>견적 요청 내역 <span>{quoteRequests.length}</span></button></div>
-      {section === 'quotes' ? <QuoteHistory records={quoteRequests} selectedId={selectedQuoteId} onSelect={setSelectedQuoteId} onBack={() => setSelectedQuoteId(null)} /> : <>
+      <div className="sa-tabs sp-section-tabs" aria-label="마이페이지 메뉴"><button aria-pressed={section === 'account'} onClick={() => setSection('account')}>계정 정보</button><button aria-pressed={section === 'quotes'} onClick={() => setSection('quotes')}>견적 요청 내역 <span>{quoteRequests.length}</span></button></div>
+      {section === 'quotes' ? <QuoteHistory records={quoteRequests} selectedId={selectedQuoteId} onSelect={setSelectedQuoteId} onBack={closeQuoteDetail} /> : <>
         <section className="sp-company" aria-label="회사 정보"><span className="sa-avatar">HC</span><div><h2>현대건설(주)</h2><p>사업자 등록번호 123-45-67890</p></div><span className="sa-badge selling">ECO 파트너</span></section>
         <section className="sp-metrics" aria-label="거래 요약">{[['이번 달 거래', '142건', '지난달보다 18건 증가'], ['누적 거래액', '4.2억원', '올해 누적 기준'], ['진행 중 문의', '1건', '확인 필요']].map(([label, value, caption]) => <div key={label}><span>{label}</span><strong>{value}</strong><small>{caption}</small></div>)}</section>
         <div className="sp-details">

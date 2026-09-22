@@ -10,6 +10,7 @@ import { materialPhotos } from './assetPhotos'
 import { categoryChain, categoryMatches, materialCategories } from './categories'
 import CategorySelect from './CategorySelect'
 import PageBanner from './PageBanner'
+import { useHistoryState } from './useHistoryState'
 
 const amount = (value: string) => Number(value.replaceAll(',', ''))
 const number = (value: number) => value.toLocaleString('ko-KR')
@@ -133,7 +134,8 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
   const [sort, setSort] = useState('newest')
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
-  const [detail, setDetail] = useState<Asset | null>(null)
+  const [detailCode, setDetailCode, closeDetail] = useHistoryState<string | null>('asset-detail', null)
+  const detail = inventory.find((asset) => asset.code === detailCode) ?? null
   const [assetListActive, setAssetListActive] = useState(false)
   const overview = useAssetValueMotion(inventory, detail !== null || inspectionActive, onValuesObserved)
   const [message, setMessage] = useState('')
@@ -174,7 +176,7 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
     setQuery(''); setStatus('전체'); setLocation('전체 위치'); setGrade('전체'); setCategory(''); setReceivedFrom(''); setReceivedTo(''); setStorageDaysFrom(''); setStorageDaysTo('')
     setDraftQuery(''); setDraftGrade('전체'); setDraftCategory(''); setDraftLocation('전체 위치'); setDraftReceivedFrom(''); setDraftReceivedTo(''); setDraftStorageDaysFrom(''); setDraftStorageDaysTo('')
   }
-  const openDetail = (asset: Asset) => setDetail(asset)
+  const openDetail = (asset: Asset) => setDetailCode(asset.code)
   const openList = (item: string) => {
     setQuery(''); setStatus(item); setLocation('전체 위치'); setGrade('전체'); setCategory(''); setReceivedFrom(''); setReceivedTo(''); setStorageDaysFrom(''); setStorageDaysTo('')
     setDraftQuery(''); setDraftGrade('전체'); setDraftCategory(''); setDraftLocation('전체 위치'); setDraftReceivedFrom(''); setDraftReceivedTo(''); setDraftStorageDaysFrom(''); setDraftStorageDaysTo('')
@@ -244,7 +246,7 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
   return <AdminShell navigation={navigation} search={detail || inspectionActive ? undefined : search}>
     {marketConfirmOpen && <MarketRegistrationConfirm subject={`선택한 자산 ${selectedVisible.length}건`} onCancel={() => setMarketConfirmOpen(false)} onConfirm={confirmSelectedMarket} />}
     <main ref={overview} className="sa-main sa-assets-main">
-      {detail ? <ShopifyAssetDetail key={detail.code} asset={inventory[detailIndex]} previous={inventory[detailIndex - 1]} next={inventory[detailIndex + 1]} onBack={() => setDetail(null)} onNavigate={setDetail} onSave={(updated) => setInventory((current) => current.map((asset) => asset.code === updated.code ? updated : asset))} onFaq={onFaq} /> : <>
+      {detail ? <ShopifyAssetDetail key={detail.code} asset={inventory[detailIndex]} previous={inventory[detailIndex - 1]} next={inventory[detailIndex + 1]} onBack={closeDetail} onNavigate={(asset) => setDetailCode(asset.code)} onSave={(updated) => setInventory((current) => current.map((asset) => asset.code === updated.code ? updated : asset))} onFaq={onFaq} /> : <>
       <div className="sa-heading"><div><div className="sa-breadcrumb">워크스페이스 <span>/</span> 자산</div><h1>내 자산 <span>{inventory.length}</span></h1></div>{!inspectionActive && <div className="sa-heading-actions"><button className="sa-button" onClick={exportAssets} disabled={!visible.length}><ArrowDownToLine size={15} />내보내기</button><button className="sa-button sa-primary" onClick={() => addDialog.current?.showModal()}><PackagePlus size={16} />자산 등록</button></div>}</div>
       <div className="inspection-tabs" role="group" aria-label="내 자산 보기"><button className="sa-button" aria-pressed={!inspectionActive && !assetListActive} onClick={() => { setAssetListActive(false); onInspectionView(false) }}>자산 현황</button><button className="sa-button" aria-pressed={assetListActive} onClick={() => { syncDraft(); setAssetListActive(true); onInspectionView(false) }}>자산 목록</button><button className="sa-button" aria-pressed={inspectionActive} onClick={() => { setAssetListActive(false); onInspectionView(true) }}>검수·폐기 내역</button></div>
       {inspectionActive ? inspectionContent : <>
