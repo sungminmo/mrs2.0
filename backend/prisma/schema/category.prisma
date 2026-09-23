@@ -1,16 +1,17 @@
+/// 자재 분류 트리(대/중/소분류). 자기참조로 다단계 계층 구조를 표현
 model MaterialCategory {
   id        String  @id @db.VarChar(20)
-  parentId  String? @db.VarChar(20)
+  parentId  String? @db.VarChar(20) // 상위 분류 ID, null이면 최상위(루트)
   name      String  @db.VarChar(80)
-  enabled   Boolean @default(true)
-  sortOrder Int     @default(0)
+  enabled   Boolean @default(true) // false면 신규 연결만 차단, 기존 품목/자산 연결은 유지
+  sortOrder Int     @default(0) // 같은 부모 하위에서의 노출 순서
 
   parent   MaterialCategory?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   children MaterialCategory[] @relation("CategoryTree")
   items    MasterItem[]
   assets   Asset[]
 
-  @@unique([parentId, name])
+  @@unique([parentId, name]) // 동일 부모 아래 이름 중복 방지
   @@index([parentId, sortOrder])
   @@map("material_categories")
 }

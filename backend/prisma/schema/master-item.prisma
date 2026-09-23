@@ -1,3 +1,4 @@
+/// 품목 계량 단위
 enum ItemUnit {
   EA
   BOX @map("Box")
@@ -8,6 +9,7 @@ enum ItemUnit {
   PIECE @map("본")
 }
 
+/// 품목 마스터(카탈로그). 실제 입고 자산(Asset)은 품목을 참조해 생성됨
 model MasterItem {
   id            String   @id @db.VarChar(20)
   name          String   @db.VarChar(160)
@@ -15,10 +17,10 @@ model MasterItem {
   specification String   @db.VarChar(255)
   brand         String   @default("") @db.VarChar(160)
   unit          ItemUnit
-  inboundPrice  Decimal? @db.Decimal(19, 0)
-  outboundPrice Decimal? @db.Decimal(19, 0)
-  standardPrice Decimal? @db.Decimal(19, 0)
-  enabled       Boolean  @default(true)
+  inboundPrice  Decimal? @db.Decimal(19, 0) // 입고(매입) 기준가, 미정 시 null
+  outboundPrice Decimal? @db.Decimal(19, 0) // 출고 기준가, 미정 시 null
+  standardPrice Decimal? @db.Decimal(19, 0) // 등급 할인 적용 전 표준 판매가
+  enabled       Boolean  @default(true) // false면 신규 자산 연결만 차단, 기존 자산은 유지
   note          String   @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -27,11 +29,12 @@ model MasterItem {
   images   MasterItemImage[]
   assets   Asset[]
 
-  @@unique([name, categoryId, specification, brand, unit])
+  @@unique([name, categoryId, specification, brand, unit]) // 동일 스펙 품목 중복 등록 방지
   @@index([categoryId, enabled])
   @@map("master_items")
 }
 
+/// 품목 대표 이미지. sortOrder로 노출 순서 제어
 model MasterItemImage {
   id           String @id @db.VarChar(36)
   masterItemId String @db.VarChar(20)

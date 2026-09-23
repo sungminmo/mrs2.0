@@ -1,8 +1,10 @@
+/// 계정 유형: 고객(자산 소유주) / 관리자
 enum UserRole {
   CUSTOMER
   ADMIN
 }
 
+/// 가입 승인 흐름: 대기 -> 승인/반려, 승인 후 정지 가능
 enum UserStatus {
   PENDING
   ACTIVE
@@ -10,21 +12,22 @@ enum UserStatus {
   SUSPENDED
 }
 
+/// 서비스 이용 계정(고객사 담당자 또는 관리자)
 model User {
   id           String     @id @default(uuid()) @db.VarChar(36)
   email        String     @unique @db.VarChar(254)
-  passwordHash String     @db.VarChar(255)
+  passwordHash String     @db.VarChar(255) // 해시 저장, 평문 비밀번호는 저장하지 않음
   companyName  String     @db.VarChar(160)
   companyPhone String?    @db.VarChar(30)
-  managerName  String     @db.VarChar(80)
-  managerPhone String     @db.VarChar(30)
+  managerName  String     @db.VarChar(80) // 담당자 이름
+  managerPhone String     @db.VarChar(30) // 담당자 연락처
   address      String?    @db.VarChar(500)
   role         UserRole   @default(CUSTOMER)
-  status       UserStatus @default(PENDING)
+  status       UserStatus @default(PENDING) // 가입 직후 관리자 승인 대기 상태
   approvedAt   DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  @@index([status, createdAt])
+  @@index([status, createdAt]) // 승인 대기 목록 등 상태별 조회
   @@map("users")
 }

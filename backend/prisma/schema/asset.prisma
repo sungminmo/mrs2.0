@@ -1,3 +1,4 @@
+/// 검수로 확정되는 품질 등급. 판매가 할인율에 연동(S 10%, A 30%, B 50% 할인), F는 재사용 불가로 폐기 대상
 enum AssetGrade {
   S
   A
@@ -5,33 +6,36 @@ enum AssetGrade {
   F
 }
 
+/// 입고~출고 보관 흐름: 입고대기 -> 보관중 -> 출고완료
 enum AssetStorageStatus {
-  PENDING  @map("입고대기")
-  STORED   @map("보관중")
-  RELEASED @map("출고완료")
+  PENDING  @map("입고대기") // 입고 신청 접수, 아직 창고 입고 전
+  STORED   @map("보관중")   // 창고 보관 중, 위치를 점유
+  RELEASED @map("출고완료") // 출고(판매/반출) 완료, 위치 점유 해제
 }
 
+/// 판매 진행 상태
 enum AssetSaleStatus {
-  PENDING @map("판매대기")
-  ON_SALE @map("판매중")
-  SOLD    @map("판매완료")
+  PENDING @map("판매대기") // 판매 미등록. F등급/입고대기 자산은 이 상태만 허용
+  ON_SALE @map("판매중")   // 마켓에 노출되어 판매 진행 중
+  SOLD    @map("판매완료") // 판매 확정
 }
 
+/// 입고 lot 단위 개별 자산. 검수로 확정된 품목/수량/등급/가치를 관리
 model Asset {
   id            String             @id @db.VarChar(20)
-  itemId        String             @db.VarChar(20)
-  receivingId   String             @db.VarChar(20)
-  customerId    String             @db.VarChar(20)
-  receiptId     String?            @db.VarChar(20)
-  locationId    String?            @db.VarChar(20)
-  categoryId    String             @db.VarChar(20)
+  itemId        String             @db.VarChar(20) // MasterItem(품목 마스터) 참조
+  receivingId   String             @db.VarChar(20) // 원본 입고 신청 ID(외부 참조, 관계 미정의)
+  customerId    String             @db.VarChar(20) // 자산 소유 고객(User) ID(외부 참조, 관계 미정의)
+  receiptId     String?            @db.VarChar(20) // 검수증 ID(선택, 외부 참조)
+  locationId    String?            @db.VarChar(20) // 보관 위치 ID(선택, 외부 참조), 출고완료 시 점유 해제
+  categoryId    String             @db.VarChar(20) // MaterialCategory 참조, 품목과 별도로 자산 단위 분류 보관
   name          String             @db.VarChar(160)
   specification String             @db.VarChar(500)
   brand         String             @default("") @db.VarChar(160)
-  grade         AssetGrade
-  quantity      Decimal            @db.Decimal(18, 3)
+  grade         AssetGrade         // 검수 시 확정되는 품질 등급
+  quantity      Decimal            @db.Decimal(18, 3) // 검수로 확정된 실수량(입고 신청 lot 수량과 다를 수 있음)
   unit          ItemUnit
-  appraisal     Decimal?           @db.Decimal(19, 0)
+  appraisal     Decimal?           @db.Decimal(19, 0) // 평가 가치(참고 금액). null=미평가, 0과 구분
   storageStatus AssetStorageStatus
   saleStatus    AssetSaleStatus
   createdAt     DateTime           @default(now())
@@ -40,16 +44,17 @@ model Asset {
   item     MasterItem       @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   category MaterialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   images   AssetImage[]
-  history  AssetChange[]
+  history  AssetChange[] // 수동 수정 감사 이력
 
   @@index([itemId])
   @@index([categoryId])
-  @@index([customerId, storageStatus])
+  @@index([customerId, storageStatus]) // 고객별 보관 현황 조회
   @@index([receivingId])
-  @@index([saleStatus, storageStatus])
+  @@index([saleStatus, storageStatus]) // 상태별 대시보드 집계 조회
   @@map("assets")
 }
 
+/// 자산 사진(검수/보관 상태 증빙). sortOrder로 노출 순서 제어
 model AssetImage {
   id       String @id @db.VarChar(36)
   assetId  String @db.VarChar(20)
@@ -63,11 +68,12 @@ model AssetImage {
   @@map("asset_images")
 }
 
+/// 자산 수동 수정 감사 로그. 사유와 필드별 변경 전/후 값을 기록
 model AssetChange {
   id        String   @id @db.VarChar(36)
   assetId   String   @db.VarChar(20)
-  reason    String   @db.VarChar(500)
-  changes   Json
+  reason    String   @db.VarChar(500) // 수정 사유(필수 입력)
+  changes   Json     // 변경된 필드별 이전/이후 값
   createdAt DateTime @default(now())
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade, onUpdate: Cascade)
