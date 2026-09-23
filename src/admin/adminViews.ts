@@ -2,7 +2,7 @@ import { campaigns, campaignStatus, customerForSite, customers, dateText, inspec
 import { categoryEnabled, categoryMatches, categoryPath, materialCategories, type MaterialCategory } from '../categories'
 import { detailedInspectionStatus, type MarketData } from './adminMarket'
 
-export type MenuId = 'dashboard' | 'basic' | 'receiving' | 'inventory' | 'market' | 'billing' | 'customers' | 'members' | 'settings'
+export type MenuId = 'dashboard' | 'basic' | 'receiving' | 'inventory' | 'market' | 'content' | 'billing' | 'customers' | 'members' | 'settings'
 export type AdminLink = { label: string; menu: MenuId; tab: string; id?: string; status?: string; customer?: string }
 export type DetailSection = { title: string; headers: string[]; rows: string[][] }
 export type AdminRow = { id: string; title: string; status: string; customerId?: string; date?: string; cells: string[]; fields: [string, string][]; sections?: DetailSection[]; links: AdminLink[]; note?: string; images?: AdminImage[]; grade?: string; saleStatus?: string; inspectionStatus?: string; itemId?: string; locationId?: string; categoryId?: string }
@@ -13,6 +13,7 @@ export const menus: { id: MenuId; label: string; tabs: { id: string; label: stri
   { id: 'receiving', label: '입고·검수·폐기', tabs: [{ id: 'requests', label: '입고 신청' }, { id: 'primary', label: '1차 검수' }, { id: 'detailed', label: '상세 검수' }, { id: 'disposal', label: '폐기 관리' }] },
   { id: 'inventory', label: '자산 관리', tabs: [{ id: 'stock', label: '자산 목록' }, { id: 'locations', label: '로케이션' }] },
   { id: 'market', label: '마켓 운영', tabs: [{ id: 'sales', label: '판매 요청' }, { id: 'products', label: '상품' }, { id: 'quotes', label: '구매 견적' }, { id: 'campaigns', label: '기획전' }] },
+  { id: 'content', label: '콘텐츠 관리', tabs: [{ id: 'banners', label: '배너 관리' }] },
   { id: 'billing', label: '보관료·정산', tabs: [{ id: 'storage', label: '보관료' }, { id: 'payouts', label: '판매 정산' }, { id: 'disposal', label: '폐기 청구' }] },
   { id: 'customers', label: '고객·문의', tabs: [{ id: 'companies', label: '고객사' }, { id: 'sites', label: '현장' }, { id: 'inquiries', label: '문의' }] },
   { id: 'members', label: '회원 관리', tabs: [{ id: 'list', label: '회원 목록' }, { id: 'applications', label: '가입 신청' }] },

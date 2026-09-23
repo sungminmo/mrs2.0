@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server'
 import { createApp } from './app.js'
+import type { BannerInput } from './banner.js'
 import { readConfig } from './config.js'
 import { createDatabase } from './database.js'
 
@@ -15,7 +16,12 @@ const authRepository = {
     return result.count === 1 ? database.client.user.findUnique({ where: { id } }) : null
   },
 }
-const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt } })
+const bannerRepository = {
+  list: () => database.client.banner.findMany({ orderBy: { id: 'asc' } }),
+  findByIds: (ids: string[]) => database.client.banner.findMany({ where: { id: { in: ids } } }),
+  upsert: (id: string, data: BannerInput) => database.client.banner.upsert({ where: { id }, create: { id, ...data }, update: data }),
+}
+const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt }, banners: bannerRepository })
 const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: config.port }, (info) => {
   console.info(`Backend listening on port ${info.port}`)
 })

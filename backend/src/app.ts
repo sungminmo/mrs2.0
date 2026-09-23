@@ -1,14 +1,16 @@
 import { Hono } from 'hono'
 import { approveMember, authRoutes, currentUser, listMembers, register, requireAdmin, requireAuth, type AuthRepository } from './auth.js'
+import { listAdminBanners, listPublicBanners, saveBanner, type BannerRepository } from './banner.js'
 import { ErrorCode, failure, handleError, success } from './http.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
   readinessTimeoutMs: number
   auth?: { repository: AuthRepository; secret: string; expiresIn: string }
+  banners?: BannerRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, banners }: Dependencies) {
   const app = new Hono()
 
   app.onError(handleError)
@@ -19,7 +21,13 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth }: Dependenc
     app.get('/api/auth/me', requireAuth(auth.repository, auth.secret), currentUser)
     app.get('/api/admin/members', requireAuth(auth.repository, auth.secret), requireAdmin, listMembers(auth.repository))
     app.post('/api/admin/members/:id/approve', requireAuth(auth.repository, auth.secret), requireAdmin, approveMember(auth.repository))
+    if (banners) {
+      app.get('/api/admin/banners', requireAuth(auth.repository, auth.secret), requireAdmin, listAdminBanners(banners))
+      app.put('/api/admin/banners/:id', requireAuth(auth.repository, auth.secret), requireAdmin, saveBanner(banners))
+    }
   }
+
+  if (banners) app.get('/api/banners', listPublicBanners(banners))
 
   app.get('/api/health/live', (context) => success(context, { status: 'ok' }))
 

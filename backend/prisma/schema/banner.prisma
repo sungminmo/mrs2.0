@@ -1,0 +1,15 @@
+/// 고객 화면에서 배너 ID로 조회하는 노출 배너
+model Banner {
+  id              String    @id @db.VarChar(80)
+  desktopImageUrl String    @db.LongText
+  mobileImageUrl  String    @db.LongText
+  linkUrl         String?   @db.VarChar(2048)
+  enabled         Boolean   @default(true)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([enabled, startsAt, endsAt])
+  @@map("banners")
+}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutDashboard, ListChecks, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, Images, ImageOff, LayoutDashboard, ListChecks, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
 import { authenticatedFetch, signOut } from '../authSession'
 import { campaigns, customers, dateText, inventory, invoiceAmount, invoices, locations, masterItems, money, products, quotes, receivings, receivingStatuses, referenceDate, saleRequests, type MemberAccount, type ReceivingStatus } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
@@ -10,10 +10,11 @@ import { categoryMatches, materialCategories, type MaterialCategory } from '../c
 import CategorySelect from '../CategorySelect'
 import CategoryManager from './CategoryManager'
 import CampaignEditor, { MarketStatusEditor } from './MarketEditor'
+import BannerManager from './BannerManager'
 import { changeMarketStatus, marketStatusOptions, type MarketStatusTab } from './adminMarket'
 import './AdminPortal.css'
 
-const icons = { dashboard: LayoutDashboard, basic: ListChecks, receiving: ClipboardCheck, inventory: Archive, market: ShoppingCart, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2 }
+const icons = { dashboard: LayoutDashboard, basic: ListChecks, receiving: ClipboardCheck, inventory: Archive, market: ShoppingCart, content: Images, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2 }
 const pageSize = 5
 
 export default function AdminPortal({ hash }: { hash: string }) {
@@ -115,7 +116,7 @@ export default function AdminPortal({ hash }: { hash: string }) {
       <div className="adm-heading"><div><div className="adm-breadcrumb">운영 관리 / {menu.label}{row ? ` / ${row.id}` : ''}</div><h1 ref={heading} tabIndex={-1}>{editing ? `${recordKind} ${mode === 'new' ? '등록' : '수정'}` : row ? row.title : menu.label}</h1></div><span className="adm-mode">관리자 시안</span></div>
       {menu.id === 'dashboard' ? <Dashboard views={views} /> : <>
         <nav className="adm-tabs" aria-label={`${menu.label} 보기`}>{menu.tabs.map((item) => <a key={item.id} href={adminHref({ label: item.label, menu: menu.id, tab: item.id })} aria-current={item.id === tab?.id ? 'page' : undefined}>{item.label}</a>)}</nav>
-        {categoryManagement ? <CategoryManager categories={categories} items={items} assets={assets} params={url.searchParams} onSave={(category) => { setCategories((current) => current.some((entry) => entry.id === category.id) ? current.map((entry) => entry.id === category.id ? category : entry) : [...current, category]); window.location.hash = `/admin/basic?tab=categories&id=${category.id}` }} /> : <>
+        {menu.id === 'content' && tab?.id === 'banners' ? <BannerManager params={url.searchParams} /> : categoryManagement ? <CategoryManager categories={categories} items={items} assets={assets} params={url.searchParams} onSave={(category) => { setCategories((current) => current.some((entry) => entry.id === category.id) ? current.map((entry) => entry.id === category.id ? category : entry) : [...current, category]); window.location.hash = `/admin/basic?tab=categories&id=${category.id}` }} /> : <>
         {notice.scope === noticeScope && !editing && <p className="adm-note" role="status">{notice.text}</p>}
         {statusTab && <p className="adm-note">상태는 임시 저장되며 새로고침·고객 포털 이동 시 초기화됩니다. 실제 판매·발송·재고 차감·정산은 실행하지 않습니다.</p>}
         {editing && campaignEditing ? <CampaignEditor key={`${mode}/${id}`} campaign={mode === 'edit' ? market.campaigns.find((entry) => entry.id === id) : undefined} campaigns={market.campaigns} categories={categories} cancelHref={cancelHref} onSave={(campaign) => { setMarket((current) => ({ ...current, campaigns: current.campaigns.some((entry) => entry.id === campaign.id) ? current.campaigns.map((entry) => entry.id === campaign.id ? campaign : entry) : [...current.campaigns, campaign] })); setNotice({ scope: `market/campaigns/${campaign.id}`, text: '기획전이 임시 저장되었습니다.' }); saved(campaign.id) }} /> : editing && locationEditing ? <LocationEditor key={`${mode}/${id}`} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSave={(location) => { setLocationRecords((current) => current.some((entry) => entry.id === location.id) ? current.map((entry) => entry.id === location.id ? location : entry) : [...current, location]); setNotice({ scope: `inventory/locations/${location.id}`, text: `${location.id} 로케이션이 임시 저장되었습니다.` }); saved(location.id) }} /> : editing ? <InventoryEditor key={`${menu.id}/${mode}/${id}`} kind={itemManagement ? 'items' : 'inventory'} items={items} assets={assets} categories={categories} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSaveItem={(item) => { setItems((current) => current.some((entry) => entry.id === item.id) ? current.map((entry) => entry.id === item.id ? item : entry) : [...current, item]); saved(item.id) }} onSaveAsset={(asset) => { setAssets((current) => current.some((entry) => entry.id === asset.id) ? current.map((entry) => entry.id === asset.id ? asset : entry) : [...current, asset]); saved(asset.id) }} /> : <>

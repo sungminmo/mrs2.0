@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowRight, Eye, EyeOff, Leaf, LogIn, MessageSquare, Phone, ReceiptText, ShoppingBag, Warehouse, X } from 'lucide-react'
+import { useBanners } from './banners'
 import { useReceivingRequest } from './ReceivingRequest'
 import './LoginPage.css'
 
@@ -13,6 +14,7 @@ const valueMetrics = [
 const companyLogo = `${import.meta.env.BASE_URL}logo.png`
 const heroSlides = [
   {
+    id: 'customer-home-hero-01',
     image: `${import.meta.env.BASE_URL}banner1.jpg`,
     eyebrow: '보관에서 거래까지, 자재의 새로운 순환',
     title: 'MRS',
@@ -20,6 +22,7 @@ const heroSlides = [
     description: <>현장에 남은 자재를 보관하고, 필요한 곳으로 연결합니다.<br />입고부터 판매와 정산까지 한곳에서 관리하세요.</>,
   },
   {
+    id: 'customer-home-hero-02',
     image: `${import.meta.env.BASE_URL}banner2.jpg`,
     eyebrow: '입고부터 출고까지, 현장을 움직이는 운영',
     title: 'MRS CENTER',
@@ -27,20 +30,29 @@ const heroSlides = [
     description: <>전문 인력이 자재를 확인하고 체계적으로 보관합니다.<br />필요한 순간, 필요한 현장으로 신속하게 연결합니다.</>,
   },
 ]
+const heroBannerIds = heroSlides.map((slide) => slide.id)
 
 function HeroCarousel({ onBrowse, onLogin }: { onBrowse: () => void; onLogin: () => void }) {
   const [activeSlide, setActiveSlide] = useState(0)
   const [paused, setPaused] = useState(false)
+  const managedBanners = useBanners(heroBannerIds)
+  const slides = managedBanners === null ? heroSlides.map((slide) => ({ ...slide, mobileImage: slide.image, linkUrl: null })) : heroSlides.flatMap((slide) => {
+    const banner = managedBanners.find((item) => item.id === slide.id)
+    return banner ? [{ ...slide, image: banner.desktopImageUrl, mobileImage: banner.mobileImageUrl, linkUrl: banner.linkUrl }] : []
+  })
+  const visibleSlides = slides.length ? slides : [{ ...heroSlides[0], image: '', mobileImage: '', linkUrl: null }]
+  const activeIndex = activeSlide % visibleSlides.length
 
   useEffect(() => {
     if (paused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const timer = window.setInterval(() => setActiveSlide((current) => (current + 1) % heroSlides.length), 6000)
+    const timer = window.setInterval(() => setActiveSlide((current) => (current + 1) % visibleSlides.length), 6000)
     return () => window.clearInterval(timer)
-  }, [paused])
+  }, [paused, visibleSlides.length])
 
-  const slide = heroSlides[activeSlide]
+  const slide = visibleSlides[activeIndex]
   return <section className="login-hero" aria-label="MRS 주요 서비스" aria-roledescription="carousel" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false) }}>
-    <div className="login-hero-images" aria-hidden="true">{heroSlides.map((item, index) => <img key={item.image} className={`login-hero-image ${index === activeSlide ? 'is-active' : ''}`} src={item.image} alt="" fetchPriority={index === 0 ? 'high' : 'auto'} loading="eager" />)}</div>
+    <div className="login-hero-images" aria-hidden="true">{visibleSlides.map((item, index) => item.image && <picture key={item.id} className={`login-hero-image ${index === activeIndex ? 'is-active' : ''}`}><source media="(max-width: 640px)" srcSet={item.mobileImage} /><img src={item.image} alt="" fetchPriority={index === 0 ? 'high' : 'auto'} loading="eager" /></picture>)}</div>
+    {slide.linkUrl && <a className="login-hero-banner-link" href={slide.linkUrl} aria-label={`${slide.subtitle} 배너 페이지로 이동`} />}
     <div className="login-hero-inner">
       <div key={activeSlide} className="login-hero-content">
         <span className="login-eyebrow">{slide.eyebrow}</span>
@@ -49,9 +61,9 @@ function HeroCarousel({ onBrowse, onLogin }: { onBrowse: () => void; onLogin: ()
         <div className="login-hero-actions"><button className="login-primary" onClick={onBrowse}>마켓 둘러보기<ArrowRight size={18} /></button><button className="login-hero-login" onClick={onLogin} aria-haspopup="dialog">로그인<LogIn size={17} /></button></div>
         <a className="login-hero-more" href="#services">MRS 제공 서비스<ArrowDown size={16} /></a>
       </div>
-      <div className="login-hero-indicators" aria-label="배너 선택">{heroSlides.map((item, index) => <button key={item.image} type="button" aria-label={`${index + 1}번 배너: ${item.subtitle}`} aria-current={index === activeSlide ? 'true' : undefined} onClick={() => setActiveSlide(index)}><span>{String(index + 1).padStart(2, '0')}</span></button>)}</div>
+      <div className="login-hero-indicators" aria-label="배너 선택">{visibleSlides.map((item, index) => <button key={item.id} type="button" aria-label={`${index + 1}번 배너: ${item.subtitle}`} aria-current={index === activeIndex ? 'true' : undefined} onClick={() => setActiveSlide(index)}><span>{String(index + 1).padStart(2, '0')}</span></button>)}</div>
     </div>
-    <p className="login-sr-only" aria-live="polite">{activeSlide + 1}번 배너, {slide.subtitle}</p>
+    <p className="login-sr-only" aria-live="polite">{activeIndex + 1}번 배너, {slide.subtitle}</p>
   </section>
 }
 

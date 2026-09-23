@@ -64,10 +64,13 @@
 .login-main { flex: 1; padding-top: 68px; }
 .login-hero { position: relative; isolation: isolate; overflow: hidden; background: #313a35; color: #f8faf7; }
 .login-hero-images { position: absolute; inset: 0; z-index: -2; }
-.login-hero-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.015); transition: opacity 700ms cubic-bezier(.25, 1, .5, 1), transform 6s linear; }
+.login-hero-image { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transform: scale(1.015); transition: opacity 700ms cubic-bezier(.25, 1, .5, 1), transform 6s linear; }
+.login-hero-image img { width: 100%; height: 100%; object-fit: cover; }
 .login-hero-image.is-active { opacity: 1; transform: scale(1); }
 .login-hero::before { content: ''; position: absolute; inset: 0; z-index: -1; background: #101b16a8; }
-.login-hero-inner { position: relative; max-width: 1200px; margin: 0 auto; padding: 58px 32px 26px; min-height: min(570px, calc(100svh - 168px)); }
+.login-hero-banner-link { position: absolute; inset: 0; z-index: 0; }
+.login-hero-inner { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 58px 32px 26px; min-height: min(570px, calc(100svh - 168px)); pointer-events: none; }
+.login-hero-inner a, .login-hero-inner button { pointer-events: auto; }
 .login-hero-content { min-height: inherit; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; animation: login-hero-content-in 650ms cubic-bezier(.22, 1, .36, 1) both; }
 @keyframes login-hero-content-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 .login-hero .login-eyebrow { color: #dbe8df; }
