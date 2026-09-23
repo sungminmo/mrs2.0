@@ -54,8 +54,8 @@ jobs:
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%b\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null
-          printf '%b\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
-          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" 'cd /home/ubuntu/MRS && flock /tmp/mrs-source.lock git pull --ff-only origin main && ./scripts/deploy-service.sh customer '"$GITHUB_SHA"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 "$DEPLOY_USER@$DEPLOY_HOST" 'cd /home/ubuntu/MRS && flock /tmp/mrs-source.lock git pull --ff-only origin main && ./scripts/deploy-service.sh customer '"$GITHUB_SHA"
