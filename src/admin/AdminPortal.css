@@ -86,6 +86,7 @@
 .adm-product-photo figcaption { margin-top: 8px; font-size: 11px; line-height: 1.7; color: var(--adm-muted); }
 .adm-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .adm-management-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.adm-management-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .adm-inspection-action { padding: 16px 0; border-block: 1px solid var(--adm-border); }
 .admin-portal .adm-primary { color: #fdfefd; background: #285c42; border-color: #285c42; }
 .adm-primary:disabled { opacity: .6; cursor: default; }
@@ -159,8 +160,15 @@
 .adm-banner-row-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .adm-banner-row-head > div { display: flex; align-items: center; gap: 6px; }
 .adm-banner-item-editor > .adm-edit-fields:last-child { margin-top: 20px; }
+.adm-location-occupancy-editor { max-width: 1200px; }
+.adm-location-occupancy-editor table select { min-width: 180px; min-height: 40px; padding: 8px 10px; border: 1px solid #bfc8c1; border-radius: 4px; background: #fdfefd; color: #28312c; font: inherit; }
+.adm-occupancy-add { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 22px 0; border-bottom: 1px solid var(--adm-border); }
+.adm-occupancy-add h2, .adm-occupancy-add p { margin: 0; }
+.adm-occupancy-add > div:last-child { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.adm-occupancy-add select { min-width: min(420px, 60vw); min-height: 44px; padding: 9px 11px; border: 1px solid #bfc8c1; border-radius: 4px; background: #fdfefd; color: #28312c; font: inherit; }
 @media (max-width: 640px) { .adm-category-columns { grid-template-columns: minmax(0, 1fr); } .adm-category-columns > section { border-right: 0; border-bottom: 1px solid var(--adm-border); padding: 16px 0; } .adm-category-columns ul { max-height: 210px; } }
 @media (max-width: 640px) { .adm-edit-fields, .adm-price-fields, .adm-banner-previews, .adm-banner-image-fields { grid-template-columns: minmax(0, 1fr); } .adm-edit-form h2 small { display: block; margin-top: 6px; } .adm-banner-composition-head { align-items: stretch; flex-direction: column; } }
+@media (max-width: 640px) { .adm-management-buttons { width: 100%; } .adm-management-buttons .adm-button { flex: 1; } .adm-occupancy-add { align-items: stretch; flex-direction: column; } .adm-occupancy-add > div:last-child { align-items: stretch; flex-direction: column; } .adm-occupancy-add select { width: 100%; min-width: 0; } }
 @media (max-width: 1200px) { .adm-dashboard-columns { grid-template-columns: 1fr; } .adm-fields { grid-template-columns: 1fr; } .adm-metrics { gap: 12px; } }
 @media (max-width: 900px) { .adm-main { margin-left: 0; padding: 24px 20px 0; } .adm-sidebar { display: none; } .adm-sidebar.is-open { display: flex; position: static; width: 100%; border-right: 0; border-bottom: 1px solid var(--adm-border); } .adm-sidebar-note { display: none; } .adm-sidebar nav { grid-template-columns: 1fr 1fr; } .adm-menu-toggle { display: inline-flex; flex-shrink: 0; } .adm-brand { min-width: 0; } .adm-header { padding-inline: 20px; gap: 16px; } .adm-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 24px; } }
 @media (max-width: 560px) { .adm-header { padding-inline: 12px; gap: 10px; } .adm-brand { font-size: 20px; } .adm-brand span { font-size: 10px; } .adm-prototype { display: none; } .adm-main { padding: 24px 16px 0; } .admin-portal h1 { font-size: 21px; } .adm-mode { display: none; } .adm-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .adm-filterbar { gap: 12px 8px; } .adm-search { max-width: none; flex-basis: 100%; } .adm-filterbar select { max-width: 180px; } .adm-fields > div { grid-template-columns: 108px minmax(0, 1fr); padding-inline: 0; } .adm-tabs { gap: 20px; } .adm-icon, .adm-detail-link, .adm-button { min-height: 44px; } .adm-icon { width: 44px; } .adm-list-heading { flex-wrap: wrap; } }
