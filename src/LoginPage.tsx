@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowRight, Eye, EyeOff, Leaf, LogIn, MessageSquare, Phone, ReceiptText, ShoppingBag, Warehouse, X } from 'lucide-react'
-import { useBanners } from './banners'
+import { useBannerPlacement } from './banners'
 import { useReceivingRequest } from './ReceivingRequest'
 import './LoginPage.css'
 
@@ -14,7 +14,6 @@ const valueMetrics = [
 const companyLogo = `${import.meta.env.BASE_URL}logo.png`
 const heroSlides = [
   {
-    id: 'customer-home-hero-01',
     image: `${import.meta.env.BASE_URL}banner1.jpg`,
     eyebrow: '보관에서 거래까지, 자재의 새로운 순환',
     title: 'MRS',
@@ -22,7 +21,6 @@ const heroSlides = [
     description: <>현장에 남은 자재를 보관하고, 필요한 곳으로 연결합니다.<br />입고부터 판매와 정산까지 한곳에서 관리하세요.</>,
   },
   {
-    id: 'customer-home-hero-02',
     image: `${import.meta.env.BASE_URL}banner2.jpg`,
     eyebrow: '입고부터 출고까지, 현장을 움직이는 운영',
     title: 'MRS CENTER',
@@ -30,17 +28,13 @@ const heroSlides = [
     description: <>전문 인력이 자재를 확인하고 체계적으로 보관합니다.<br />필요한 순간, 필요한 현장으로 신속하게 연결합니다.</>,
   },
 ]
-const heroBannerIds = heroSlides.map((slide) => slide.id)
 
 function HeroCarousel({ onBrowse, onLogin }: { onBrowse: () => void; onLogin: () => void }) {
   const [activeSlide, setActiveSlide] = useState(0)
   const [paused, setPaused] = useState(false)
-  const managedBanners = useBanners(heroBannerIds)
-  const slides = managedBanners === null ? heroSlides.map((slide) => ({ ...slide, mobileImage: slide.image, linkUrl: null })) : heroSlides.flatMap((slide) => {
-    const banner = managedBanners.find((item) => item.id === slide.id)
-    return banner ? [{ ...slide, image: banner.desktopImageUrl, mobileImage: banner.mobileImageUrl, linkUrl: banner.linkUrl }] : []
-  })
-  const visibleSlides = slides.length ? slides : [{ ...heroSlides[0], image: '', mobileImage: '', linkUrl: null }]
+  const placement = useBannerPlacement('customer-home-hero')
+  const slides = placement?.items.map((banner, index) => ({ ...heroSlides[index % heroSlides.length], id: banner.id, image: banner.desktopImageUrl, mobileImage: banner.mobileImageUrl, linkUrl: banner.linkUrl }))
+  const visibleSlides = slides?.length ? slides : heroSlides.map((slide, index) => ({ ...slide, id: `fallback-${index}`, mobileImage: slide.image, linkUrl: null }))
   const activeIndex = activeSlide % visibleSlides.length
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server'
 import { createApp } from './app.js'
-import type { BannerInput } from './banner.js'
+import type { BannerPlacementInput } from './banner.js'
 import { readConfig } from './config.js'
 import { createDatabase } from './database.js'
 
@@ -17,9 +17,14 @@ const authRepository = {
   },
 }
 const bannerRepository = {
-  list: () => database.client.banner.findMany({ orderBy: { id: 'asc' } }),
-  findByIds: (ids: string[]) => database.client.banner.findMany({ where: { id: { in: ids } } }),
-  upsert: (id: string, data: BannerInput) => database.client.banner.upsert({ where: { id }, create: { id, ...data }, update: data }),
+  list: () => database.client.bannerPlacement.findMany({ include: { items: true }, orderBy: { id: 'asc' } }),
+  findByIds: (ids: string[]) => database.client.bannerPlacement.findMany({ where: { id: { in: ids } }, include: { items: true } }),
+  replace: (id: string, data: BannerPlacementInput) => database.client.$transaction(async (transaction) => {
+    const placement = await transaction.bannerPlacement.upsert({ where: { id }, create: { id, name: data.name, enabled: data.enabled }, update: { name: data.name, enabled: data.enabled } })
+    await transaction.bannerItem.deleteMany({ where: { placementId: id } })
+    if (data.items.length) await transaction.bannerItem.createMany({ data: data.items.map((item) => ({ ...item, placementId: id })) })
+    return { ...placement, items: await transaction.bannerItem.findMany({ where: { placementId: id }, orderBy: { sortOrder: 'asc' } }) }
+  }),
 }
 const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt }, banners: bannerRepository })
 const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: config.port }, (info) => {

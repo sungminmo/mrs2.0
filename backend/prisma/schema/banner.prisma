@@ -1,15 +1,32 @@
-/// 고객 화면에서 배너 ID로 조회하는 노출 배너
-model Banner {
-  id              String    @id @db.VarChar(80)
+/// 고객 프론트와 ID로 맵핑되는 배너 노출 위치
+model BannerPlacement {
+  id        String       @id @db.VarChar(80)
+  name      String       @db.VarChar(120)
+  enabled   Boolean      @default(true)
+  items     BannerItem[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@map("banner_placements")
+}
+
+/// 노출 위치에 순서대로 편성되는 개별 배너
+model BannerItem {
+  id              String          @id @default(uuid()) @db.VarChar(36)
+  placementId     String          @db.VarChar(80)
   desktopImageUrl String    @db.LongText
   mobileImageUrl  String    @db.LongText
   linkUrl         String?   @db.VarChar(2048)
   enabled         Boolean   @default(true)
+  sortOrder       Int       @default(0)
   startsAt        DateTime?
   endsAt          DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  placement BannerPlacement @relation(fields: [placementId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([placementId, sortOrder])
   @@index([enabled, startsAt, endsAt])
-  @@map("banners")
+  @@map("banner_items")
 }
