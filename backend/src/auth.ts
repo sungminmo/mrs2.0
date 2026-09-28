@@ -10,6 +10,7 @@ const hashLength = 64
 
 export type AuthUser = {
   id: string
+  customerId?: string | null
   email: string
   passwordHash: string
   companyName: string
@@ -94,7 +95,7 @@ export function authRoutes(repository: AuthRepository, secret: string, expiresIn
     if (user.status === 'PENDING') throw new AppError(403, ErrorCode.ACCOUNT_PENDING, 'Account approval is pending')
     if (user.status !== 'ACTIVE') throw new AppError(403, ErrorCode.FORBIDDEN, 'Account is not available')
     const accessToken = await issueToken(user, secret, expiresIn)
-    const { passwordHash: _passwordHash, status: _status, ...profile } = user
+    const { passwordHash: _passwordHash, status: _status, customerId: _customerId, ...profile } = user
     return success(context, { accessToken, tokenType: 'Bearer', user: profile })
   }
 }
@@ -172,6 +173,6 @@ export function approveMember(repository: AuthRepository) {
 
 export function currentUser(context: Context) {
   const user = context.get('authUser') as AuthUser
-  const { passwordHash: _passwordHash, status: _status, ...profile } = user
+  const { passwordHash: _passwordHash, status: _status, customerId: _customerId, ...profile } = user
   return success(context, { user: profile })
 }

@@ -7,6 +7,10 @@
 - Content-Type: `application/json`
 - 시간: ISO 8601 UTC (`2026-09-22T01:23:45.000Z`)
 - 금액: 원 단위 정수 문자열. 예: `"1375000"`
+- OpenAPI 3.1: `/api/openapi.json`
+- Scalar API Reference: `/api/docs`
+
+실행 계약의 기준은 코드에서 생성되는 OpenAPI 3.1 문서입니다. 이 문서는 업무 규칙과 예시를 설명하는 보조 명세입니다.
 
 ## 1. 공통 규칙
 
@@ -316,7 +320,14 @@ Query:
 | `saleStatus` | enum | - | `PENDING`, `ON_SALE`, `SOLD` |
 | `grade` | enum | - | `S`, `A`, `B`, `F` |
 | `categoryId` | string | - | 카테고리와 하위 카테고리 포함 |
-| `sort` | enum | `updatedDesc` | `updatedDesc`, `valueDesc`, `receivedDesc` |
+| `locationId` | string | - | 보관 위치 코드 |
+| `receivedFrom` | date | - | 입고일 시작, `YYYY-MM-DD` |
+| `receivedTo` | date | - | 입고일 종료, `YYYY-MM-DD` |
+| `storageDaysFrom` | integer | - | 최소 보관 일수, 0 이상 |
+| `storageDaysTo` | integer | - | 최대 보관 일수, 0 이상 |
+| `sort` | enum | `updatedDesc` | `updatedDesc`, `valueDesc`, `receivedDesc`, `nameAsc` |
+
+`receivedFrom`은 `receivedTo`보다 늦을 수 없고, `storageDaysFrom`은 `storageDaysTo`보다 클 수 없습니다. 범위가 잘못되면 `400 VALIDATION_ERROR`를 반환합니다.
 
 항목 예시:
 
@@ -334,13 +345,18 @@ Query:
   "appraisalValue": "3480000",
   "storageStatus": "STORED",
   "saleStatus": "ON_SALE",
-  "location": { "id": "LOC-A03", "name": "A-03 창고" },
+  "locationId": "LOC-A03",
   "thumbnailUrl": null,
-  "activeSaleStatusRequest": null,
+  "receivedAt": "2026-09-02T01:00:00.000Z",
+  "storageDays": 19,
   "createdAt": "2026-09-02T01:00:00.000Z",
   "updatedAt": "2026-09-21T03:30:00.000Z"
 }
 ```
+
+현재 별도 입고 확정 시각과 위치 마스터 관계가 없으므로 `receivedAt`은 `Asset.createdAt`의 API 별칭이며 보관 일수도 이 시각을 기준으로 계산합니다. 위치는 `locationId`만 반환합니다. `appraisalValue`가 없는 자산은 `null`입니다.
+
+로그인한 `CUSTOMER` 계정의 `User.customerId`와 일치하는 자산만 조회합니다. 활성 계정에 고객 코드가 연결되지 않은 경우 빈 목록 대신 `403 FORBIDDEN`을 반환합니다.
 
 ### POST `/assets/{assetId}/sale-requests`
 
@@ -480,7 +496,7 @@ Query:
 
 현재 Prisma 스키마에는 아래 확장이 필요합니다.
 
-1. `User.businessRegistrationNumber` 추가 및 사용자와 고객사 소유권 연결
+1. `User.businessRegistrationNumber` 추가. 자산 소유권은 `User.customerId`와 기존 고객 코드를 연결해 조회하며, 고객사 엔터티 분리는 후속 과제
 2. `Product`: 자산, 가격, 공개 상태, 판매 가능 수량, 특가 정보·기간
 3. `PurchaseRequest`, `PurchaseRequestItem`: 요청자, 상품 스냅샷, 배송·연락처, 상태
 4. `SaleStatusRequest`: `START_SALE`/`CANCEL_SALE`, 승인 상태, 희망 금액, 사유
@@ -488,7 +504,7 @@ Query:
 6. `RevokedToken` 또는 세션 저장소: JWT `jti`, 만료 시각, 폐기 시각
 7. `IdempotencyRecord`: 사용자, 경로, 키, 요청 hash, 응답, 만료 시각
 
-현재 `Asset.customerId`는 `User` 외래키가 아닙니다. API 구현 전에 로그인 사용자와 고객사 및 자산 소유권을 서버에서 신뢰할 수 있도록 관계를 추가해야 합니다.
+`Asset.customerId`는 기존 고객 코드이며 `User` 외래키가 아닙니다. 동일 고객사의 여러 계정은 같은 `User.customerId`를 사용할 수 있습니다. migration 적용 후 기존 활성 고객 계정에는 운영 데이터의 고객 코드를 명시적으로 매핑해야 하며, 미연결 계정은 자산 API를 호출할 수 없습니다.
 
 ## 8. 보안 및 동시성
 

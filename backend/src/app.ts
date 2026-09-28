@@ -1,4 +1,6 @@
-import { Hono } from 'hono'
+import { OpenAPIHono } from '@hono/zod-openapi'
+import { Scalar } from '@scalar/hono-api-reference'
+import { assetListRoute, listAssets, type AssetRepository } from './asset.js'
 import { approveMember, authRoutes, currentUser, listMembers, register, requireAdmin, requireAuth, type AuthRepository } from './auth.js'
 import { listAdminBanners, listPublicBanners, saveBanner, type BannerRepository } from './banner.js'
 import { ErrorCode, failure, handleError, success } from './http.js'
@@ -7,13 +9,25 @@ type Dependencies = {
   checkDatabase: () => Promise<void>
   readinessTimeoutMs: number
   auth?: { repository: AuthRepository; secret: string; expiresIn: string }
+  assets?: AssetRepository
   banners?: BannerRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth, banners }: Dependencies) {
-  const app = new Hono()
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners }: Dependencies) {
+  const app = new OpenAPIHono({
+    defaultHook: (result, context) => {
+      if (result.success) return
+      return failure(context, 400, ErrorCode.VALIDATION_ERROR, 'Request validation failed', result.error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+        code: issue.code,
+      })))
+    },
+  })
 
   app.onError(handleError)
+
+  app.openAPIRegistry.registerComponent('securitySchemes', 'BearerAuth', { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
 
   if (auth) {
     app.post('/api/auth/login', authRoutes(auth.repository, auth.secret, auth.expiresIn))
@@ -21,6 +35,10 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, banners }: 
     app.get('/api/auth/me', requireAuth(auth.repository, auth.secret), currentUser)
     app.get('/api/admin/members', requireAuth(auth.repository, auth.secret), requireAdmin, listMembers(auth.repository))
     app.post('/api/admin/members/:id/approve', requireAuth(auth.repository, auth.secret), requireAdmin, approveMember(auth.repository))
+    if (assets) {
+      app.use('/api/assets', requireAuth(auth.repository, auth.secret))
+      app.openapi(assetListRoute, listAssets(assets))
+    }
     if (banners) {
       app.get('/api/admin/banners', requireAuth(auth.repository, auth.secret), requireAdmin, listAdminBanners(banners))
       app.put('/api/admin/banners/:id', requireAuth(auth.repository, auth.secret), requireAdmin, saveBanner(banners))
@@ -49,6 +67,13 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, banners }: 
       clearTimeout(timer)
     }
   })
+
+  app.doc31('/api/openapi.json', (context) => ({
+    openapi: '3.1.0',
+    info: { title: 'MRS Customer API', version: '1.0.0' },
+    servers: [{ url: new URL(context.req.url).origin, description: 'Current environment' }],
+  }))
+  app.get('/api/docs', Scalar({ url: '/api/openapi.json', pageTitle: 'MRS API Reference' }))
 
   app.notFound((context) => failure(context, 404, ErrorCode.NOT_FOUND, 'Not found'))
 

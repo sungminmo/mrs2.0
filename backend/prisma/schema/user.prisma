@@ -15,6 +15,7 @@ enum UserStatus {
 /// 서비스 이용 계정(고객사 담당자 또는 관리자)
 model User {
   id           String     @id @default(uuid()) @db.VarChar(36)
+  customerId   String?    @db.VarChar(20) // 기존 자산 소유 고객 코드. 같은 고객사에 여러 계정 연결 가능
   email        String     @unique @db.VarChar(254)
   passwordHash String     @db.VarChar(255) // 해시 저장, 평문 비밀번호는 저장하지 않음
   companyName  String     @db.VarChar(160)
@@ -28,6 +29,7 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  @@index([customerId])
   @@index([status, createdAt]) // 승인 대기 목록 등 상태별 조회
   @@map("users")
 }

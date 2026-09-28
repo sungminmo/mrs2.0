@@ -59,6 +59,7 @@ try {
     await transaction.user.upsert({
       where: { email: 'customer@example.test' },
       update: {
+        customerId: 'TEST-CUST-001',
         passwordHash: customerPasswordHash,
         companyName: 'MRS Test Customer',
         managerName: 'Test Customer',
@@ -68,6 +69,7 @@ try {
         approvedAt: new Date('2026-09-21T00:00:00.000Z'),
       },
       create: {
+        customerId: 'TEST-CUST-001',
         email: 'customer@example.test',
         passwordHash: customerPasswordHash,
         companyName: 'MRS Test Customer',

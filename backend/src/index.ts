@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server'
 import { createApp } from './app.js'
+import { createAssetRepository } from './asset.js'
 import type { BannerPlacementInput } from './banner.js'
 import { readConfig } from './config.js'
 import { createDatabase } from './database.js'
@@ -26,7 +27,7 @@ const bannerRepository = {
     return { ...placement, items: await transaction.bannerItem.findMany({ where: { placementId: id }, orderBy: { sortOrder: 'asc' } }) }
   }),
 }
-const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt }, banners: bannerRepository })
+const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt }, assets: createAssetRepository(database.client), banners: bannerRepository })
 const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: config.port }, (info) => {
   console.info(`Backend listening on port ${info.port}`)
 })
