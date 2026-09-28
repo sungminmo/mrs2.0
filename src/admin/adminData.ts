@@ -18,7 +18,7 @@ export type AssetChange = { at: string; reason: string; changes: [string, string
 export type Inventory = { id: string; itemId: string; receivingId: string; customerId: string; receiptId: string | null; locationId: string; name: string; category: string; brand: string; grade: 'S' | 'A' | 'B' | 'F'; quantity: number; unit: typeof itemUnits[number]; appraisal: number | null; status: '입고대기' | '보관중' | '출고완료'; saleStatus: '판매대기' | '판매중' | '판매완료'; specification: string; images: AdminImage[]; history: AssetChange[] }
 export type Location = { id: string; name: string; zone: string; status: '사용 중' | '비어 있음'; rate: number | null }
 export type SaleRequest = { id: string; assetId: string; date: string; quantity: number; desiredAmount: number; status: '승인 대기' | '승인 완료' | '반려'; inspection: string }
-export type Product = { id: string; assetId: string; name: string; price: number; unit: string; status: '판매대기' | '판매 중' | '재고 없음' }
+export type Product = { id: string; assetId: string; name: string; price: number; discountRate: number; unit: string; status: '판매대기' | '판매 중' | '재고 없음' }
 export type Quote = { id: string; customerId: string; date: string; dueAt: string; status: '접수 대기' | '견적 회신' | '출고 완료'; lines: { productId: string; name: string; quantity: number; unit: string; unitPrice: number | null }[]; address: string; note: string }
 export type Campaign = { id: string; name: string; category: string; description: string; enabled: boolean; order: number; startsAt: string; endsAt: string }
 export type MemberAccount = { id: string; type: '기업회원' | '공급처'; email: string; companyName: string; businessNumber: string; representativeName: string; managerName: string; managerPhone: string; companyPhone: string; faxNumber: string; lastLoginAt: string | null; joinedAt: string; status: '가입 승인 대기' | '이용 중' | '승인 반려' }
@@ -81,8 +81,8 @@ export const saleRequests: SaleRequest[] = [
   { id: 'SALE-003', assetId: 'AST-003', date: '2026-09-01T10:00:00+09:00', quantity: 200, desiredAmount: 760000, status: '승인 완료', inspection: '판매용 정밀 검수 완료 · A등급' },
 ]
 export const products: Product[] = [
-  { id: 'PRD-002', assetId: 'AST-002', name: '회수 참나무 구조목', price: 43500, unit: 'M', status: '판매 중' },
-  { id: 'PRD-003', assetId: 'AST-003', name: '폴리에틸렌 파이프 DN100', price: 3490, unit: 'M', status: '판매 중' },
+  { id: 'PRD-002', assetId: 'AST-002', name: '회수 참나무 구조목', price: 43500, discountRate: 0, unit: 'M', status: '판매 중' },
+  { id: 'PRD-003', assetId: 'AST-003', name: '폴리에틸렌 파이프 DN100', price: 3490, discountRate: 0, unit: 'M', status: '판매 중' },
 ]
 export const quotes: Quote[] = [
   { id: 'QUO-0914', customerId: 'CUS-003', date: '2026-09-14T10:00:00+09:00', dueAt: '2026-09-21T09:00:00+09:00', status: '접수 대기', lines: [{ productId: 'PRD-002', name: '회수 참나무 구조목', quantity: 10, unit: 'M', unitPrice: null }, { productId: 'PRD-003', name: '폴리에틸렌 파이프 DN100', quantity: 30, unit: 'M', unitPrice: null }], address: '경기 수원시 · 예시 납품지', note: '일괄 배송 및 운반비 확인 요청' },

@@ -1,10 +1,31 @@
 import { useState } from 'react'
 import { Check, Save, X } from 'lucide-react'
-import type { Campaign } from './adminData'
+import type { Campaign, Product } from './adminData'
 import type { MaterialCategory } from '../categories'
 import CategorySelect from '../CategorySelect'
 import { nextCode } from './adminInventory'
-import { marketStatusOptions, validateCampaign, type MarketStatusTab } from './adminMarket'
+import { discountedPrice, marketStatusOptions, setProductDiscount, validateCampaign, type MarketStatusTab } from './adminMarket'
+
+export function ProductDiscountEditor({ product, cancelHref, onSave }: { product: Product; cancelHref: string; onSave: (product: Product) => void }) {
+  const [discountRate, setDiscountRate] = useState(product.discountRate)
+  const [error, setError] = useState('')
+  const preview = discountedPrice({ ...product, discountRate: Number.isFinite(discountRate) ? discountRate : 0 })
+  return <div className="adm-editor"><form className="adm-edit-form" onSubmit={(event) => {
+    event.preventDefault()
+    try { onSave(setProductDiscount(product, discountRate)); setError('') } catch (failure) { setError(failure instanceof Error ? failure.message : '할인율을 저장하지 못했습니다.') }
+  }}>
+    <h2>상품 할인율</h2>
+    <div className="adm-edit-fields">
+      <label>상품번호<input value={product.id} readOnly /></label>
+      <label>상품명<input value={product.name} readOnly /></label>
+      <label>판매 단가<input value={product.price.toLocaleString('ko-KR')} readOnly /></label>
+      <label>할인율 (%)<input type="number" min={0} max={100} step={1} value={discountRate} onChange={(event) => { setDiscountRate(event.target.valueAsNumber); setError('') }} required autoFocus /></label>
+      <label>할인 적용 단가<input value={preview.toLocaleString('ko-KR')} readOnly /></label>
+    </div>
+    <p className="adm-note">판매대기 상태에서만 할인율을 설정할 수 있습니다. 0%는 할인 없음으로 처리합니다.</p>
+    <div className="adm-edit-footer">{error && <p role="alert" className="adm-form-error">{error}</p>}<div className="adm-management-actions"><a className="adm-button" href={cancelHref}>취소</a><button className="adm-button adm-primary"><Save size={16} />할인율 임시 저장</button></div></div>
+  </form></div>
+}
 
 export function MarketStatusEditor({ tab, ids, currentStatus, onChange, bulk = false, onDone }: { tab: MarketStatusTab; ids: string[]; currentStatus?: string; onChange: (ids: string[], status: string) => void; bulk?: boolean; onDone?: () => void }) {
   const [target, setTarget] = useState('')

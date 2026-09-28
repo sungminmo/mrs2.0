@@ -9,6 +9,13 @@ export const marketStatusOptions = {
 } as const
 export type MarketStatusTab = keyof typeof marketStatusOptions
 export const detailedInspectionStatus = (request: SaleRequest) => request.inspection.includes('완료') ? '상세 검수 완료' : '상세 검수 대기'
+export const discountedPrice = (product: Product) => Math.round(product.price * (100 - product.discountRate) / 100)
+
+export function setProductDiscount(product: Product, discountRate: number): Product {
+  if (product.status !== '판매대기') throw new Error('판매대기 상태인 상품만 할인율을 설정할 수 있습니다.')
+  if (!Number.isInteger(discountRate) || discountRate < 0 || discountRate > 100) throw new Error('할인율은 0~100 사이의 정수로 입력해 주세요.')
+  return { ...product, discountRate }
+}
 
 export function changeMarketStatus(data: MarketData, tab: MarketStatusTab, ids: string[], status: string): MarketData {
   if (!(marketStatusOptions[tab] as readonly string[]).includes(status)) throw new Error('변경할 상태를 선택해 주세요.')
