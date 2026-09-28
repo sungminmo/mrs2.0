@@ -1,0 +1,240 @@
+enum ReceivingStatus {
+  REQUESTED @map("입고 신청")
+  APPROVED  @map("입고 승인")
+  RECEIVED  @map("입고 완료")
+  REJECTED  @map("입고 반려")
+  CANCELLED @map("취소")
+}
+
+enum ReceivingChannel {
+  ADMIN    @map("관리자 등록")
+  WEBSITE  @map("홈페이지")
+  KAKAO    @map("카카오톡")
+  PORTAL   @map("MRS고객포탈")
+  OTHER    @map("기타")
+}
+
+enum ReceivingVolume {
+  UNDER_ONE_TON
+  TWO_POINT_FIVE_TONS
+  FIVE_TONS_OR_MORE
+  OTHER
+}
+
+enum InspectionStatus {
+  PENDING                 @map("검수 대기")
+  AWAITING_ACKNOWLEDGEMENT @map("결과 확인 대기")
+  COMPLETED               @map("검수 종료")
+}
+
+enum DisposalStatus {
+  UNPROCESSED @map("미처리")
+  SCHEDULED   @map("처리 예정")
+  COMPLETED   @map("폐기 완료")
+}
+
+enum DisposalCostStatus {
+  UNESTIMATED @map("미산정")
+  ESTIMATED   @map("예상 비용 안내")
+  CONFIRMED   @map("비용 확정")
+  BILLED      @map("청구 완료")
+}
+
+enum ReceivingStage {
+  RECEIVING
+  INSPECTION
+  DISPOSAL
+}
+
+model Receiving {
+  id                String           @id @db.VarChar(20)
+  customerId        String           @db.VarChar(20)
+  siteId            String?          @db.VarChar(20)
+  siteName          String           @db.VarChar(120)
+  managerName       String           @db.VarChar(80)
+  managerPhone      String           @db.VarChar(30)
+  channel           ReceivingChannel
+  volume            ReceivingVolume
+  volumeDescription String           @default("") @db.VarChar(160)
+  summary           String           @default("") @db.VarChar(500)
+  status            ReceivingStatus  @default(REQUESTED)
+  requestedAt       DateTime         @default(now())
+  scheduledAt       DateTime?
+  receivedAt        DateTime?
+  termsAgreedAt     DateTime
+  termsVersion      String           @db.VarChar(80)
+  termsText         String           @db.Text
+  transportEstimate Decimal?         @db.Decimal(19, 0)
+  note              String           @default("") @db.VarChar(1000)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  images     ReceivingImage[]
+  inspection Inspection?
+  history    ReceivingChange[]
+
+  @@index([customerId, requestedAt])
+  @@index([status, requestedAt])
+  @@index([siteId, requestedAt])
+  @@index([scheduledAt])
+  @@map("receivings")
+}
+
+model ReceivingImage {
+  id          String @id @default(uuid()) @db.VarChar(36)
+  receivingId String @db.VarChar(20)
+  name        String @db.VarChar(255)
+  url         String @db.Text
+  sortOrder   Int    @default(0) @db.UnsignedTinyInt
+
+  receiving Receiving @relation(fields: [receivingId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([receivingId, sortOrder])
+  @@map("receiving_images")
+}
+
+model Inspection {
+  id                  String           @id @db.VarChar(20)
+  receivingId         String           @unique @db.VarChar(20)
+  status              InspectionStatus @default(PENDING)
+  inspectorUserId     String?          @db.VarChar(36)
+  inspectedAt         DateTime?
+  notifiedAt          DateTime?
+  notificationChannel String?          @db.VarChar(80)
+  acknowledgedAt      DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  receiving Receiving        @relation(fields: [receivingId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  inspector User?            @relation(fields: [inspectorUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  items     InspectionItem[]
+  disposal  Disposal?
+
+  @@index([status, createdAt])
+  @@index([inspectorUserId, inspectedAt])
+  @@map("inspections")
+}
+
+model InspectionItem {
+  id               String      @id @default(uuid()) @db.VarChar(36)
+  inspectionId     String      @db.VarChar(20)
+  assetId          String?     @unique @db.VarChar(20)
+  name             String      @db.VarChar(160)
+  specification    String      @default("") @db.VarChar(500)
+  grade            AssetGrade?
+  unit             ItemUnit
+  receivedQuantity Decimal     @db.Decimal(18, 3)
+  usableQuantity   Decimal?    @db.Decimal(18, 3)
+  disposalQuantity Decimal?    @db.Decimal(18, 3)
+  reason           String      @default("") @db.VarChar(1000)
+  sortOrder        Int         @default(0) @db.UnsignedSmallInt
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  inspection Inspection            @relation(fields: [inspectionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  asset      Asset?                @relation(fields: [assetId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  images     InspectionItemImage[]
+  disposal   DisposalItem?
+
+  @@unique([id, inspectionId])
+  @@unique([inspectionId, sortOrder])
+  @@map("inspection_items")
+}
+
+model InspectionItemImage {
+  id               String @id @default(uuid()) @db.VarChar(36)
+  inspectionItemId String @db.VarChar(36)
+  url              String @db.Text
+  caption          String @default("") @db.VarChar(500)
+  sortOrder        Int    @default(0) @db.UnsignedSmallInt
+
+  item InspectionItem @relation(fields: [inspectionItemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([inspectionItemId, sortOrder])
+  @@map("inspection_item_images")
+}
+
+model Disposal {
+  inspectionId    String             @id @db.VarChar(20)
+  status          DisposalStatus     @default(UNPROCESSED)
+  consentRequired Boolean            @default(true)
+  consentedAt     DateTime?
+  scheduledAt     DateTime?
+  completedAt     DateTime?
+  evidence        String?            @db.Text
+  costStatus      DisposalCostStatus @default(UNESTIMATED)
+  estimate        Decimal?           @db.Decimal(19, 0)
+  amount          Decimal?           @db.Decimal(19, 0)
+  invoiceId       String?            @unique @db.VarChar(20)
+  billedAt        DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  inspection Inspection          @relation(fields: [inspectionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  items      DisposalItem[]
+  costLines  DisposalCostLine[]
+  comments   DisposalComment[]
+
+  @@index([status, scheduledAt])
+  @@index([costStatus, billedAt])
+  @@map("disposals")
+}
+
+model DisposalItem {
+  inspectionItemId  String   @id @db.VarChar(36)
+  inspectionId      String   @db.VarChar(20)
+  processedQuantity Decimal? @db.Decimal(18, 3)
+  updatedAt         DateTime @updatedAt
+
+  disposal Disposal       @relation(fields: [inspectionId], references: [inspectionId], onDelete: Restrict, onUpdate: Cascade)
+  item     InspectionItem @relation(fields: [inspectionItemId, inspectionId], references: [id, inspectionId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([inspectionItemId, inspectionId])
+  @@index([inspectionId])
+  @@map("disposal_items")
+}
+
+model DisposalCostLine {
+  id           String  @id @default(uuid()) @db.VarChar(36)
+  inspectionId String  @db.VarChar(20)
+  label        String  @db.VarChar(160)
+  amount       Decimal @db.Decimal(19, 0)
+  sortOrder    Int     @default(0) @db.UnsignedSmallInt
+
+  disposal Disposal @relation(fields: [inspectionId], references: [inspectionId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([inspectionId, sortOrder])
+  @@map("disposal_cost_lines")
+}
+
+model DisposalComment {
+  id           String   @id @default(uuid()) @db.VarChar(36)
+  inspectionId String   @db.VarChar(20)
+  authorUserId String?  @db.VarChar(36)
+  text         String   @db.VarChar(2000)
+  createdAt    DateTime @default(now())
+
+  disposal Disposal @relation(fields: [inspectionId], references: [inspectionId], onDelete: Restrict, onUpdate: Cascade)
+  author   User?    @relation(fields: [authorUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([inspectionId, createdAt])
+  @@index([authorUserId])
+  @@map("disposal_comments")
+}
+
+model ReceivingChange {
+  id          String         @id @default(uuid()) @db.VarChar(36)
+  receivingId String         @db.VarChar(20)
+  stage       ReceivingStage
+  actorUserId String?        @db.VarChar(36)
+  reason      String         @db.VarChar(500)
+  changes     Json
+  createdAt   DateTime       @default(now())
+
+  receiving Receiving @relation(fields: [receivingId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  actor     User?     @relation(fields: [actorUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([receivingId, stage, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("receiving_changes")
+}

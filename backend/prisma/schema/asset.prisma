@@ -41,11 +41,12 @@ model Asset {
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  item     MasterItem       @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  category MaterialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  images   AssetImage[]
-  history  AssetChange[] // 수동 수정 감사 이력
-  product  Product?
+  item           MasterItem       @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  category       MaterialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  images         AssetImage[]
+  history        AssetChange[] // 수동 수정 감사 이력
+  product        Product?
+  inspectionItem InspectionItem?
 
   @@index([itemId])
   @@index([categoryId])
