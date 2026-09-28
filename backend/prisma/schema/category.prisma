@@ -10,6 +10,7 @@ model MaterialCategory {
   children MaterialCategory[] @relation("CategoryTree")
   items    MasterItem[]
   assets   Asset[]
+  campaigns Campaign[]
 
   @@unique([parentId, name]) // 동일 부모 아래 이름 중복 방지
   @@index([parentId, sortOrder])

@@ -1,0 +1,73 @@
+/// 마켓 상품 운영 상태: 판매대기 -> 판매 중 -> 재고 없음
+/// 판매취소는 별도 상태가 아니라 DRAFT로 되돌리는 운영 액션이다.
+enum ProductStatus {
+  DRAFT        @map("판매대기")
+  AVAILABLE    @map("판매중")
+  OUT_OF_STOCK @map("재고없음")
+}
+
+/// 마켓 상품 또는 기획전 변경 이력의 대상 유형
+enum MarketEntityType {
+  PRODUCT
+  CAMPAIGN
+}
+
+/// 자산 단위 판매 상품. 한 자산은 하나의 상품으로만 등록할 수 있다.
+model Product {
+  id                   String              @id @db.VarChar(20)
+  assetId              String              @unique @db.VarChar(20)
+  name                 String              @db.VarChar(160) // 마켓 노출 상품명 스냅샷
+  originalUnitPrice    Decimal             @db.Decimal(19, 0) // 할인 전 단가, 원 단위·VAT 포함
+  discountRate         Int                 @default(0) @db.UnsignedTinyInt // 0~100 정수
+  listedQuantity       Decimal             @db.Decimal(18, 3) // 판매 등록 수량
+  reservedQuantity     Decimal             @default(0) @db.Decimal(18, 3) // 진행 중 구매 요청에 예약된 수량
+  soldQuantity         Decimal             @default(0) @db.Decimal(18, 3) // 출고 확정된 누적 수량
+  minimumOrderQuantity Decimal             @default(1) @db.Decimal(18, 3)
+  deliveryNotice       String              @default("") @db.VarChar(1000)
+  status               ProductStatus       @default(DRAFT)
+  publishedAt          DateTime? // 최초 판매 중 전환 시각
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([status, createdAt])
+  @@map("products")
+}
+
+/// 카테고리 기반 기획전. 선택 카테고리와 모든 하위 카테고리의 판매 중 상품을 동적으로 포함한다.
+model Campaign {
+  id          String   @id @db.VarChar(20)
+  name        String   @db.VarChar(120)
+  categoryId  String   @db.VarChar(20)
+  description String   @db.VarChar(1000)
+  enabled     Boolean  @default(false)
+  sortOrder   Int      @default(0) @db.UnsignedSmallInt
+  startsAt    DateTime
+  endsAt      DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category MaterialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([enabled, startsAt, endsAt, sortOrder])
+  @@index([categoryId])
+  @@map("campaigns")
+}
+
+/// 상품·기획전 운영 변경 감사 이력. 다형 대상은 entityType/entityId로 식별한다.
+model MarketChange {
+  id          String           @id @db.VarChar(36)
+  entityType  MarketEntityType
+  entityId    String           @db.VarChar(20)
+  actorUserId String?          @db.VarChar(36) // 시스템 변경은 null
+  reason      String           @db.VarChar(500)
+  changes     Json // 필드별 before/after 값
+  createdAt   DateTime         @default(now())
+
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("market_changes")
+}

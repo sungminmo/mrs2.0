@@ -190,6 +190,8 @@ Query:
 
 특가가 아니면 `originalUnitPrice`와 `deal`은 `null`입니다.
 
+`unitPrice`는 상품의 `originalUnitPrice`와 `discountRate`로 계산하고, `availableQuantity`는 `listedQuantity - reservedQuantity - soldQuantity`로 계산합니다. 진행 중인 기획전이 여러 개면 `sortOrder`, 종료 시각, 기획전 ID 순으로 첫 기획전을 `deal`에 사용합니다.
+
 ### GET `/products/{productId}`
 
 판매 가능한 상품 상세를 조회합니다. 비공개·판매 종료 상품은 고객에게 `404`로 응답합니다.
@@ -497,7 +499,7 @@ Query:
 현재 Prisma 스키마에는 아래 확장이 필요합니다.
 
 1. `User.businessRegistrationNumber` 추가. 자산 소유권은 `User.customerId`와 기존 고객 코드를 연결해 조회하며, 고객사 엔터티 분리는 후속 과제
-2. `Product`: 자산, 가격, 공개 상태, 판매 가능 수량, 특가 정보·기간
+2. `Product`, `Campaign`, `MarketChange`: 스키마 정의 완료. 상품·기획전 관리 API와 구매 요청 연계 구현 필요
 3. `PurchaseRequest`, `PurchaseRequestItem`: 요청자, 상품 스냅샷, 배송·연락처, 상태
 4. `SaleStatusRequest`: `START_SALE`/`CANCEL_SALE`, 승인 상태, 희망 금액, 사유
 5. `Transaction`: 유형, 금액, 상태, 업무 리소스 참조
