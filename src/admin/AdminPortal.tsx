@@ -187,6 +187,8 @@ function RecordList({ view, params, path, categories, statusTab, onStatusChange 
   if (selection.scope !== scope) setSelection({ scope, ids: [] })
   const bulk = statusTab === 'sales' || statusTab === 'products'
   const query = params.get('q') ?? ''
+  const [search, setSearch] = useState({ scope, text: query })
+  if (search.scope !== scope) setSearch({ scope, text: query })
   const status = params.get('status') ?? ''
   const customer = params.get('customer') ?? ''
   const period = params.get('period') ?? ''
@@ -224,7 +226,7 @@ function RecordList({ view, params, path, categories, statusTab, onStatusChange 
   return <>
     {(view.rows.some((row) => row.categoryId) || categoryId) && <div className="adm-category-filter"><CategorySelect categories={categories} value={categoryId} onChange={(value) => update('category', value)} /></div>}
     <div className="adm-filterbar">
-      <label className="adm-search"><span>검색</span><div><Search size={16} /><input type="search" value={query} onChange={(event) => update('q', event.target.value)} placeholder="번호, 이름, 고객사" /></div></label>
+      <label className="adm-search"><span>검색</span><div><Search size={16} /><input type="search" value={search.text} onChange={(event) => setSearch({ scope, text: event.target.value })} placeholder="번호, 이름, 고객사" /></div></label><button className="adm-button" type="button" onClick={() => update('q', search.text)}>검색</button>
       <label><span>{path === 'basic' ? '사용 구분' : extraFilters.length ? '보관 상태' : '상태'}</span><select value={status} onChange={(event) => update('status', event.target.value)}><option value="">전체 상태</option>{status && !statuses.includes(status) && <option value={status}>{status}</option>}{statuses.map((value) => <option key={value}>{value}</option>)}</select></label>
       {extraFilters.map(([key, label]) => { const values = [...new Set(view.rows.flatMap((row) => row[key] ? [row[key]!] : []))]; const selected = params.get(key) ?? ''; return <label key={key}><span>{label}</span><select value={selected} onChange={(event) => update(key, event.target.value)}><option value="">전체</option>{selected && !values.includes(selected) && <option value={selected}>{selected}</option>}{values.map((value) => <option key={value}>{value}</option>)}</select></label> })}
       {availableCustomers.length > 0 && <label><span>고객사</span><select value={customer} onChange={(event) => update('customer', event.target.value)}><option value="">전체 고객사</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}

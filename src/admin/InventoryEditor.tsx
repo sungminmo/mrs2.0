@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, Save, Upload, X } from 'lucide-react'
+import { ArrowLeft, Save, Search, Upload, X } from 'lucide-react'
 import { customerForSite, customers, itemUnits, receivings, sites, type AdminImage, type Inspection, type Inventory, type Location, type MasterItem } from './adminData'
 import { categoryEnabled, type MaterialCategory } from '../categories'
 import CategorySelect from '../CategorySelect'
@@ -60,6 +60,7 @@ function AssetForm({ items, assets, inspections = [], categories, locations, id,
   const [itemId, setItemId] = useState(asset?.itemId ?? '')
   const [receivingId, setReceivingId] = useState(asset?.receivingId ?? '')
   const [query, setQuery] = useState('')
+  const [searchText, setSearchText] = useState('')
   const [images, setImages] = useState<AdminImage[]>(asset?.images ?? [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -83,7 +84,7 @@ function AssetForm({ items, assets, inspections = [], categories, locations, id,
       <label>입고 신청번호<select value={receivingId} onChange={(event) => setReceivingId(event.target.value)} disabled={!!asset} required autoFocus><option value="" disabled>입고 신청 선택</option>{receivings.filter((request) => request.status !== '취소').map((request) => <option key={request.id} value={request.id}>{request.id} · {request.summary}</option>)}</select></label>
       <label>고객사<input value={customer?.name ?? ''} readOnly placeholder="입고 신청 선택 시 자동 연결" /></label>
       <label>현장<input value={sites.find((site) => site.id === receiving?.siteId)?.name ?? ''} readOnly /></label>
-      {!asset && <label>품목 검색<input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="품목코드, 품목명, 규격, 브랜드" /></label>}
+      {!asset && <><label>품목 검색<input type="search" value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="품목코드, 품목명, 규격, 브랜드" /></label><button className="adm-button" type="button" onClick={() => setQuery(searchText)}><Search size={16} />검색</button></>}
       <label>품목코드<select value={itemId} onChange={(event) => setItemId(event.target.value)} required disabled={!!asset}><option value="" disabled>품목 선택</option>{availableItems.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.id} · {candidate.name}{candidate.enabled ? '' : ' (미사용)'}</option>)}</select>{!availableItems.length && <small>일치하는 사용 품목이 없습니다.</small>}</label>
     </div>
     <h2>자산 정보</h2>
