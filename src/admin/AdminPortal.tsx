@@ -30,7 +30,8 @@ export default function AdminPortal({ hash }: { hash: string }) {
   const [receivingRecords, setReceivingRecords] = useState<Receiving[]>([])
   const [inspectionRecords, setInspectionRecords] = useState<Inspection[]>([])
   const [loadingData, setLoadingData] = useState(true)
-  const [notice, setNotice] = useState({ scope: '', text: '' })
+  const [notice, setNoticeState] = useState({ scope: '', text: '' })
+  const setNotice = (next: { scope: string; text: string }) => setNoticeState({ ...next, text: next.text.replace('파일에서 임시 등록', '파일에서 DB에 등록') })
   useEffect(() => {
     let active = true
     Promise.all([authenticatedFetch('/api/admin/data'), authenticatedFetch('/api/admin/members')]).then(async ([dataResponse, memberResponse]) => {

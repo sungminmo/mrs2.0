@@ -1,22 +1,38 @@
 /// 품목 계량 단위
 enum ItemUnit {
   EA
+  SET @map("Set")
+  ROLL @map("롤")
+  BAR @map("봉")
+  SURFACE @map("면")
   BOX @map("Box")
   KG  @map("kg")
   TON @map("ton")
   M   @map("m")
   M3  @map("m³")
   PIECE @map("본")
+  PAIR @map("켤레")
+  GROUP @map("조")
+  SHEET @map("장")
+  SETUP @map("식")
+  CASE @map("건")
+  CONTAINER @map("통")
+  BUNDLE @map("묶음")
+  UNIT @map("대")
+  BAG @map("포")
+  PACK @map("곽")
+  CARTON @map("갑")
+  OTHER @map("기타")
 }
 
 /// 품목 마스터(카탈로그). 실제 입고 자산(Asset)은 품목을 참조해 생성됨
 model MasterItem {
   id            String   @id @db.VarChar(6) // 관리자가 입력·변경하는 6자리 숫자 코드
   name          String   @db.VarChar(160)
-  categoryId    String   @db.VarChar(6)
+  categoryId    String?  @db.VarChar(6)
   specification String   @db.VarChar(255)
   brand         String   @default("") @db.VarChar(160)
-  unit          ItemUnit
+  unit          ItemUnit?
   inboundPrice  Decimal? @db.Decimal(19, 0) // 입고(매입) 기준가, 미정 시 null
   outboundPrice Decimal? @db.Decimal(19, 0) // 출고 기준가, 미정 시 null
   standardPrice Decimal? @db.Decimal(19, 0) // 등급 할인 적용 전 표준 판매가
@@ -25,7 +41,7 @@ model MasterItem {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  category MaterialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  category MaterialCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   images   MasterItemImage[]
   assets   Asset[]
 
@@ -39,7 +55,7 @@ model MasterItemImage {
   id           String @id @db.VarChar(36)
   masterItemId String @db.VarChar(6)
   name         String @db.VarChar(255)
-  url          String @db.Text
+  url          String @db.LongText
   sortOrder    Int    @default(0)
 
   masterItem MasterItem @relation(fields: [masterItemId], references: [id], onDelete: Cascade, onUpdate: Cascade)

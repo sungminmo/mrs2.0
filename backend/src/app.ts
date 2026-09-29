@@ -4,7 +4,7 @@ import { assetListRoute, listAssets, type AssetRepository } from './asset.js'
 import { approveMember, authRoutes, currentUser, listMembers, register, requireAdmin, requireAuth, type AuthRepository } from './auth.js'
 import { listAdminBanners, listPublicBanners, saveBanner, type BannerRepository } from './banner.js'
 import { ErrorCode, failure, handleError, success } from './http.js'
-import { loadAdminData, type AdminDataRepository } from './admin-data.js'
+import { createAdminItems, loadAdminData, type AdminDataRepository } from './admin-data.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -37,7 +37,10 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
     app.get('/api/auth/me', requireAuth(auth.repository, auth.secret), currentUser)
     app.get('/api/admin/members', requireAuth(auth.repository, auth.secret), requireAdmin, listMembers(auth.repository))
     app.post('/api/admin/members/:id/approve', requireAuth(auth.repository, auth.secret), requireAdmin, approveMember(auth.repository))
-    if (adminData) app.get('/api/admin/data', requireAuth(auth.repository, auth.secret), requireAdmin, loadAdminData(adminData))
+    if (adminData) {
+      app.get('/api/admin/data', requireAuth(auth.repository, auth.secret), requireAdmin, loadAdminData(adminData))
+      app.post('/api/admin/items', requireAuth(auth.repository, auth.secret), requireAdmin, createAdminItems(adminData))
+    }
     if (assets) {
       app.use('/api/assets', requireAuth(auth.repository, auth.secret))
       app.openapi(assetListRoute, listAssets(assets))

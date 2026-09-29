@@ -4,13 +4,14 @@ import { customerForSite, customers, itemUnits, receivings, sites, type AdminIma
 import { categoryEnabled, type MaterialCategory } from '../categories'
 import CategorySelect from '../CategorySelect'
 import { nextAssetCode, prepareInventory, validateMasterItem } from './adminInventory'
+import { registerAdminItems } from './adminItems'
 
 type Props = { kind: 'items' | 'inventory'; items: MasterItem[]; assets: Inventory[]; inspections?: Inspection[]; categories: MaterialCategory[]; locations: Location[]; id: string | null; cancelHref: string; onSaveItem: (item: MasterItem, previousId: string | null) => void; onSaveAsset: (asset: Inventory) => void }
 
 export default function InventoryEditor(props: Props) {
   return <section className="adm-editor">
     <a className="adm-button adm-back" href={props.cancelHref}><ArrowLeft size={15} />취소하고 돌아가기</a>
-    <p className="adm-note">임시 저장 · 새로고침하거나 고객 포털로 이동하면 초기화됩니다.</p>
+    <p className="adm-note">{props.kind === 'items' && !props.id ? '신규 품목은 개발 DB에 저장됩니다.' : '임시 저장 · 새로고침하거나 고객 포털로 이동하면 초기화됩니다.'}</p>
     {props.kind === 'items' ? <ItemForm {...props} /> : <AssetForm {...props} />}
   </section>
 }
@@ -24,11 +25,16 @@ function ItemForm({ items, assets, categories, id, onSaveItem }: Props) {
   const [images, setImages] = useState<AdminImage[]>(item?.images ?? [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
     const next: MasterItem = { id: text(data, 'id'), name: text(data, 'name'), category: text(data, 'category'), specification: text(data, 'specification'), brand: text(data, 'brand'), unit: (linked ? item!.unit : text(data, 'unit')) as MasterItem['unit'], inboundPrice: price(data, 'inboundPrice'), outboundPrice: price(data, 'outboundPrice'), standardPrice: price(data, 'standardPrice'), enabled: data.get('enabled') === 'on', note: text(data, 'note'), images }
-    try { validateMasterItem(next, items, assets, categories, item?.id); onSaveItem(next, item?.id ?? null) } catch (error) { setError((error as Error).message) }
+    try {
+      validateMasterItem(next, items, assets, categories, item?.id)
+      setBusy(true)
+      const savedItem = item ? next : (await registerAdminItems([next]))[0]
+      onSaveItem(savedItem, item?.id ?? null)
+    } catch (error) { setError((error as Error).message) } finally { setBusy(false) }
   }
   return <form onSubmit={submit} className="adm-edit-form">
     <h2>품목 기본 정보</h2>
@@ -45,7 +51,7 @@ function ItemForm({ items, assets, categories, id, onSaveItem }: Props) {
     <ImagePicker images={images} onChange={setImages} limit={1} onBusy={setBusy} label="대표 이미지" />
     <label className="adm-check"><input name="enabled" type="checkbox" defaultChecked={item?.enabled ?? true} />사용 품목</label>
     <label className="adm-edit-memo">적요 (선택)<textarea name="note" defaultValue={item?.note} rows={4} maxLength={2000} /></label>
-    <SaveFooter busy={busy} error={error} />
+    <SaveFooter busy={busy} error={error} label={item ? '임시 저장' : '품목 등록'} />
   </form>
 }
 
@@ -60,13 +66,13 @@ function AssetForm({ items, assets, inspections = [], categories, locations, id,
   const item = items.find((candidate) => candidate.id === itemId)
   const receiving = receivings.find((candidate) => candidate.id === receivingId)
   const customer = receiving ? customers.find((candidate) => candidate.id === customerForSite(receiving.siteId)) : null
-  const availableItems = items.filter((candidate) => candidate.id === itemId || candidate.enabled && categoryEnabled(categories, candidate.category) && [candidate.id, candidate.name, candidate.specification, candidate.brand].join(' ').toLocaleLowerCase('ko-KR').includes(query.trim().toLocaleLowerCase('ko-KR')))
+  const availableItems = items.filter((candidate) => candidate.id === itemId || candidate.enabled && !!candidate.unit && categoryEnabled(categories, candidate.category) && [candidate.id, candidate.name, candidate.specification, candidate.brand].join(' ').toLocaleLowerCase('ko-KR').includes(query.trim().toLocaleLowerCase('ko-KR')))
   const receivedAt = inspections.find((inspection) => inspection.receivingId === receivingId)?.date
   const code = asset?.id ?? (receivedAt ? nextAssetCode(receivedAt, assets) : '')
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
-    if (!item) { setError('품목을 선택해 주세요.'); return }
+    if (!item || !item.unit) { setError('카테고리와 기준 단위가 등록된 품목을 선택해 주세요.'); return }
     const next: Inventory = { id: code, itemId, receivingId, customerId: customer?.id ?? '', receiptId: asset?.receiptId ?? null, name: text(data, 'name'), category: text(data, 'category'), specification: text(data, 'specification'), brand: text(data, 'brand'), quantity: Number(text(data, 'quantity')), unit: item.unit, locationId: text(data, 'locationId'), grade: text(data, 'grade') as Inventory['grade'], status: text(data, 'status') as Inventory['status'], saleStatus: text(data, 'saleStatus') as Inventory['saleStatus'], appraisal: asset?.appraisal ?? null, images, history: asset?.history ?? [] }
     try { onSaveAsset(prepareInventory(next, asset, items, text(data, 'reason'), categories, locations)) } catch (error) { setError((error as Error).message) }
   }
@@ -103,10 +109,10 @@ function AssetForm({ items, assets, inspections = [], categories, locations, id,
   </form>
 }
 
-function SaveFooter({ busy, error }: { busy: boolean; error: string }) {
+function SaveFooter({ busy, error, label = '임시 저장' }: { busy: boolean; error: string; label?: string }) {
   const errorRef = useRef<HTMLParagraphElement>(null)
   useEffect(() => { if (error) errorRef.current?.focus() }, [error])
-  return <div className="adm-edit-footer">{error && <p className="adm-form-error" role="alert" ref={errorRef} tabIndex={-1}>{error}</p>}<button className="adm-button adm-primary" type="submit" disabled={busy}><Save size={16} />{busy ? '이미지 확인 중...' : '임시 저장'}</button></div>
+  return <div className="adm-edit-footer">{error && <p className="adm-form-error" role="alert" ref={errorRef} tabIndex={-1}>{error}</p>}<button className="adm-button adm-primary" type="submit" disabled={busy}><Save size={16} />{busy ? '저장 중...' : label}</button></div>
 }
 
 function loadImage(file: File): Promise<AdminImage> {

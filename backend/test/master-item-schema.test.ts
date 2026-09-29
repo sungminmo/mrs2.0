@@ -63,4 +63,14 @@ test('master item codes migrate to editable unique six-digit values on isolated 
   await context.test('item reference columns are six characters', () => {
     assert.equal(sql("SELECT GROUP_CONCAT(CONCAT(TABLE_NAME, '.', COLUMN_NAME, ':', CHARACTER_MAXIMUM_LENGTH) ORDER BY TABLE_NAME, COLUMN_NAME SEPARATOR '|') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND ((TABLE_NAME = 'master_items' AND COLUMN_NAME = 'id') OR (TABLE_NAME = 'master_item_images' AND COLUMN_NAME = 'masterItemId') OR (TABLE_NAME = 'assets' AND COLUMN_NAME = 'itemId'))"), 'assets.itemId:6|master_item_images.masterItemId:6|master_items.id:6')
   })
+
+  sql(readFileSync(new URL('20260929003000_allow_incomplete_master_items/migration.sql', migrations), 'utf8'))
+
+  await context.test('file items allow missing category and unit while supporting admin units', () => {
+    sql("INSERT INTO master_items (id, name, categoryId, specification, brand, unit, note, updatedAt) VALUES ('200001', '', NULL, '', '', NULL, '', NOW(3)), ('200002', 'Sheet item', '010000', '', '', '장', '', NOW(3))")
+    assert.equal(sql("SELECT CONCAT(COALESCE(categoryId, 'NULL'), ':', COALESCE(unit, 'NULL')) FROM master_items WHERE id = '200001'"), 'NULL:NULL')
+    assert.equal(sql("SELECT unit FROM master_items WHERE id = '200002'"), '장')
+    assert.equal(sql("SELECT CONCAT(COLUMN_NAME, ':', IS_NULLABLE) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'master_items' AND COLUMN_NAME IN ('categoryId', 'unit') ORDER BY COLUMN_NAME"), 'categoryId:YES\nunit:YES')
+    assert.equal(sql("SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'master_item_images' AND COLUMN_NAME = 'url'"), 'longtext')
+  })
 })

@@ -1,8 +1,11 @@
 import type { PrismaClient } from './generated/prisma/client.js'
 import type { Context } from 'hono'
-import { success } from './http.js'
+import { z } from 'zod'
+import { AppError, ErrorCode, success } from './http.js'
 
-const unit = { EA: 'EA', BOX: 'Box', KG: 'kg', TON: 'ton', M: 'M', M3: 'm³', PIECE: '본' } as const
+const unit = { EA: 'EA', SET: 'Set', ROLL: '롤', BAR: '봉', SURFACE: '면', BOX: 'Box', KG: 'kg', TON: 'ton', M: 'M', M3: 'm³', PIECE: '본', PAIR: '켤레', GROUP: '조', SHEET: '장', SETUP: '식', CASE: '건', CONTAINER: '통', BUNDLE: '묶음', UNIT: '대', BAG: '포', PACK: '곽', CARTON: '갑', OTHER: '기타' } as const
+type ItemUnit = keyof typeof unit
+const databaseUnit = Object.fromEntries(Object.entries(unit).map(([key, value]) => [value, key])) as Record<(typeof unit)[ItemUnit], ItemUnit>
 const storageStatus = { PENDING: '입고대기', STORED: '보관중', RELEASED: '출고완료' } as const
 const saleStatus = { PENDING: '판매대기', ON_SALE: '판매중', SOLD: '판매완료' } as const
 const productStatus = { DRAFT: '판매대기', AVAILABLE: '판매 중', OUT_OF_STOCK: '재고 없음' } as const
@@ -26,7 +29,7 @@ export function createAdminDataRepository(client: PrismaClient) {
       ])
       return {
         categories: categories.map((category) => ({ id: category.id, parentId: category.parentId, name: category.name, enabled: category.enabled, order: category.sortOrder })),
-        items: items.map((item) => ({ id: item.id, name: item.name, category: item.categoryId, specification: item.specification, brand: item.brand, unit: unit[item.unit], inboundPrice: item.inboundPrice === null ? null : Number(item.inboundPrice), outboundPrice: item.outboundPrice === null ? null : Number(item.outboundPrice), standardPrice: item.standardPrice === null ? null : Number(item.standardPrice), enabled: item.enabled, note: item.note, images: item.images.map((image) => ({ id: image.id, name: image.name, url: image.url })) })),
+        items: items.map(itemPayload),
         assets: assets.map((asset) => ({ id: asset.id, itemId: asset.itemId, receivingId: asset.receivingId, customerId: asset.customerId, receiptId: asset.receiptId, locationId: asset.locationId ?? '', name: asset.name, category: asset.categoryId, brand: asset.brand, grade: asset.grade, quantity: Number(asset.quantity), unit: unit[asset.unit], appraisal: asset.appraisal === null ? null : Number(asset.appraisal), status: storageStatus[asset.storageStatus], saleStatus: saleStatus[asset.saleStatus], specification: asset.specification, images: asset.images.map((image) => ({ id: image.id, name: image.name, url: image.url })), history: asset.history.map((entry) => ({ at: entry.createdAt.toISOString(), reason: entry.reason, changes: entry.changes })) })),
         receivings: receivings.map((receiving) => ({ id: receiving.id, customerId: receiving.customerId, siteId: receiving.siteId ?? receiving.id, siteName: receiving.siteName, managerName: receiving.managerName, managerPhone: receiving.managerPhone, date: receiving.requestedAt.toISOString(), channel: receivingChannel[receiving.channel], volume: receiving.volumeDescription || receivingVolume[receiving.volume], summary: receiving.summary, status: receivingStatus[receiving.status], scheduledAt: receiving.scheduledAt?.toISOString() ?? null, termsAt: receiving.termsAgreedAt.toISOString(), estimate: receiving.transportEstimate === null ? null : Number(receiving.transportEstimate), note: receiving.note })),
         inspections: inspections.map((inspection) => ({ id: inspection.id, receivingId: inspection.receivingId, date: inspection.createdAt.toISOString(), inspectedAt: inspection.inspectedAt?.toISOString() ?? null, notifiedAt: inspection.notifiedAt?.toISOString() ?? null, status: inspectionStatus[inspection.status], acknowledgedAt: inspection.acknowledgedAt?.toISOString() ?? null, disposalStatus: inspection.disposal ? disposalStatus[inspection.disposal.status] : '판정 대기', materials: inspection.items.map((item) => ({ assetId: item.assetId, name: item.name, grade: item.grade, unit: unit[item.unit], received: Number(item.receivedQuantity), usable: item.usableQuantity === null ? null : Number(item.usableQuantity), disposal: item.disposalQuantity === null ? null : Number(item.disposalQuantity), processed: item.disposal?.processedQuantity === null || item.disposal?.processedQuantity === undefined ? null : Number(item.disposal.processedQuantity), reason: item.reason })), evidence: inspection.disposal?.evidence ?? null })),
@@ -34,6 +37,26 @@ export function createAdminDataRepository(client: PrismaClient) {
         campaigns: campaigns.map((campaign) => ({ id: campaign.id, name: campaign.name, category: campaign.categoryId, description: campaign.description, enabled: campaign.enabled, order: campaign.sortOrder, startsAt: campaign.startsAt.toISOString(), endsAt: campaign.endsAt.toISOString() })),
       }
     },
+    createItems: (items: AdminItemInput[]) => client.$transaction(async (transaction) => Promise.all(items.map(async (item) => {
+      const created = await transaction.masterItem.create({
+        data: {
+          id: item.id,
+          name: item.name,
+          categoryId: item.category,
+          specification: item.specification,
+          brand: item.brand,
+          unit: item.unit,
+          inboundPrice: item.inboundPrice,
+          outboundPrice: item.outboundPrice,
+          standardPrice: item.standardPrice,
+          enabled: item.enabled,
+          note: item.note,
+          images: item.images.length ? { create: item.images.map((image, sortOrder) => ({ ...image, sortOrder })) } : undefined,
+        },
+        include: { images: { orderBy: { sortOrder: 'asc' } } },
+      })
+      return itemPayload(created)
+    }))),
   }
 }
 
@@ -41,4 +64,39 @@ export type AdminDataRepository = ReturnType<typeof createAdminDataRepository>
 
 export function loadAdminData(repository: AdminDataRepository) {
   return async (context: Context) => success(context, await repository.load())
+}
+
+const imageInput = z.object({ id: z.uuid(), name: z.string().trim().min(1).max(255), url: z.string().min(1).max(7_000_000) })
+const itemUnit = z.enum(Object.values(unit) as [(typeof unit)[ItemUnit], ...(typeof unit)[ItemUnit][]])
+const itemInput = z.object({
+  id: z.string().regex(/^\d{6}$/),
+  name: z.string().trim().max(160),
+  category: z.union([z.string().regex(/^\d{6}$/), z.literal('')]).transform((value) => value || null),
+  specification: z.string().trim().max(255),
+  brand: z.string().trim().max(160),
+  unit: z.union([itemUnit, z.literal('')]).transform((value) => value ? databaseUnit[value] : null),
+  inboundPrice: z.number().min(0).max(1e12).nullable(),
+  outboundPrice: z.number().min(0).max(1e12).nullable(),
+  standardPrice: z.number().min(0).max(1e12).nullable(),
+  enabled: z.boolean(),
+  note: z.string().trim().max(65535),
+  images: z.array(imageInput).max(1),
+})
+
+type AdminItemInput = z.output<typeof itemInput>
+
+function itemPayload(item: { id: string; name: string; categoryId: string | null; specification: string; brand: string; unit: ItemUnit | null; inboundPrice: { toString(): string } | number | null; outboundPrice: { toString(): string } | number | null; standardPrice: { toString(): string } | number | null; enabled: boolean; note: string; images: { id: string; name: string; url: string }[] }) {
+  return { id: item.id, name: item.name, category: item.categoryId ?? '', specification: item.specification, brand: item.brand, unit: item.unit ? unit[item.unit] : '', inboundPrice: item.inboundPrice === null ? null : Number(item.inboundPrice), outboundPrice: item.outboundPrice === null ? null : Number(item.outboundPrice), standardPrice: item.standardPrice === null ? null : Number(item.standardPrice), enabled: item.enabled, note: item.note, images: item.images.map((image) => ({ id: image.id, name: image.name, url: image.url })) }
+}
+
+export function createAdminItems(repository: AdminDataRepository) {
+  return async (context: Context) => {
+    const input = z.object({ items: z.array(itemInput).min(1) }).parse(await context.req.json())
+    if (new Set(input.items.map((item) => item.id)).size !== input.items.length) throw new AppError(409, ErrorCode.CONFLICT, '요청에 중복된 품목코드가 포함되어 있습니다.')
+    try {
+      return success(context, { items: await repository.createItems(input.items) }, 201)
+    } catch {
+      throw new AppError(409, ErrorCode.CONFLICT, '품목을 등록하지 못했습니다. 품목코드, 카테고리 및 중복 데이터를 확인해 주세요.')
+    }
+  }
 }

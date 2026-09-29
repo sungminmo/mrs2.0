@@ -20,7 +20,7 @@ export function validateMasterItem(item: MasterItem, items: MasterItem[], assets
   if (!/^\d{6}$/.test(item.id)) throw new Error('품목코드는 숫자 6자리로 입력해 주세요.')
   if (items.some((candidate) => candidate.id === item.id && candidate.id !== previousId)) throw new Error('이미 사용 중인 품목코드입니다.')
   if (!item.name.trim() || !item.specification.trim()) throw new Error('품목명과 규격을 입력해 주세요.')
-  if (!itemUnits.includes(item.unit)) throw new Error('유효한 단위를 선택해 주세요.')
+  if (!itemUnits.includes(item.unit as typeof itemUnits[number])) throw new Error('유효한 단위를 선택해 주세요.')
   validateLeafCategory(categories, item.category, previousId ? items.find((candidate) => candidate.id === previousId)?.category : undefined)
   if ([item.inboundPrice, item.outboundPrice, item.standardPrice].some((price) => price !== null && (!Number.isFinite(price) || price < 0 || price > 1e12))) throw new Error('단가는 0~1조 원 범위로 입력해 주세요. 미입력은 미산정으로 관리합니다.')
   const previous = previousId ? items.find((candidate) => candidate.id === previousId) : undefined
@@ -33,7 +33,7 @@ export function validateMasterItem(item: MasterItem, items: MasterItem[], assets
 export function prepareInventory(asset: Inventory, previous: Inventory | undefined, items: MasterItem[], reason: string, categories: MaterialCategory[] = materialCategories, locationRecords: Location[] = locations): Inventory {
   const item = items.find((candidate) => candidate.id === asset.itemId)
   const receiving = receivings.find((candidate) => candidate.id === asset.receivingId)
-  if (!item || (!item.enabled && previous?.itemId !== item.id)) throw new Error('사용 중인 품목을 선택해 주세요.')
+  if (!item || !item.unit || (!item.enabled && previous?.itemId !== item.id)) throw new Error('카테고리와 기준 단위가 등록된 사용 품목을 선택해 주세요.')
   if (!receiving || receiving.status === '취소') throw new Error('취소되지 않은 입고 신청을 선택해 주세요.')
   if (previous && (previous.itemId !== asset.itemId || previous.receivingId !== asset.receivingId)) throw new Error('등록된 자산의 품목과 입고 신청은 변경할 수 없습니다.')
   if (!asset.name.trim() || !asset.specification.trim()) throw new Error('자산명과 규격을 입력해 주세요.')
