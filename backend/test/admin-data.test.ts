@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createApp } from '../src/app.js'
 import { hashPassword, type AuthRepository, type AuthUser } from '../src/auth.js'
+import { createAdminDataRepository } from '../src/admin-data.js'
 
 const secret = 'test-only-secret-at-least-32-characters'
 
@@ -55,4 +56,33 @@ test('item registration requires an administrator and rejects duplicate request 
 
   const customer = await fixture('CUSTOMER')
   assert.equal((await customer.app.request('/api/admin/items', { method: 'POST', headers: { Authorization: `Bearer ${customer.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [item] }) })).status, 403)
+})
+
+test('item repository batches large imports and preserves input order', async () => {
+  const createBatchSizes: number[] = []
+  const findBatchSizes: number[] = []
+  const stored = new Map<string, Record<string, unknown>>()
+  const transaction = {
+    masterItem: {
+      createMany: async ({ data }: { data: Record<string, unknown>[] }) => {
+        createBatchSizes.push(data.length)
+        for (const item of data) stored.set(String(item.id), item)
+        return { count: data.length }
+      },
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) => {
+        findBatchSizes.push(where.id.in.length)
+        return where.id.in.map((id) => ({ ...stored.get(id), id, images: [] }))
+      },
+    },
+    masterItemImage: { createMany: async ({ data }: { data: unknown[] }) => ({ count: data.length }) },
+  }
+  const client = { $transaction: async (operation: (value: typeof transaction) => Promise<unknown>) => operation(transaction) }
+  const repository = createAdminDataRepository(client as never)
+  const items = Array.from({ length: 2005 }, (_, index) => ({ id: String(index + 1).padStart(6, '0'), name: `Item ${index}`, category: null, specification: '', brand: '', unit: null, inboundPrice: null, outboundPrice: null, standardPrice: null, enabled: true, note: '', images: [] }))
+  const created = await repository.createItems(items)
+  assert.deepEqual(createBatchSizes, [1000, 1000, 5])
+  assert.deepEqual(findBatchSizes, [1000, 1000, 5])
+  assert.equal(created.length, 2005)
+  assert.equal(created[0]?.id, '000001')
+  assert.equal(created.at(-1)?.id, '002005')
 })

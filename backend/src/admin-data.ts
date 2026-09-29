@@ -14,6 +14,11 @@ const receivingChannel = { ADMIN: '관리자 등록', WEBSITE: '홈페이지', K
 const receivingVolume = { UNDER_ONE_TON: '1톤 이하', TWO_POINT_FIVE_TONS: '2.5톤', FIVE_TONS_OR_MORE: '5톤 이상', OTHER: '기타' } as const
 const inspectionStatus = { PENDING: '검수 대기', AWAITING_ACKNOWLEDGEMENT: '결과 확인 대기', COMPLETED: '검수 종료' } as const
 const disposalStatus = { UNPROCESSED: '미처리', SCHEDULED: '처리 예정', COMPLETED: '폐기 완료' } as const
+const itemBatchSize = 1000
+
+function chunks<T>(values: T[]) {
+  return Array.from({ length: Math.ceil(values.length / itemBatchSize) }, (_, index) => values.slice(index * itemBatchSize, (index + 1) * itemBatchSize))
+}
 
 export function createAdminDataRepository(client: PrismaClient) {
   return {
@@ -37,9 +42,8 @@ export function createAdminDataRepository(client: PrismaClient) {
         campaigns: campaigns.map((campaign) => ({ id: campaign.id, name: campaign.name, category: campaign.categoryId, description: campaign.description, enabled: campaign.enabled, order: campaign.sortOrder, startsAt: campaign.startsAt.toISOString(), endsAt: campaign.endsAt.toISOString() })),
       }
     },
-    createItems: (items: AdminItemInput[]) => client.$transaction(async (transaction) => Promise.all(items.map(async (item) => {
-      const created = await transaction.masterItem.create({
-        data: {
+    createItems: (items: AdminItemInput[]) => client.$transaction(async (transaction) => {
+      const records = items.map((item) => ({
           id: item.id,
           name: item.name,
           categoryId: item.category,
@@ -51,12 +55,15 @@ export function createAdminDataRepository(client: PrismaClient) {
           standardPrice: item.standardPrice,
           enabled: item.enabled,
           note: item.note,
-          images: item.images.length ? { create: item.images.map((image, sortOrder) => ({ ...image, sortOrder })) } : undefined,
-        },
-        include: { images: { orderBy: { sortOrder: 'asc' } } },
-      })
-      return itemPayload(created)
-    }))),
+      }))
+      for (const batch of chunks(records)) await transaction.masterItem.createMany({ data: batch })
+      const images = items.flatMap((item) => item.images.map((image, sortOrder) => ({ ...image, masterItemId: item.id, sortOrder })))
+      for (const batch of chunks(images)) await transaction.masterItemImage.createMany({ data: batch })
+      const created = []
+      for (const ids of chunks(items.map((item) => item.id))) created.push(...await transaction.masterItem.findMany({ where: { id: { in: ids } }, include: { images: { orderBy: { sortOrder: 'asc' } } } }))
+      const byId = new Map(created.map((item) => [item.id, item]))
+      return items.map((item) => itemPayload(byId.get(item.id)!))
+    }, { maxWait: 10_000, timeout: 120_000 }),
   }
 }
 
@@ -91,7 +98,7 @@ function itemPayload(item: { id: string; name: string; categoryId: string | null
 
 export function createAdminItems(repository: AdminDataRepository) {
   return async (context: Context) => {
-    const input = z.object({ items: z.array(itemInput).min(1) }).parse(await context.req.json())
+    const input = z.object({ items: z.array(itemInput).min(1).max(50_000) }).parse(await context.req.json())
     if (new Set(input.items.map((item) => item.id)).size !== input.items.length) throw new AppError(409, ErrorCode.CONFLICT, '요청에 중복된 품목코드가 포함되어 있습니다.')
     try {
       return success(context, { items: await repository.createItems(input.items) }, 201)
