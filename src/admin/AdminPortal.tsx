@@ -127,7 +127,7 @@ export default function AdminPortal({ hash }: { hash: string }) {
     <header className="adm-header">
       <button className="adm-icon adm-menu-toggle" aria-label={menuOpen ? '관리 메뉴 닫기' : '관리 메뉴 열기'} aria-expanded={menuOpen} aria-controls="admin-navigation" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
       <a className="adm-brand" href="#/admin/dashboard">MRS <span>ADMIN</span></a>
-      <span className="adm-prototype">독립 예시 · 관리자 데이터 임시 편집</span>
+      <span className="adm-prototype">스테이징 · 개발 데이터</span>
       <a className="adm-customer-link" href="/mrs2.0/">고객 포털<ArrowUpRight size={16} /></a>
       <button type="button" className="adm-icon" title="로그아웃" aria-label="로그아웃" onClick={() => signOut()}><LogOut size={17} /></button>
     </header>
@@ -136,7 +136,7 @@ export default function AdminPortal({ hash }: { hash: string }) {
       <div className="adm-sidebar-note">예시 기준일<strong>{dateText(referenceDate)}</strong><span>한국 표준시 · KST</span></div>
     </aside>
     <main className="adm-main">
-      <div className="adm-heading"><div><div className="adm-breadcrumb">운영 관리 / {menu.label}{row ? ` / ${row.id}` : ''}</div><h1 ref={heading} tabIndex={-1}>{discountEditing ? `${row?.title} 할인율 설정` : occupancyEditing ? `${row?.title} 점유 재고 편집` : editing ? `${recordKind} ${mode === 'new' ? '등록' : '수정'}` : row ? row.title : menu.label}</h1></div><span className="adm-mode">관리자 시안</span></div>
+      <div className="adm-heading"><div><div className="adm-breadcrumb">스테이징 관리 / {menu.label}{row ? ` / ${row.id}` : ''}</div><h1 ref={heading} tabIndex={-1}>{discountEditing ? `${row?.title} 할인율 설정` : occupancyEditing ? `${row?.title} 점유 재고 편집` : editing ? `${recordKind} ${mode === 'new' ? '등록' : '수정'}` : row ? row.title : menu.label}</h1></div><span className="adm-mode">STAGING</span></div>
       {loadingData && <p className="adm-note" role="status">개발 DB 데이터를 불러오는 중입니다.</p>}
       {notice.scope === 'database' && <p className="adm-form-error" role="alert">{notice.text}</p>}
       {menu.id === 'dashboard' ? <Dashboard views={views} /> : <>
@@ -151,7 +151,7 @@ export default function AdminPortal({ hash }: { hash: string }) {
         </>}
         </>}
       </>}
-      <footer className="adm-footer">MRS 운영 관리 · 예시 데이터 / 실제 승인·발송·청구 없음</footer>
+      <footer className="adm-footer">MRS 스테이징 환경 · 실제 서비스 운영 환경 아님</footer>
     </main>
   </div>
 }

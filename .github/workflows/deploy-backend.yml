@@ -15,13 +15,13 @@ permissions:
   packages: write
 
 concurrency:
-  group: production-backend
+  group: staging-backend
   cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: production
+    environment: staging
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3

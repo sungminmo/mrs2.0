@@ -160,11 +160,11 @@ docker compose -f compose.yaml -f compose.local.yaml run --rm --no-deps backend 
 스키마 파일은 `backend/prisma/schema/`에 도메인별로 분리되어 있고, 생성된 SQL은
 `backend/prisma/migrations/`에 저장됩니다. 이미 배포한 마이그레이션 파일은 수정하지 마세요.
 
-### GitHub Actions 자동 배포
+### GitHub Actions 스테이징 자동 배포
 
 `main` push 시 변경 경로에 따라 고객, 관리자, 백엔드 workflow가 각각 private GHCR 이미지를
-commit SHA 태그로 발행하고 Lightsail에서 해당 서비스만 교체합니다. 고객 데모는 별도의 Pages
-workflow가 `dist/customer`만 배포합니다. GitHub 저장소의 `production` Environment에 아래
+commit SHA 태그로 발행하고 스테이징 Lightsail에서 해당 서비스만 교체합니다. 고객 데모는 별도의 Pages
+workflow가 `dist/customer`만 배포합니다. GitHub 저장소의 `staging` Environment에 아래
 secret을 등록하세요.
 
 | Secret | 값 |
