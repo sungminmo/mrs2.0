@@ -1,46 +1,58 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, Images, ImageOff, LayoutDashboard, ListChecks, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
 import { authenticatedFetch, signOut } from '../authSession'
-import { campaigns, customers, dateText, inventory, invoiceAmount, invoices, locations, masterItems, money, products, quotes, receivings, receivingStatuses, referenceDate, saleRequests, type MemberAccount, type ReceivingStatus } from './adminData'
+import { customers, dateText, invoiceAmount, invoices, locations, money, receivingStatuses, referenceDate, type Campaign, type Inspection, type Inventory, type MasterItem, type MemberAccount, type Product, type Receiving, type ReceivingStatus } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
 import { materialPhotos } from '../assetPhotos'
 import InventoryEditor from './InventoryEditor'
 import LocationEditor from './LocationEditor'
 import LocationOccupancyEditor from './LocationOccupancyEditor'
-import { categoryMatches, materialCategories, type MaterialCategory } from '../categories'
+import { categoryMatches, type MaterialCategory } from '../categories'
 import CategorySelect from '../CategorySelect'
 import CategoryManager from './CategoryManager'
 import CampaignEditor, { MarketStatusEditor, ProductDiscountEditor } from './MarketEditor'
 import BannerManager from './BannerManager'
 import ItemFileActions from './ItemFileActions'
-import { changeMarketStatus, marketStatusOptions, type MarketStatusTab } from './adminMarket'
+import { changeMarketStatus, marketStatusOptions, type MarketData, type MarketStatusTab } from './adminMarket'
 import './AdminPortal.css'
 
 const icons = { dashboard: LayoutDashboard, basic: ListChecks, receiving: ClipboardCheck, inventory: Archive, market: ShoppingCart, content: Images, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2 }
 const pageSize = 5
+type AdminDatabaseData = { categories: MaterialCategory[]; items: MasterItem[]; assets: Inventory[]; receivings: Receiving[]; inspections: Inspection[]; products: Product[]; campaigns: Campaign[] }
 
 export default function AdminPortal({ hash }: { hash: string }) {
-  const [assets, setAssets] = useState(() => structuredClone(inventory))
-  const [items, setItems] = useState(() => structuredClone(masterItems))
-  const [categories, setCategories] = useState(() => structuredClone(materialCategories))
-  const [market, setMarket] = useState(() => structuredClone({ sales: saleRequests, products, quotes, campaigns }))
+  const [assets, setAssets] = useState<Inventory[]>([])
+  const [items, setItems] = useState<MasterItem[]>([])
+  const [categories, setCategories] = useState<MaterialCategory[]>([])
+  const [market, setMarket] = useState<MarketData>({ sales: [], products: [], quotes: [], campaigns: [] })
   const [members, setMembers] = useState<MemberAccount[]>([])
   const [locationRecords, setLocationRecords] = useState(() => structuredClone(locations))
-  const [receivingRecords, setReceivingRecords] = useState(() => structuredClone(receivings))
+  const [receivingRecords, setReceivingRecords] = useState<Receiving[]>([])
+  const [inspectionRecords, setInspectionRecords] = useState<Inspection[]>([])
+  const [loadingData, setLoadingData] = useState(true)
   const [notice, setNotice] = useState({ scope: '', text: '' })
   useEffect(() => {
     let active = true
-    authenticatedFetch('/api/admin/members').then(async (response) => {
-      if (!response.ok) throw new Error('회원 정보를 불러오지 못했습니다.')
+    Promise.all([authenticatedFetch('/api/admin/data'), authenticatedFetch('/api/admin/members')]).then(async ([dataResponse, memberResponse]) => {
+      if (!dataResponse.ok) throw new Error('개발 DB의 관리자 데이터를 불러오지 못했습니다.')
+      if (!memberResponse.ok) throw new Error('회원 정보를 불러오지 못했습니다.')
+      const database = await dataResponse.json() as { data: AdminDatabaseData }
+      const response = memberResponse
       const body = await response.json() as { data: { members: Array<{ id: string; email: string; companyName: string; companyPhone: string | null; managerName: string; managerPhone: string; role: 'CUSTOMER' | 'ADMIN'; status: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'; createdAt: string }> } }
       if (!active) return
+      setAssets(database.data.assets)
+      setItems(database.data.items)
+      setCategories(database.data.categories)
+      setReceivingRecords(database.data.receivings)
+      setInspectionRecords(database.data.inspections)
+      setMarket({ sales: [], quotes: [], products: database.data.products, campaigns: database.data.campaigns })
       setMembers(body.data.members.filter((member) => member.role !== 'ADMIN').map((member) => ({ id: member.id, type: '기업회원', email: member.email, companyName: member.companyName, businessNumber: '', representativeName: '', managerName: member.managerName, managerPhone: member.managerPhone, companyPhone: member.companyPhone ?? '', faxNumber: '', lastLoginAt: null, joinedAt: member.createdAt, status: member.status === 'PENDING' ? '가입 승인 대기' : member.status === 'ACTIVE' ? '이용 중' : '승인 반려' })))
     }).catch((error) => {
-      if (active) setNotice({ scope: 'members/applications/', text: error instanceof Error ? error.message : '회원 정보를 불러오지 못했습니다.' })
-    })
+      if (active) setNotice({ scope: 'database', text: error instanceof Error ? error.message : '개발 DB의 관리자 데이터를 불러오지 못했습니다.' })
+    }).finally(() => { if (active) setLoadingData(false) })
     return () => { active = false }
   }, [])
-  const views = createAdminViews(assets, items, categories, market, members, locationRecords, receivingRecords)
+  const views = createAdminViews(assets, items, categories, market, members, locationRecords, receivingRecords, inspectionRecords)
   const url = new URL(hash.slice(1), 'https://mrs.example')
   const rawRoute = url.pathname.split('/')[2] || 'dashboard'
   const legacyRoute = rawRoute === 'items' ? { menu: 'basic' as const, tab: 'items' } : rawRoute === 'categories' ? { menu: 'basic' as const, tab: 'categories' } : rawRoute === 'inspections' ? { menu: 'receiving' as const, tab: url.searchParams.get('tab') || 'primary' } : null
@@ -125,6 +137,8 @@ export default function AdminPortal({ hash }: { hash: string }) {
     </aside>
     <main className="adm-main">
       <div className="adm-heading"><div><div className="adm-breadcrumb">운영 관리 / {menu.label}{row ? ` / ${row.id}` : ''}</div><h1 ref={heading} tabIndex={-1}>{discountEditing ? `${row?.title} 할인율 설정` : occupancyEditing ? `${row?.title} 점유 재고 편집` : editing ? `${recordKind} ${mode === 'new' ? '등록' : '수정'}` : row ? row.title : menu.label}</h1></div><span className="adm-mode">관리자 시안</span></div>
+      {loadingData && <p className="adm-note" role="status">개발 DB 데이터를 불러오는 중입니다.</p>}
+      {notice.scope === 'database' && <p className="adm-form-error" role="alert">{notice.text}</p>}
       {menu.id === 'dashboard' ? <Dashboard views={views} /> : <>
         <nav className="adm-tabs" aria-label={`${menu.label} 보기`}>{menu.tabs.map((item) => <a key={item.id} href={adminHref({ label: item.label, menu: menu.id, tab: item.id })} aria-current={item.id === tab?.id ? 'page' : undefined}>{item.label}</a>)}</nav>
         {menu.id === 'content' && tab?.id === 'banners' ? <BannerManager params={url.searchParams} /> : categoryManagement ? <CategoryManager categories={categories} items={items} assets={assets} params={url.searchParams} onSave={(category) => { setCategories((current) => current.some((entry) => entry.id === category.id) ? current.map((entry) => entry.id === category.id ? category : entry) : [...current, category]); window.location.hash = `/admin/basic?tab=categories&id=${category.id}` }} /> : <>

@@ -1,4 +1,4 @@
-import { campaigns, campaignStatus, customerForSite, customers, dateText, inspections, inquiries, invoiceAmount, invoices, itemUnits, locations, memberAccounts, money, products, quotes, receivings, saleRequests, siteForReceipt, sites, type AdminImage, type Inventory, type Location, type MasterItem, type MemberAccount, type Receiving } from './adminData'
+import { campaigns, campaignStatus, customers, dateText, inquiries, invoiceAmount, invoices, itemUnits, locations, memberAccounts, money, products, quotes, receivings, saleRequests, sites, type AdminImage, type Inspection, type Inventory, type Location, type MasterItem, type MemberAccount, type Receiving } from './adminData'
 import { categoryEnabled, categoryMatches, categoryPath, materialCategories, type MaterialCategory } from '../categories'
 import { detailedInspectionStatus, discountedPrice, type MarketData } from './adminMarket'
 
@@ -26,34 +26,37 @@ export const adminHref = (link: AdminLink) => {
   if (link.customer) params.set('customer', link.customer)
   return `#/admin/${link.menu}?${params}`
 }
-const customerName = (id: string) => customers.find((customer) => customer.id === id)!.name
+const customerName = (id: string) => customers.find((customer) => customer.id === id)?.name ?? id
 const customerLink = (id: string): AdminLink => ({ label: customerName(id), menu: 'customers', tab: 'companies', id })
 const receiptLink = (id: string): AdminLink => ({ label: id, menu: 'receiving', tab: 'primary', id })
 const assetLink = (id: string): AdminLink => ({ label: id, menu: 'inventory', tab: 'stock', id })
 const requestLink = (id: string): AdminLink => ({ label: id, menu: 'receiving', tab: 'requests', id })
-const siteLink = (id: string): AdminLink => ({ label: sites.find((site) => site.id === id)!.name, menu: 'customers', tab: 'sites', id })
+const siteLink = (id: string): AdminLink => ({ label: sites.find((site) => site.id === id)?.name ?? id, menu: 'customers', tab: 'sites', id })
 const invoiceTab = (type: string) => type === '보관료' ? 'storage' : type === '판매 정산' ? 'payouts' : 'disposal'
 const qty = (value: number | null, unit: string) => value === null ? '미확정' : `${value.toLocaleString('ko-KR')} ${unit}`
 const campaignDateText = (value: string) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value))
 
-export function createAdminViews(inventory: Inventory[], masterItems: MasterItem[], categories: MaterialCategory[] = materialCategories, market: MarketData = { sales: saleRequests, products, quotes, campaigns }, members: MemberAccount[] = memberAccounts, locationRecords: Location[] = locations, receivingRecords: Receiving[] = receivings): Record<string, AdminView> {
+export function createAdminViews(inventory: Inventory[], masterItems: MasterItem[], categories: MaterialCategory[] = materialCategories, market: MarketData = { sales: saleRequests, products, quotes, campaigns }, members: MemberAccount[] = memberAccounts, locationRecords: Location[] = locations, receivingRecords: Receiving[] = receivings, inspectionRecords: Inspection[] = []): Record<string, AdminView> {
 const { sales: saleRequests, products, quotes, campaigns } = market
 const categoryLink = (id: string): AdminLink => ({ label: categoryPath(categories, id), menu: 'basic', tab: 'categories', id })
 const receivingRows: AdminRow[] = receivingRecords.map((request) => {
-  const site = sites.find((item) => item.id === request.siteId)!
-  const customer = customers.find((item) => item.id === site.customerId)!
-  return { id: request.id, title: request.summary, status: request.status, customerId: customer.id, date: request.date,
-    cells: [request.id, dateText(request.date), request.channel, customer.name, site.name, request.volume, request.status],
-    fields: [['신청번호', request.id], ['고객사', customer.name], ['현장명', site.name], ['담당자', customer.manager], ['연락처', customer.phone], ['접수일', dateText(request.date)], ['신청 경로', request.channel], ['차량 기준 예상물량', request.volume], ['입고 예정일', dateText(request.scheduledAt)], ['폐기 규정 동의일', dateText(request.termsAt)], ['운반비 견적 (예시)', money(request.estimate)], ['자재 사진', '미등록'], ['요청 메모', request.note]],
-    links: [customerLink(customer.id), siteLink(site.id), ...inspections.filter((receipt) => receipt.receivingId === request.id).map((receipt) => receiptLink(receipt.id))],
+  const site = sites.find((item) => item.id === request.siteId)
+  const customerId = site?.customerId ?? ('customerId' in request && typeof request.customerId === 'string' ? request.customerId : request.id)
+  const customer = customers.find((item) => item.id === customerId)
+  return { id: request.id, title: request.summary, status: request.status, customerId, date: request.date,
+    cells: [request.id, dateText(request.date), request.channel, customer?.name ?? customerId, site?.name ?? request.siteId, request.volume, request.status],
+    fields: [['신청번호', request.id], ['고객사', customer?.name ?? customerId], ['현장명', site?.name ?? request.siteId], ['담당자', customer?.manager ?? '미등록'], ['연락처', customer?.phone ?? '미등록'], ['접수일', dateText(request.date)], ['신청 경로', request.channel], ['차량 기준 예상물량', request.volume], ['입고 예정일', dateText(request.scheduledAt)], ['폐기 규정 동의일', dateText(request.termsAt)], ['운반비 견적 (예시)', money(request.estimate)], ['자재 사진', '미등록'], ['요청 메모', request.note]],
+    links: [customerLink(customerId), ...(site ? [siteLink(site.id)] : []), ...inspectionRecords.filter((receipt) => receipt.receivingId === request.id).map((receipt) => receiptLink(receipt.id))],
   }
 })
-const inspectionRows: AdminRow[] = inspections.map((receipt) => {
-  const siteId = siteForReceipt(receipt.id)
-  const customerId = customerForSite(siteId)
+const inspectionRows: AdminRow[] = inspectionRecords.map((receipt) => {
+  const receiving = receivingRecords.find((request) => request.id === receipt.receivingId)
+  const siteId = receiving?.siteId ?? receipt.receivingId
+  const site = sites.find((candidate) => candidate.id === siteId)
+  const customerId = site?.customerId ?? (receiving && 'customerId' in receiving && typeof receiving.customerId === 'string' ? receiving.customerId : receipt.receivingId)
   const createdAssets = inventory.filter((asset) => asset.receiptId === receipt.id)
   const disposalQuantity = receipt.materials.reduce((sum, material) => sum + (material.disposal ?? 0), 0)
-  return { id: receipt.id, title: `${sites.find((site) => site.id === siteId)!.name} 검수`, customerId, date: receipt.date, status: receipt.status,
+  return { id: receipt.id, title: `${site?.name ?? siteId} 검수`, customerId, date: receipt.date, status: receipt.status,
     cells: [receipt.receivingId, receipt.id, customerName(customerId), dateText(receipt.date), `${createdAssets.length}건`, disposalQuantity ? disposalQuantity.toLocaleString('ko-KR') : '없음', receipt.status],
     fields: [['입고 신청번호', receipt.receivingId], ['1차 검수번호', receipt.id], ['검수 상태', receipt.status], ['입고 일자', dateText(receipt.date)], ['검수 완료일', dateText(receipt.inspectedAt)], ['생성 자산', `${createdAssets.length}건`], ['결과 안내일', dateText(receipt.notifiedAt)], ['고객 확인일', dateText(receipt.acknowledgedAt)], ['폐기 처리 상태', receipt.disposalStatus], ['처리 증빙', receipt.evidence ?? '미등록'], ['검수 사진', '미등록']],
     sections: [{ title: '1차 검수 결과 및 자산 원시 데이터', headers: ['자재', '등급', '입고 수량', '자산 생성 수량', '폐기 대상'], rows: receipt.materials.map((material) => [material.name, material.grade ?? '미판정', qty(material.received, material.unit), qty(material.usable, material.unit), qty(material.disposal, material.unit)]) }, { title: '폐기 판정 내역', headers: ['자재', '폐기 사유', '대상 수량', '실제 처리'], rows: receipt.materials.filter((material) => material.disposal !== 0).map((material) => [material.name, material.reason, qty(material.disposal, material.unit), qty(material.processed, material.unit)]) }],
@@ -72,11 +75,13 @@ const detailedInspectionRows: AdminRow[] = saleRequests.map((request) => {
     note: '판매 요청이 접수된 자산만 상세 검수 대상입니다. 상세 검수에서 규격·브랜드·등급·평가 정보를 보완한 후 판매 승인으로 이어집니다.',
   }
 })
-const disposalRows: AdminRow[] = inspections.filter((receipt) => receipt.materials.some((material) => (material.disposal ?? 0) > 0)).map((receipt) => {
-  const siteId = siteForReceipt(receipt.id)
-  const customerId = customerForSite(siteId)
+const disposalRows: AdminRow[] = inspectionRecords.filter((receipt) => receipt.materials.some((material) => (material.disposal ?? 0) > 0)).map((receipt) => {
+  const receiving = receivingRecords.find((request) => request.id === receipt.receivingId)
+  const siteId = receiving?.siteId ?? receipt.receivingId
+  const site = sites.find((candidate) => candidate.id === siteId)
+  const customerId = site?.customerId ?? (receiving && 'customerId' in receiving && typeof receiving.customerId === 'string' ? receiving.customerId : receipt.receivingId)
   const disposalMaterials = receipt.materials.filter((material) => (material.disposal ?? 0) > 0)
-  return { id: receipt.id, title: `${sites.find((site) => site.id === siteId)!.name} 폐기`, customerId, date: receipt.inspectedAt ?? receipt.date, status: receipt.disposalStatus,
+  return { id: receipt.id, title: `${site?.name ?? siteId} 폐기`, customerId, date: receipt.inspectedAt ?? receipt.date, status: receipt.disposalStatus,
     cells: [receipt.receivingId, receipt.id, customerName(customerId), `${disposalMaterials.length}종`, receipt.disposalStatus],
     fields: [['입고 신청번호', receipt.receivingId], ['1차 검수번호', receipt.id], ['고객사', customerName(customerId)], ['폐기 대상 품목', `${disposalMaterials.length}종`], ['폐기 처리 상태', receipt.disposalStatus], ['처리 증빙', receipt.evidence ?? '미등록']],
     sections: [{ title: '폐기 대상 및 처리 내역', headers: ['자재', '폐기 사유', '판정 수량', '처리 수량'], rows: disposalMaterials.map((material) => [material.name, material.reason, qty(material.disposal, material.unit), qty(material.processed, material.unit)]) }],
@@ -85,14 +90,14 @@ const disposalRows: AdminRow[] = inspections.filter((receipt) => receipt.materia
   }
 })
 const inventoryRows: AdminRow[] = inventory.map((asset) => {
-  const siteId = receivingRecords.find((request) => request.id === asset.receivingId)!.siteId
+  const siteId = receivingRecords.find((request) => request.id === asset.receivingId)?.siteId
   const customerId = asset.customerId
   const location = locationRecords.find((item) => item.id === asset.locationId)
   return { id: asset.id, title: asset.name, status: asset.status, customerId, images: asset.images, grade: asset.grade, saleStatus: asset.saleStatus, itemId: asset.itemId, locationId: asset.locationId, categoryId: asset.category,
     cells: [asset.id, asset.itemId, asset.name, categoryPath(categories, asset.category), customerName(customerId), asset.grade, qty(asset.quantity, asset.unit), location?.name ?? '미지정', asset.status, asset.saleStatus],
-    fields: [['재고번호', asset.id], ['입고 신청번호', asset.receivingId], ['품목코드', asset.itemId], ['고객사', customerName(customerId)], ['현장', sites.find((site) => site.id === siteId)!.name], ['자산명', asset.name], ['카테고리', categoryPath(categories, asset.category)], ['카테고리 사용', categoryEnabled(categories, asset.category) ? '사용' : '미사용'], ['규격', asset.specification], ['브랜드', asset.brand || '미등록'], ['등급', asset.grade], ['현재 수량', qty(asset.quantity, asset.unit)], ['평가금액 (총액)', money(asset.appraisal)], ['보관 상태', asset.status], ['판매 상태', asset.saleStatus], ['판매 승인', saleRequests.find((request) => request.assetId === asset.id)?.status ?? '요청 없음'], ['로케이션', location?.name ?? '미지정']],
+    fields: [['재고번호', asset.id], ['입고 신청번호', asset.receivingId], ['품목코드', asset.itemId], ['고객사', customerName(customerId)], ['현장', siteId ? sites.find((site) => site.id === siteId)?.name ?? siteId : '미등록'], ['자산명', asset.name], ['카테고리', categoryPath(categories, asset.category)], ['카테고리 사용', categoryEnabled(categories, asset.category) ? '사용' : '미사용'], ['규격', asset.specification], ['브랜드', asset.brand || '미등록'], ['등급', asset.grade], ['현재 수량', qty(asset.quantity, asset.unit)], ['평가금액 (총액)', money(asset.appraisal)], ['보관 상태', asset.status], ['판매 상태', asset.saleStatus], ['판매 승인', saleRequests.find((request) => request.assetId === asset.id)?.status ?? '요청 없음'], ['로케이션', (location?.name ?? asset.locationId) || '미지정']],
     sections: [{ title: '변경 이력', headers: ['변경 시각 (KST)', '사유', '항목', '변경 전', '변경 후'], rows: [...asset.history].reverse().flatMap((entry) => entry.changes.map(([field, before, after]) => [new Date(entry.at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }), entry.reason, field, before, after])) }],
-    links: [categoryLink(asset.category), { label: asset.itemId, menu: 'basic', tab: 'items', id: asset.itemId }, ...(asset.receiptId ? [receiptLink(asset.receiptId)] : []), requestLink(asset.receivingId), customerLink(customerId), siteLink(siteId), ...(location ? [{ label: location.name, menu: 'inventory' as const, tab: 'locations', id: location.id }] : []), ...saleRequests.filter((item) => item.assetId === asset.id).map((item): AdminLink => ({ label: item.id, menu: 'market', tab: 'sales', id: item.id }))],
+    links: [categoryLink(asset.category), { label: asset.itemId, menu: 'basic', tab: 'items', id: asset.itemId }, ...(asset.receiptId ? [receiptLink(asset.receiptId)] : []), requestLink(asset.receivingId), customerLink(customerId), ...(siteId ? [siteLink(siteId)] : []), ...(location ? [{ label: location.name, menu: 'inventory' as const, tab: 'locations', id: location.id }] : []), ...saleRequests.filter((item) => item.assetId === asset.id).map((item): AdminLink => ({ label: item.id, menu: 'market', tab: 'sales', id: item.id }))],
     note: '수량은 현재 잔량입니다. 입고대기는 예정 수량, 출고완료는 0으로 관리합니다. 변경 이력은 관리자 임시 수정 기록이며 부분 출고·분할 및 실제 검수·판매·정산은 실행하지 않습니다.',
   }
 })
@@ -156,10 +161,10 @@ return {
 
 }
 
-export const dashboardMetrics: (AdminLink & { count: number })[] = [
-  { label: '입고 신청', menu: 'receiving', tab: 'requests', status: '입고 신청', count: receivings.filter((item) => item.status === '입고 신청').length },
-  { label: '1차 검수 대기', menu: 'receiving', tab: 'primary', status: '검수 대기', count: inspections.filter((item) => item.status === '검수 대기').length },
-  { label: '판매 승인 대기', menu: 'market', tab: 'sales', status: '승인 대기', count: saleRequests.filter((item) => item.status === '승인 대기').length },
-  { label: '미답변 문의', menu: 'customers', tab: 'inquiries', status: '미답변', count: inquiries.filter((item) => item.status === '미답변').length },
-  { label: '미수 보관료', menu: 'billing', tab: 'storage', status: '청구 완료', count: invoices.filter((item) => item.type === '보관료' && item.status === '청구 완료').length },
+export const dashboardMetrics: AdminLink[] = [
+  { label: '입고 신청', menu: 'receiving', tab: 'requests', status: '입고 신청' },
+  { label: '1차 검수 대기', menu: 'receiving', tab: 'primary', status: '검수 대기' },
+  { label: '판매 승인 대기', menu: 'market', tab: 'sales', status: '승인 대기' },
+  { label: '미답변 문의', menu: 'customers', tab: 'inquiries', status: '미답변' },
+  { label: '미수 보관료', menu: 'billing', tab: 'storage', status: '청구 완료' },
 ]

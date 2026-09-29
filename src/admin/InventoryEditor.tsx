@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, Save, Upload, X } from 'lucide-react'
-import { customerForSite, customers, inspections, itemUnits, receivings, sites, type AdminImage, type Inventory, type Location, type MasterItem } from './adminData'
+import { customerForSite, customers, itemUnits, receivings, sites, type AdminImage, type Inspection, type Inventory, type Location, type MasterItem } from './adminData'
 import { categoryEnabled, type MaterialCategory } from '../categories'
 import CategorySelect from '../CategorySelect'
 import { nextAssetCode, prepareInventory, validateMasterItem } from './adminInventory'
 
-type Props = { kind: 'items' | 'inventory'; items: MasterItem[]; assets: Inventory[]; categories: MaterialCategory[]; locations: Location[]; id: string | null; cancelHref: string; onSaveItem: (item: MasterItem, previousId: string | null) => void; onSaveAsset: (asset: Inventory) => void }
+type Props = { kind: 'items' | 'inventory'; items: MasterItem[]; assets: Inventory[]; inspections?: Inspection[]; categories: MaterialCategory[]; locations: Location[]; id: string | null; cancelHref: string; onSaveItem: (item: MasterItem, previousId: string | null) => void; onSaveAsset: (asset: Inventory) => void }
 
 export default function InventoryEditor(props: Props) {
   return <section className="adm-editor">
@@ -49,7 +49,7 @@ function ItemForm({ items, assets, categories, id, onSaveItem }: Props) {
   </form>
 }
 
-function AssetForm({ items, assets, categories, locations, id, onSaveAsset }: Props) {
+function AssetForm({ items, assets, inspections = [], categories, locations, id, onSaveAsset }: Props) {
   const asset = assets.find((candidate) => candidate.id === id)
   const [itemId, setItemId] = useState(asset?.itemId ?? '')
   const [receivingId, setReceivingId] = useState(asset?.receivingId ?? '')
