@@ -3,7 +3,7 @@ import { ChevronRight, Plus, Save } from 'lucide-react'
 import { categoryChain, categoryChildren, categoryEnabled, categoryMatches, categoryPath, nextCategoryCode, validateCategory, type MaterialCategory } from '../categories'
 import type { Inventory, MasterItem } from './adminData'
 
-export default function CategoryManager({ categories, items, assets, params, onSave }: { categories: MaterialCategory[]; items: MasterItem[]; assets: Inventory[]; params: URLSearchParams; onSave: (category: MaterialCategory) => void }) {
+export default function CategoryManager({ categories, items, assets, params, onSave }: { categories: MaterialCategory[]; items: MasterItem[]; assets: Inventory[]; params: URLSearchParams; onSave: (category: MaterialCategory) => Promise<void> }) {
   const selected = categories.find((category) => category.id === params.get('id'))
   const creating = params.get('mode') === 'new'
   const parentId = params.get('parent') || null
@@ -12,7 +12,7 @@ export default function CategoryManager({ categories, items, assets, params, onS
   const createHref = (parent: string | null) => `#/admin/basic?tab=categories&mode=new${parent ? `&parent=${encodeURIComponent(parent)}` : ''}`
   const invalidParent = creating && parentId !== null && (!categories.some((category) => category.id === parentId) || categoryChain(categories, parentId).length >= 3)
   return <>
-    <p className="adm-note">최대 3차 분류 · 상위 분류 미사용 시 하위 분류 신규 선택 제한 · 새로고침·고객 포털 이동 시 초기화</p>
+    <p className="adm-note">최대 3차 분류 · 상위 분류 미사용 시 하위 분류 신규 선택 제한 · 변경 내용은 DB에 저장됩니다.</p>
     <div className="adm-category-columns">{[0, 1, 2].map((depth) => {
       const parent = depth === 0 ? null : chain[depth - 1]?.id
       const children = parent === undefined ? [] : categoryChildren(categories, parent)
@@ -29,19 +29,20 @@ export default function CategoryManager({ categories, items, assets, params, onS
   </>
 }
 
-function CategoryForm({ categories, category, parentId, onSave }: { categories: MaterialCategory[]; category?: MaterialCategory; parentId: string | null; onSave: (category: MaterialCategory) => void }) {
+function CategoryForm({ categories, category, parentId, onSave }: { categories: MaterialCategory[]; category?: MaterialCategory; parentId: string | null; onSave: (category: MaterialCategory) => Promise<void> }) {
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => { heading.current?.focus({ preventScroll: true }) }, [])
   const depth = category ? categoryChain(categories, category.id).length : categoryChain(categories, parentId ?? '').length + 1
   const code = category?.id ?? nextCategoryCode(categories, parentId)
   const parents = categories.filter((candidate) => categoryChain(categories, candidate.id).length === depth - 1)
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
     const next: MaterialCategory = { id: code, parentId: depth === 1 ? null : String(data.get('parentId')), name: String(data.get('name') ?? '').trim(), order: Number(data.get('order')), enabled: data.get('enabled') === 'on' }
-    try { validateCategory(next, categories); setError(''); onSave(next); setSaved(true) } catch (error) { setSaved(false); setError((error as Error).message) }
+    try { validateCategory(next, categories); setError(''); setSaving(true); await onSave(next); setSaved(true) } catch (error) { setSaved(false); setError((error as Error).message) } finally { setSaving(false) }
   }
   return <form className="adm-edit-form adm-category-form" onSubmit={submit} onInput={() => { setSaved(false); setError('') }}><h2 ref={heading} tabIndex={-1}>{depth}차 카테고리 {category ? '수정' : '등록'}</h2>
     <div className="adm-edit-fields"><label>카테고리 코드<input value={code} readOnly /></label><label>카테고리명<input name="name" defaultValue={category?.name ?? ''} required maxLength={80} /></label>
@@ -50,7 +51,7 @@ function CategoryForm({ categories, category, parentId, onSave }: { categories: 
     <label className="adm-check"><input type="checkbox" name="enabled" defaultChecked={category?.enabled ?? (parentId ? categoryEnabled(categories, parentId) : true)} />사용 카테고리</label>
     {category && <p className="adm-note">현재 경로: {categoryPath(categories, category.id)} · 적용 상태: {categoryEnabled(categories, category.id) ? '사용' : '미사용 (상위 분류 포함)'}</p>}
     {error && <p className="adm-form-error" role="alert">{error}</p>}
-    {saved && <p className="adm-note" role="status">카테고리가 임시 저장되었습니다.</p>}
-    <div className="adm-edit-footer"><button className="adm-button adm-primary" type="submit"><Save size={16} />카테고리 임시 저장</button></div>
+    {saved && <p className="adm-note" role="status">카테고리가 DB에 저장되었습니다.</p>}
+    <div className="adm-edit-footer"><button className="adm-button adm-primary" type="submit" disabled={saving}><Save size={16} />{saving ? '저장 중...' : '카테고리 저장'}</button></div>
   </form>
 }

@@ -64,6 +64,16 @@ export function createAdminDataRepository(client: PrismaClient) {
       const byId = new Map(created.map((item) => [item.id, item]))
       return items.map((item) => itemPayload(byId.get(item.id)!))
     }, { maxWait: 10_000, timeout: 120_000 }),
+    saveCategory: (category: AdminCategoryInput) => client.$transaction(async (transaction) => {
+      const categories = await transaction.materialCategory.findMany({ select: { id: true, parentId: true, name: true, enabled: true, sortOrder: true } })
+      validateCategory(category, categories)
+      const saved = await transaction.materialCategory.upsert({
+        where: { id: category.id },
+        create: { id: category.id, parentId: category.parentId, name: category.name, enabled: category.enabled, sortOrder: category.order },
+        update: { name: category.name, enabled: category.enabled, sortOrder: category.order },
+      })
+      return categoryPayload(saved)
+    }),
   }
 }
 
@@ -90,10 +100,37 @@ const itemInput = z.object({
   images: z.array(imageInput).max(1),
 })
 
+const categoryInput = z.object({
+  parentId: z.string().regex(/^\d{6}$/).nullable(),
+  name: z.string().trim().min(1).max(80),
+  enabled: z.boolean(),
+  order: z.number().int().min(0).max(9999),
+})
+
 type AdminItemInput = z.output<typeof itemInput>
+type AdminCategoryInput = z.output<typeof categoryInput> & { id: string }
 
 function itemPayload(item: { id: string; name: string; categoryId: string | null; specification: string; brand: string; unit: ItemUnit | null; inboundPrice: { toString(): string } | number | null; outboundPrice: { toString(): string } | number | null; standardPrice: { toString(): string } | number | null; enabled: boolean; note: string; images: { id: string; name: string; url: string }[] }) {
   return { id: item.id, name: item.name, category: item.categoryId ?? '', specification: item.specification, brand: item.brand, unit: item.unit ? unit[item.unit] : '', inboundPrice: item.inboundPrice === null ? null : Number(item.inboundPrice), outboundPrice: item.outboundPrice === null ? null : Number(item.outboundPrice), standardPrice: item.standardPrice === null ? null : Number(item.standardPrice), enabled: item.enabled, note: item.note, images: item.images.map((image) => ({ id: image.id, name: image.name, url: image.url })) }
+}
+
+function categoryPayload(category: { id: string; parentId: string | null; name: string; enabled: boolean; sortOrder: number }) {
+  return { id: category.id, parentId: category.parentId, name: category.name, enabled: category.enabled, order: category.sortOrder }
+}
+
+function validateCategory(category: AdminCategoryInput, categories: { id: string; parentId: string | null; name: string; enabled: boolean; sortOrder: number }[]) {
+  const existing = categories.find((entry) => entry.id === category.id)
+  if (existing && existing.parentId !== category.parentId) throw new Error('등록된 카테고리의 상위 분류는 변경할 수 없습니다.')
+  if (categories.some((entry) => entry.id !== category.id && entry.parentId === category.parentId && entry.name.trim().toLocaleLowerCase('ko-KR') === category.name.toLocaleLowerCase('ko-KR'))) throw new Error('같은 상위 분류에 동일한 이름이 있습니다.')
+  const parent = category.parentId ? categories.find((entry) => entry.id === category.parentId) : null
+  if (category.parentId && !parent) throw new Error('상위 카테고리를 찾을 수 없습니다.')
+  const grandparent = parent?.parentId ? categories.find((entry) => entry.id === parent.parentId) : null
+  if (parent?.parentId && !grandparent || grandparent?.parentId) throw new Error('카테고리는 최대 3차까지 생성할 수 있습니다.')
+  if (!parent && !/^\d{2}0000$/.test(category.id)) throw new Error('대분류 코드 형식이 올바르지 않습니다.')
+  if (parent && !grandparent && (category.id.slice(0, 2) !== parent.id.slice(0, 2) || !category.id.endsWith('00'))) throw new Error('중분류 코드 형식이 올바르지 않습니다.')
+  if (parent && grandparent && category.id.slice(0, 4) !== parent.id.slice(0, 4)) throw new Error('소분류 코드 형식이 올바르지 않습니다.')
+  const parentEnabled = parent?.enabled && (!grandparent || grandparent.enabled)
+  if (category.enabled && parent && !parentEnabled && !(existing?.enabled && existing.parentId === category.parentId)) throw new Error('미사용 상위 분류 아래에 사용 카테고리를 저장할 수 없습니다.')
 }
 
 export function createAdminItems(repository: AdminDataRepository) {
@@ -104,6 +141,18 @@ export function createAdminItems(repository: AdminDataRepository) {
       return success(context, { items: await repository.createItems(input.items) }, 201)
     } catch {
       throw new AppError(409, ErrorCode.CONFLICT, '품목을 등록하지 못했습니다. 품목코드, 카테고리 및 중복 데이터를 확인해 주세요.')
+    }
+  }
+}
+
+export function saveAdminCategory(repository: AdminDataRepository) {
+  return async (context: Context) => {
+    const id = z.string().regex(/^\d{6}$/).parse(context.req.param('id'))
+    const input = categoryInput.parse(await context.req.json())
+    try {
+      return success(context, { category: await repository.saveCategory({ id, ...input }) })
+    } catch {
+      throw new AppError(409, ErrorCode.CONFLICT, '카테고리를 저장하지 못했습니다. 코드, 상위 분류 및 중복 이름을 확인해 주세요.')
     }
   }
 }

@@ -11,17 +11,22 @@ async function fixture(role: AuthUser['role']) {
   const auth: AuthRepository = { findByEmail: async () => user, findById: async () => user, createRegistration: async () => user, listMembers: async () => [], approveMember: async () => null }
   const data = { categories: [], items: [{ id: '000001' }], assets: [], receivings: [], inspections: [], products: [], campaigns: [] }
   const created: unknown[][] = []
+  const savedCategories: unknown[] = []
   const adminData = {
     load: async () => data,
     createItems: async (items: unknown[]) => {
       created.push(items)
       return items.map((item) => ({ ...(item as object), category: '', unit: '', images: [] }))
     },
+    saveCategory: async (category: unknown) => {
+      savedCategories.push(category)
+      return category
+    },
   }
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret, expiresIn: '1h' }, adminData: adminData as never })
   const login = await app.request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email, password: 'test-password' }) })
   const token = (await login.json() as { data: { accessToken: string } }).data.accessToken
-  return { app, token, data, created }
+  return { app, token, data, created, savedCategories }
 }
 
 test('admin data endpoint requires an authenticated administrator', async () => {
@@ -56,6 +61,47 @@ test('item registration requires an administrator and rejects duplicate request 
 
   const customer = await fixture('CUSTOMER')
   assert.equal((await customer.app.request('/api/admin/items', { method: 'POST', headers: { Authorization: `Bearer ${customer.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [item] }) })).status, 403)
+})
+
+test('administrator can save a category to the database', async () => {
+  const admin = await fixture('ADMIN')
+  const category = { parentId: '010000', name: '신규 중분류', enabled: true, order: 4 }
+  const response = await admin.app.request('/api/admin/categories/010400', { method: 'PUT', headers: { Authorization: `Bearer ${admin.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(category) })
+  assert.equal(response.status, 200)
+  assert.deepEqual(admin.savedCategories, [{ id: '010400', ...category }])
+  assert.deepEqual((await response.json() as { data: { category: unknown } }).data.category, { id: '010400', ...category })
+})
+
+test('category saving requires an administrator and valid input', async () => {
+  const admin = await fixture('ADMIN')
+  const category = { parentId: null, name: '신규 대분류', enabled: true, order: 4 }
+  assert.equal((await admin.app.request('/api/admin/categories/040000', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(category) })).status, 401)
+  assert.equal((await admin.app.request('/api/admin/categories/not-a-code', { method: 'PUT', headers: { Authorization: `Bearer ${admin.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(category) })).status, 400)
+
+  const customer = await fixture('CUSTOMER')
+  assert.equal((await customer.app.request('/api/admin/categories/040000', { method: 'PUT', headers: { Authorization: `Bearer ${customer.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(category) })).status, 403)
+})
+
+test('category repository upserts the material category record', async () => {
+  let upsertInput: unknown
+  const transaction = {
+    materialCategory: {
+      findMany: async () => [{ id: '010000', parentId: null, name: '대분류', enabled: true, sortOrder: 1 }],
+      upsert: async (input: { create: { id: string; parentId: string | null; name: string; enabled: boolean; sortOrder: number } }) => {
+        upsertInput = input
+        return input.create
+      },
+    },
+  }
+  const client = { $transaction: async (operation: (value: typeof transaction) => Promise<unknown>) => operation(transaction) }
+  const repository = createAdminDataRepository(client as never)
+  const saved = await repository.saveCategory({ id: '010100', parentId: '010000', name: '중분류', enabled: true, order: 2 })
+  assert.deepEqual(upsertInput, {
+    where: { id: '010100' },
+    create: { id: '010100', parentId: '010000', name: '중분류', enabled: true, sortOrder: 2 },
+    update: { name: '중분류', enabled: true, sortOrder: 2 },
+  })
+  assert.deepEqual(saved, { id: '010100', parentId: '010000', name: '중분류', enabled: true, order: 2 })
 })
 
 test('item repository batches large imports and preserves input order', async () => {
