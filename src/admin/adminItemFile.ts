@@ -1,7 +1,7 @@
 import Papa from 'papaparse'
 import { itemUnits, type Inventory, type MasterItem } from './adminData'
 import type { MaterialCategory } from '../categories'
-import { validateMasterItem } from './adminInventory'
+import { validateLeafCategory } from '../categories'
 
 const columns = ['품목코드', '품목명', '카테고리코드', '규격', '브랜드', '기준단위', '입고단가', '출고단가', '표준단가', '사용구분', '적요'] as const
 type ItemFileRow = Record<typeof columns[number], string>
@@ -31,7 +31,7 @@ export function itemFileExample() {
   return `\uFEFF${Papa.unparse(exampleRows, { columns: [...columns], newline: '\r\n' })}`
 }
 
-export function parseItemFile(source: string, items: MasterItem[], assets: Inventory[], categories: MaterialCategory[]) {
+export function parseItemFile(source: string, items: MasterItem[], _assets: Inventory[], categories: MaterialCategory[]) {
   const result = Papa.parse<ItemFileRow>(source.replace(/^\uFEFF/, ''), { header: true, skipEmptyLines: 'greedy', transformHeader: (header) => header.trim() })
   if (result.errors.length) throw new Error(`${result.errors[0].row !== undefined ? `${result.errors[0].row + 2}행: ` : ''}${result.errors[0].message}`)
   const headers = result.meta.fields ?? []
@@ -47,9 +47,9 @@ export function parseItemFile(source: string, items: MasterItem[], assets: Inven
   for (const [index, row] of result.data.entries()) {
     try {
       const enabled = row.사용구분.trim()
-      if (!['사용', '미사용'].includes(enabled)) throw new Error('사용구분은 사용 또는 미사용으로 입력해 주세요.')
       const unit = row.기준단위.trim()
-      if (!itemUnits.includes(unit as MasterItem['unit'])) throw new Error(`기준단위는 ${itemUnits.join(', ')} 중 하나로 입력해 주세요.`)
+      if (enabled && !['사용', '미사용'].includes(enabled)) throw new Error('사용구분은 사용, 미사용 또는 빈 값으로 입력해 주세요.')
+      if (unit && !itemUnits.includes(unit as typeof itemUnits[number])) throw new Error(`기준단위는 ${itemUnits.join(', ')} 중 하나 또는 빈 값으로 입력해 주세요.`)
       const item: MasterItem = {
         id: row.품목코드.trim(),
         name: row.품목명.trim(),
@@ -60,16 +60,19 @@ export function parseItemFile(source: string, items: MasterItem[], assets: Inven
         inboundPrice: optionalPrice(row.입고단가, '입고단가'),
         outboundPrice: optionalPrice(row.출고단가, '출고단가'),
         standardPrice: optionalPrice(row.표준단가, '표준단가'),
-        enabled: enabled === '사용',
+        enabled: enabled !== '미사용',
         note: row.적요.trim(),
         images: [],
       }
+      if (!/^\d{6}$/.test(item.id)) throw new Error('품목코드는 숫자 6자리로 입력해 주세요.')
       if (usedIds.has(item.id)) throw new Error('이미 사용 중인 품목코드입니다.')
       const key = itemKey(item)
-      if (usedKeys.has(key)) throw new Error('같은 품목명·카테고리·규격·브랜드·단위의 품목이 이미 있습니다.')
-      validateMasterItem(item, [], assets, categories)
+      const hasCompleteDuplicateKey = [item.name, item.category, item.specification, item.brand, item.unit].every((value) => value.trim())
+      if (hasCompleteDuplicateKey && usedKeys.has(key)) throw new Error('같은 품목명·카테고리·규격·브랜드·단위의 품목이 이미 있습니다.')
+      if (item.category) validateLeafCategory(categories, item.category)
+      if ([item.inboundPrice, item.outboundPrice, item.standardPrice].some((price) => price !== null && (!Number.isFinite(price) || price < 0 || price > 1e12))) throw new Error('단가는 0~1조 원 범위로 입력해 주세요. 미입력은 미산정으로 관리합니다.')
       usedIds.add(item.id)
-      usedKeys.add(key)
+      if (hasCompleteDuplicateKey) usedKeys.add(key)
       imported.push(item)
     } catch (error) {
       throw new Error(`${index + 2}행: ${error instanceof Error ? error.message : '품목 데이터를 확인해 주세요.'}`)
