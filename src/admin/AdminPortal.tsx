@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, Images, ImageOff, LayoutDashboard, ListChecks, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
+import { useEffect, useRef, useState, useTransition } from 'react'
+import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, Images, ImageOff, LayoutDashboard, ListChecks, LoaderCircle, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
 import { authenticatedFetch, signOut } from '../authSession'
 import { customers, dateText, invoiceAmount, invoices, locations, money, receivingStatuses, referenceDate, type Campaign, type Inspection, type Inventory, type MasterItem, type MemberAccount, type Product, type Receiving, type ReceivingStatus } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
@@ -188,6 +188,7 @@ function RecordList({ view, params, path, categories, statusTab, onStatusChange 
   const bulk = statusTab === 'sales' || statusTab === 'products'
   const query = params.get('q') ?? ''
   const [search, setSearch] = useState({ scope, text: query })
+  const [searching, startSearch] = useTransition()
   if (search.scope !== scope) setSearch({ scope, text: query })
   const status = params.get('status') ?? ''
   const customer = params.get('customer') ?? ''
@@ -220,13 +221,14 @@ function RecordList({ view, params, path, categories, statusTab, onStatusChange 
     window.history.replaceState(null, '', `#/admin/${path}?${next}`)
     window.dispatchEvent(new HashChangeEvent('hashchange'))
   }
+  const submitSearch = () => startSearch(() => update('q', search.text))
   const resetHref = `#/admin/${path}?tab=${params.get('tab') ?? ''}`
   const detailHref = (id: string) => { const next = new URLSearchParams(params); next.set('id', id); return `#/admin/${path}?${next}` }
   const billed = invoices.filter((invoice) => filtered.some((row) => row.id === invoice.id) && invoice.status !== '미청구')
   return <>
     {(view.rows.some((row) => row.categoryId) || categoryId) && <div className="adm-category-filter"><CategorySelect categories={categories} value={categoryId} onChange={(value) => update('category', value)} /></div>}
     <div className="adm-filterbar">
-      <label className="adm-search"><span>검색</span><div><Search size={16} /><input type="search" value={search.text} onChange={(event) => setSearch({ scope, text: event.target.value })} placeholder="번호, 이름, 고객사" /></div></label><button className="adm-button" type="button" onClick={() => update('q', search.text)}>검색</button>
+      <label className="adm-search"><span>검색</span><div><Search size={16} /><input type="search" value={search.text} onChange={(event) => setSearch({ scope, text: event.target.value })} placeholder="번호, 이름, 고객사" /></div></label><button className="adm-button adm-primary adm-search-button" type="button" aria-busy={searching} disabled={searching} onClick={submitSearch}>{searching ? <LoaderCircle className="adm-spinner" size={16} /> : <Search size={16} />}{searching ? '검색 중' : '검색'}</button>
       <label><span>{path === 'basic' ? '사용 구분' : extraFilters.length ? '보관 상태' : '상태'}</span><select value={status} onChange={(event) => update('status', event.target.value)}><option value="">전체 상태</option>{status && !statuses.includes(status) && <option value={status}>{status}</option>}{statuses.map((value) => <option key={value}>{value}</option>)}</select></label>
       {extraFilters.map(([key, label]) => { const values = [...new Set(view.rows.flatMap((row) => row[key] ? [row[key]!] : []))]; const selected = params.get(key) ?? ''; return <label key={key}><span>{label}</span><select value={selected} onChange={(event) => update(key, event.target.value)}><option value="">전체</option>{selected && !values.includes(selected) && <option value={selected}>{selected}</option>}{values.map((value) => <option key={value}>{value}</option>)}</select></label> })}
       {availableCustomers.length > 0 && <label><span>고객사</span><select value={customer} onChange={(event) => update('customer', event.target.value)}><option value="">전체 고객사</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}

@@ -34,6 +34,11 @@
 .adm-search input { border: 0; outline: 0; background: transparent; width: 100%; min-width: 0; height: 100%; color: #303a33; font-size: 12px; }
 .adm-search > div:focus-within { outline: 2px solid #36745a; outline-offset: 2px; }
 .adm-button, .adm-icon { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #bfc8c1; border-radius: 4px; background: #fff; color: #38443b; min-height: 38px; padding: 8px 12px; }
+.adm-search-button { min-width: 92px; font-weight: 700; transition: background-color 160ms cubic-bezier(.25, 1, .5, 1), transform 120ms cubic-bezier(.25, 1, .5, 1); }
+.adm-search-button:hover:not(:disabled) { background: #1f5138; text-decoration: none; }
+.adm-search-button:active:not(:disabled) { transform: scale(.97); }
+.adm-spinner { animation: adm-spin 700ms linear infinite; }
+@keyframes adm-spin { to { transform: rotate(360deg); } }
 .adm-item-file-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .adm-item-file-actions .adm-form-error { flex-basis: 100%; margin: 0; text-align: right; }
 .adm-icon { width: 40px; height: 40px; padding: 0; }
@@ -98,6 +103,7 @@
 .adm-inspection-action { padding: 16px 0; border-block: 1px solid var(--adm-border); }
 .admin-portal .adm-primary { color: #fdfefd; background: #285c42; border-color: #285c42; }
 .adm-primary:disabled { opacity: .6; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .adm-search-button { transition: none; } .adm-spinner { animation: none; } }
 .adm-editor { max-width: 1000px; }
 .adm-edit-form > h2 { padding: 24px 0 16px; border-top: 1px solid var(--adm-border); margin-top: 24px; }
 .adm-edit-form h2 small { font-size: 11px; font-weight: 400; color: var(--adm-muted); }
