@@ -5,7 +5,7 @@ import { categoryEnabled, type MaterialCategory } from '../categories'
 import CategorySelect from '../CategorySelect'
 import { nextCode, prepareInventory, validateMasterItem } from './adminInventory'
 
-type Props = { kind: 'items' | 'inventory'; items: MasterItem[]; assets: Inventory[]; categories: MaterialCategory[]; locations: Location[]; id: string | null; cancelHref: string; onSaveItem: (item: MasterItem) => void; onSaveAsset: (asset: Inventory) => void }
+type Props = { kind: 'items' | 'inventory'; items: MasterItem[]; assets: Inventory[]; categories: MaterialCategory[]; locations: Location[]; id: string | null; cancelHref: string; onSaveItem: (item: MasterItem, previousId: string | null) => void; onSaveAsset: (asset: Inventory) => void }
 
 export default function InventoryEditor(props: Props) {
   return <section className="adm-editor">
@@ -20,7 +20,6 @@ const price = (data: FormData, name: string) => text(data, name) === '' ? null :
 
 function ItemForm({ items, assets, categories, id, onSaveItem }: Props) {
   const item = items.find((candidate) => candidate.id === id)
-  const code = item?.id ?? nextCode('ITM-', items, 6)
   const linked = assets.some((asset) => asset.itemId === id)
   const [images, setImages] = useState<AdminImage[]>(item?.images ?? [])
   const [busy, setBusy] = useState(false)
@@ -28,14 +27,14 @@ function ItemForm({ items, assets, categories, id, onSaveItem }: Props) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
-    const next: MasterItem = { id: code, name: text(data, 'name'), category: text(data, 'category'), specification: text(data, 'specification'), brand: text(data, 'brand'), unit: (linked ? item!.unit : text(data, 'unit')) as MasterItem['unit'], inboundPrice: price(data, 'inboundPrice'), outboundPrice: price(data, 'outboundPrice'), standardPrice: price(data, 'standardPrice'), enabled: data.get('enabled') === 'on', note: text(data, 'note'), images }
-    try { validateMasterItem(next, items, assets, categories); onSaveItem(next) } catch (error) { setError((error as Error).message) }
+    const next: MasterItem = { id: text(data, 'id'), name: text(data, 'name'), category: text(data, 'category'), specification: text(data, 'specification'), brand: text(data, 'brand'), unit: (linked ? item!.unit : text(data, 'unit')) as MasterItem['unit'], inboundPrice: price(data, 'inboundPrice'), outboundPrice: price(data, 'outboundPrice'), standardPrice: price(data, 'standardPrice'), enabled: data.get('enabled') === 'on', note: text(data, 'note'), images }
+    try { validateMasterItem(next, items, assets, categories, item?.id); onSaveItem(next, item?.id ?? null) } catch (error) { setError((error as Error).message) }
   }
   return <form onSubmit={submit} className="adm-edit-form">
     <h2>품목 기본 정보</h2>
     <div className="adm-edit-fields">
-      <label>품목코드<input value={code} readOnly /></label>
-      <label>품목명<input name="name" defaultValue={item?.name} required maxLength={120} autoFocus /></label>
+      <label>품목코드<input name="id" defaultValue={item?.id ?? ''} required inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} placeholder="숫자 6자리" autoFocus /></label>
+      <label>품목명<input name="name" defaultValue={item?.name} required maxLength={120} /></label>
       <CategorySelect categories={categories} defaultValue={item?.category} retainedId={item?.category} required />
       <label>규격<input name="specification" defaultValue={item?.specification} required maxLength={160} /></label>
       <label>브랜드 (선택)<input name="brand" defaultValue={item?.brand} maxLength={80} /></label>

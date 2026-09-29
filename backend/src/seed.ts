@@ -82,49 +82,49 @@ try {
     })
 
     await transaction.masterItem.upsert({
-      where: { id: 'TEST-ITEM-001' },
+      where: { id: '900001' },
       update: {
         name: 'Test Aluminum Sheet', categoryId: '990101', specification: 'A5052, 2.0mm x 1000mm x 2000mm', brand: 'Test Metal', unit: 'EA', inboundPrice: 45000, outboundPrice: 62000, standardPrice: 55000, enabled: true, note: 'Test seed item',
       },
       create: {
-        id: 'TEST-ITEM-001', name: 'Test Aluminum Sheet', categoryId: '990101', specification: 'A5052, 2.0mm x 1000mm x 2000mm', brand: 'Test Metal', unit: 'EA', inboundPrice: 45000, outboundPrice: 62000, standardPrice: 55000, enabled: true, note: 'Test seed item',
+        id: '900001', name: 'Test Aluminum Sheet', categoryId: '990101', specification: 'A5052, 2.0mm x 1000mm x 2000mm', brand: 'Test Metal', unit: 'EA', inboundPrice: 45000, outboundPrice: 62000, standardPrice: 55000, enabled: true, note: 'Test seed item',
       },
     })
     await transaction.masterItem.upsert({
-      where: { id: 'TEST-ITEM-002' },
+      where: { id: '900002' },
       update: {
         name: 'Test Steel Pipe', categoryId: '990102', specification: 'SS400, 50mm x 50mm x 3.2mm', brand: 'Test Steel', unit: 'M', inboundPrice: 12000, outboundPrice: 18000, standardPrice: 15000, enabled: true, note: 'Test seed item',
       },
       create: {
-        id: 'TEST-ITEM-002', name: 'Test Steel Pipe', categoryId: '990102', specification: 'SS400, 50mm x 50mm x 3.2mm', brand: 'Test Steel', unit: 'M', inboundPrice: 12000, outboundPrice: 18000, standardPrice: 15000, enabled: true, note: 'Test seed item',
+        id: '900002', name: 'Test Steel Pipe', categoryId: '990102', specification: 'SS400, 50mm x 50mm x 3.2mm', brand: 'Test Steel', unit: 'M', inboundPrice: 12000, outboundPrice: 18000, standardPrice: 15000, enabled: true, note: 'Test seed item',
       },
     })
 
     await transaction.asset.upsert({
       where: { id: 'TEST-ASSET-001' },
       update: {
-        itemId: 'TEST-ITEM-001', receivingId: 'TEST-RCV-001', customerId: 'TEST-CUST-001', locationId: 'TEST-LOC-A1', categoryId: '990101', name: 'Test Aluminum Sheet', specification: 'A5052, 2.0mm x 1000mm x 2000mm', brand: 'Test Metal', grade: 'S', quantity: '25.000', unit: 'EA', appraisal: 1375000, storageStatus: 'STORED', saleStatus: 'ON_SALE',
+        itemId: '900001', receivingId: 'TEST-RCV-001', customerId: 'TEST-CUST-001', locationId: 'TEST-LOC-A1', categoryId: '990101', name: 'Test Aluminum Sheet', specification: 'A5052, 2.0mm x 1000mm x 2000mm', brand: 'Test Metal', grade: 'S', quantity: '25.000', unit: 'EA', appraisal: 1375000, storageStatus: 'STORED', saleStatus: 'ON_SALE',
       },
       create: {
-        id: 'TEST-ASSET-001', itemId: 'TEST-ITEM-001', receivingId: 'TEST-RCV-001', customerId: 'TEST-CUST-001', locationId: 'TEST-LOC-A1', categoryId: '990101', name: 'Test Aluminum Sheet', specification: 'A5052, 2.0mm x 1000mm x 2000mm', brand: 'Test Metal', grade: 'S', quantity: '25.000', unit: 'EA', appraisal: 1375000, storageStatus: 'STORED', saleStatus: 'ON_SALE',
+        id: 'TEST-ASSET-001', itemId: '900001', receivingId: 'TEST-RCV-001', customerId: 'TEST-CUST-001', locationId: 'TEST-LOC-A1', categoryId: '990101', name: 'Test Aluminum Sheet', specification: 'A5052, 2.0mm x 1000mm x 2000mm', brand: 'Test Metal', grade: 'S', quantity: '25.000', unit: 'EA', appraisal: 1375000, storageStatus: 'STORED', saleStatus: 'ON_SALE',
       },
     })
     await transaction.asset.upsert({
       where: { id: 'TEST-ASSET-002' },
       update: {
-        itemId: 'TEST-ITEM-001', receivingId: 'TEST-RCV-002', customerId: 'TEST-CUST-001', categoryId: '990101', name: 'Test Aluminum Sheet', specification: 'A5052, 2.0mm x 1000mm x 2000mm', brand: 'Test Metal', grade: 'A', quantity: '10.000', unit: 'EA', appraisal: 500000, storageStatus: 'PENDING', saleStatus: 'PENDING',
+        itemId: '900001', receivingId: 'TEST-RCV-002', customerId: 'TEST-CUST-001', categoryId: '990101', name: 'Test Aluminum Sheet', specification: 'A5052, 2.0mm x 1000mm x 2000mm', brand: 'Test Metal', grade: 'A', quantity: '10.000', unit: 'EA', appraisal: 500000, storageStatus: 'PENDING', saleStatus: 'PENDING',
       },
       create: {
-        id: 'TEST-ASSET-002', itemId: 'TEST-ITEM-001', receivingId: 'TEST-RCV-002', customerId: 'TEST-CUST-001', categoryId: '990101', name: 'Test Aluminum Sheet', specification: 'A5052, 2.0mm x 1000mm x 2000mm', brand: 'Test Metal', grade: 'A', quantity: '10.000', unit: 'EA', appraisal: 500000, storageStatus: 'PENDING', saleStatus: 'PENDING',
+        id: 'TEST-ASSET-002', itemId: '900001', receivingId: 'TEST-RCV-002', customerId: 'TEST-CUST-001', categoryId: '990101', name: 'Test Aluminum Sheet', specification: 'A5052, 2.0mm x 1000mm x 2000mm', brand: 'Test Metal', grade: 'A', quantity: '10.000', unit: 'EA', appraisal: 500000, storageStatus: 'PENDING', saleStatus: 'PENDING',
       },
     })
     await transaction.asset.upsert({
       where: { id: 'TEST-ASSET-003' },
       update: {
-        itemId: 'TEST-ITEM-002', receivingId: 'TEST-RCV-003', customerId: 'TEST-CUST-002', locationId: 'TEST-LOC-B2', categoryId: '990102', name: 'Test Steel Pipe', specification: 'SS400, 50mm x 50mm x 3.2mm', brand: 'Test Steel', grade: 'B', quantity: '120.000', unit: 'M', appraisal: 1800000, storageStatus: 'STORED', saleStatus: 'PENDING',
+        itemId: '900002', receivingId: 'TEST-RCV-003', customerId: 'TEST-CUST-002', locationId: 'TEST-LOC-B2', categoryId: '990102', name: 'Test Steel Pipe', specification: 'SS400, 50mm x 50mm x 3.2mm', brand: 'Test Steel', grade: 'B', quantity: '120.000', unit: 'M', appraisal: 1800000, storageStatus: 'STORED', saleStatus: 'PENDING',
       },
       create: {
-        id: 'TEST-ASSET-003', itemId: 'TEST-ITEM-002', receivingId: 'TEST-RCV-003', customerId: 'TEST-CUST-002', locationId: 'TEST-LOC-B2', categoryId: '990102', name: 'Test Steel Pipe', specification: 'SS400, 50mm x 50mm x 3.2mm', brand: 'Test Steel', grade: 'B', quantity: '120.000', unit: 'M', appraisal: 1800000, storageStatus: 'STORED', saleStatus: 'PENDING',
+        id: 'TEST-ASSET-003', itemId: '900002', receivingId: 'TEST-RCV-003', customerId: 'TEST-CUST-002', locationId: 'TEST-LOC-B2', categoryId: '990102', name: 'Test Steel Pipe', specification: 'SS400, 50mm x 50mm x 3.2mm', brand: 'Test Steel', grade: 'B', quantity: '120.000', unit: 'M', appraisal: 1800000, storageStatus: 'STORED', saleStatus: 'PENDING',
       },
     })
   })

@@ -336,7 +336,7 @@ Query:
 ```json
 {
   "id": "AST-000002",
-  "itemId": "ITM-000002",
+  "itemId": "000002",
   "name": "회수 참나무 구조목",
   "category": { "id": "020101", "name": "구조목", "path": "목재 > 구조재 > 구조목" },
   "specification": "38 x 89 mm, 2.4 m",

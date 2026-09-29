@@ -33,7 +33,7 @@ async function fixture(customerId: string | null = 'TEST-CUST-001') {
         totalElements: 21,
         records: [{
           id: 'TEST-ASSET-001',
-          itemId: 'TEST-ITEM-001',
+          itemId: '900001',
           receivingId: 'TEST-RCV-001',
           name: 'Test Aluminum Sheet',
           category: { id: '990101', name: 'Aluminum', path: 'Test Materials > Metals > Aluminum' },

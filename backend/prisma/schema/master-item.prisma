@@ -11,7 +11,7 @@ enum ItemUnit {
 
 /// 품목 마스터(카탈로그). 실제 입고 자산(Asset)은 품목을 참조해 생성됨
 model MasterItem {
-  id            String   @id @db.VarChar(20)
+  id            String   @id @db.VarChar(6) // 관리자가 입력·변경하는 6자리 숫자 코드
   name          String   @db.VarChar(160)
   categoryId    String   @db.VarChar(6)
   specification String   @db.VarChar(255)
@@ -37,7 +37,7 @@ model MasterItem {
 /// 품목 대표 이미지. sortOrder로 노출 순서 제어
 model MasterItemImage {
   id           String @id @db.VarChar(36)
-  masterItemId String @db.VarChar(20)
+  masterItemId String @db.VarChar(6)
   name         String @db.VarChar(255)
   url          String @db.Text
   sortOrder    Int    @default(0)

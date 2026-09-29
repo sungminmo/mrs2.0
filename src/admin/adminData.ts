@@ -65,15 +65,15 @@ export const locations: Location[] = [
   { id: 'LOC-A04', name: 'A-04 창고', zone: 'A구역', status: '비어 있음', rate: null },
 ]
 export const masterItems: MasterItem[] = [
-  { id: 'ITM-000001', name: '콘크리트 블록', category: '020400', specification: '390 × 190 × 190 mm', brand: '', unit: 'EA', inboundPrice: null, outboundPrice: 850, standardPrice: 780, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
-  { id: 'ITM-000002', name: '회수 참나무 구조목', category: '020101', specification: '38 × 89 mm, 2.4 m', brand: '', unit: 'M', inboundPrice: null, outboundPrice: 43500, standardPrice: 43500, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
-  { id: 'ITM-000003', name: '폴리에틸렌 파이프 DN100', category: '020103', specification: 'DN100, SDR17, 6 m', brand: '', unit: 'M', inboundPrice: null, outboundPrice: 3490, standardPrice: 3490, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
-  { id: 'ITM-000004', name: '알루미늄 프레임', category: '010401', specification: '40 × 40 mm', brand: '', unit: '본', inboundPrice: null, outboundPrice: null, standardPrice: null, enabled: false, note: '미사용 품목 예시', images: [] },
+  { id: '000001', name: '콘크리트 블록', category: '020400', specification: '390 × 190 × 190 mm', brand: '', unit: 'EA', inboundPrice: null, outboundPrice: 850, standardPrice: 780, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
+  { id: '000002', name: '회수 참나무 구조목', category: '020101', specification: '38 × 89 mm, 2.4 m', brand: '', unit: 'M', inboundPrice: null, outboundPrice: 43500, standardPrice: 43500, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
+  { id: '000003', name: '폴리에틸렌 파이프 DN100', category: '020103', specification: 'DN100, SDR17, 6 m', brand: '', unit: 'M', inboundPrice: null, outboundPrice: 3490, standardPrice: 3490, enabled: true, note: '기준 단가 예시 · 부가세 포함', images: [] },
+  { id: '000004', name: '알루미늄 프레임', category: '010401', specification: '40 × 40 mm', brand: '', unit: '본', inboundPrice: null, outboundPrice: null, standardPrice: null, enabled: false, note: '미사용 품목 예시', images: [] },
 ]
 export const inventory: Inventory[] = [
-  { id: 'AST-001', itemId: 'ITM-000001', receivingId: 'REQ-0907-01', customerId: 'CUS-001', receiptId: 'RCV-0908', locationId: 'LOC-B08', name: '콘크리트 블록', category: '020400', brand: '', grade: 'B', quantity: 500, unit: 'EA', appraisal: 390000, status: '보관중', saleStatus: '판매대기', specification: '390 × 190 × 190 mm', images: [], history: [] },
-  { id: 'AST-002', itemId: 'ITM-000002', receivingId: 'REQ-0901-01', customerId: 'CUS-002', receiptId: 'RCV-0902', locationId: 'LOC-A03', name: '회수 참나무 구조목', category: '020101', brand: '', grade: 'S', quantity: 80, unit: 'M', appraisal: 3480000, status: '보관중', saleStatus: '판매중', specification: '38 × 89 mm, 2.4 m', images: [], history: [] },
-  { id: 'AST-003', itemId: 'ITM-000003', receivingId: 'REQ-0826-01', customerId: 'CUS-001', receiptId: 'RCV-0827', locationId: 'LOC-C07', name: '폴리에틸렌 파이프 DN100', category: '020103', brand: '', grade: 'A', quantity: 200, unit: 'M', appraisal: 698000, status: '보관중', saleStatus: '판매중', specification: 'DN100, SDR17, 6 m', images: [], history: [] },
+  { id: 'AST-001', itemId: '000001', receivingId: 'REQ-0907-01', customerId: 'CUS-001', receiptId: 'RCV-0908', locationId: 'LOC-B08', name: '콘크리트 블록', category: '020400', brand: '', grade: 'B', quantity: 500, unit: 'EA', appraisal: 390000, status: '보관중', saleStatus: '판매대기', specification: '390 × 190 × 190 mm', images: [], history: [] },
+  { id: 'AST-002', itemId: '000002', receivingId: 'REQ-0901-01', customerId: 'CUS-002', receiptId: 'RCV-0902', locationId: 'LOC-A03', name: '회수 참나무 구조목', category: '020101', brand: '', grade: 'S', quantity: 80, unit: 'M', appraisal: 3480000, status: '보관중', saleStatus: '판매중', specification: '38 × 89 mm, 2.4 m', images: [], history: [] },
+  { id: 'AST-003', itemId: '000003', receivingId: 'REQ-0826-01', customerId: 'CUS-001', receiptId: 'RCV-0827', locationId: 'LOC-C07', name: '폴리에틸렌 파이프 DN100', category: '020103', brand: '', grade: 'A', quantity: 200, unit: 'M', appraisal: 698000, status: '보관중', saleStatus: '판매중', specification: 'DN100, SDR17, 6 m', images: [], history: [] },
 ]
 export const saleRequests: SaleRequest[] = [
   { id: 'SALE-001', assetId: 'AST-001', date: '2026-09-10T10:00:00+09:00', quantity: 500, desiredAmount: 425000, status: '승인 대기', inspection: '판매용 정밀 검수 대기' },
