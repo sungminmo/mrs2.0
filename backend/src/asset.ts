@@ -13,7 +13,7 @@ export const assetListQuerySchema = z.object({
   storageStatus: z.enum(['PENDING', 'STORED', 'RELEASED']).optional(),
   saleStatus: z.enum(['PENDING', 'ON_SALE', 'SOLD']).optional(),
   grade: z.enum(['S', 'A', 'B', 'F']).optional(),
-  categoryId: z.string().trim().min(1).max(20).optional().openapi({ example: 'CAT-010' }),
+  categoryId: z.string().regex(/^\d{6}$/).optional().openapi({ example: '020101' }),
   locationId: z.string().trim().min(1).max(20).optional().openapi({ example: 'LOC-A03' }),
   receivedFrom: z.iso.date().optional(),
   receivedTo: z.iso.date().optional(),

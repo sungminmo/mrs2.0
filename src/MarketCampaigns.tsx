@@ -5,9 +5,9 @@ import { categoryEnabled, materialCategories } from './categories'
 
 export type MarketCampaign = { id: string; title: string; description: string; category: string; enabled: boolean; order: number; startsAt: string | null; endsAt: string | null }
 export const marketCampaigns: MarketCampaign[] = [
-  { id: 'conduit', title: '배관자재(전기) 기획전', description: '트레이부터 후렉시블까지. 현장 시공 조건에 맞는 전기 배관자재를 확인하세요.', category: 'CAT-001', enabled: true, order: 1, startsAt: null, endsAt: null },
-  { id: 'cable', title: '케이블 자재 기획전', description: '전선과 용도별 케이블을 규격에 따라 비교하고 필요한 수량으로 견적을 요청하세요.', category: 'CAT-008', enabled: true, order: 2, startsAt: null, endsAt: null },
-  { id: 'device', title: '전기기구 기획전', description: '배선기구부터 조명과 배전함까지 현장에 필요한 전기기구를 한곳에서 확인하세요.', category: 'CAT-017', enabled: true, order: 3, startsAt: null, endsAt: null },
+  { id: 'conduit', title: '배관자재(전기) 기획전', description: '트레이부터 후렉시블까지. 현장 시공 조건에 맞는 전기 배관자재를 확인하세요.', category: '010000', enabled: true, order: 1, startsAt: null, endsAt: null },
+  { id: 'cable', title: '케이블 자재 기획전', description: '전선과 용도별 케이블을 규격에 따라 비교하고 필요한 수량으로 견적을 요청하세요.', category: '020000', enabled: true, order: 2, startsAt: null, endsAt: null },
+  { id: 'device', title: '전기기구 기획전', description: '배선기구부터 조명과 배전함까지 현장에 필요한 전기기구를 한곳에서 확인하세요.', category: '030000', enabled: true, order: 3, startsAt: null, endsAt: null },
 ]
 
 export default function MarketCampaigns({ onSelect, renderImage }: { onSelect: (campaign: MarketCampaign) => void; renderImage: (category: string) => ReactNode }) {

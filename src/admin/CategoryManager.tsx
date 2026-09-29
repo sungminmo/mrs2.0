@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ChevronRight, Plus, Save } from 'lucide-react'
-import { categoryChain, categoryChildren, categoryEnabled, categoryMatches, categoryPath, validateCategory, type MaterialCategory } from '../categories'
-import { nextCode } from './adminInventory'
+import { categoryChain, categoryChildren, categoryEnabled, categoryMatches, categoryPath, nextCategoryCode, validateCategory, type MaterialCategory } from '../categories'
 import type { Inventory, MasterItem } from './adminData'
 
 export default function CategoryManager({ categories, items, assets, params, onSave }: { categories: MaterialCategory[]; items: MasterItem[]; assets: Inventory[]; params: URLSearchParams; onSave: (category: MaterialCategory) => void }) {
@@ -36,7 +35,7 @@ function CategoryForm({ categories, category, parentId, onSave }: { categories: 
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => { heading.current?.focus({ preventScroll: true }) }, [])
   const depth = category ? categoryChain(categories, category.id).length : categoryChain(categories, parentId ?? '').length + 1
-  const code = category?.id ?? nextCode('CAT-', categories, 3)
+  const code = category?.id ?? nextCategoryCode(categories, parentId)
   const parents = categories.filter((candidate) => categoryChain(categories, candidate.id).length === depth - 1)
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -46,7 +45,7 @@ function CategoryForm({ categories, category, parentId, onSave }: { categories: 
   }
   return <form className="adm-edit-form adm-category-form" onSubmit={submit} onInput={() => { setSaved(false); setError('') }}><h2 ref={heading} tabIndex={-1}>{depth}차 카테고리 {category ? '수정' : '등록'}</h2>
     <div className="adm-edit-fields"><label>카테고리 코드<input value={code} readOnly /></label><label>카테고리명<input name="name" defaultValue={category?.name ?? ''} required maxLength={80} /></label>
-      {depth > 1 && <label>상위 카테고리<select name="parentId" defaultValue={category?.parentId ?? parentId ?? ''} required>{parents.map((parent) => <option key={parent.id} value={parent.id}>{categoryPath(categories, parent.id)}{categoryEnabled(categories, parent.id) ? '' : ' (미사용)'}</option>)}</select></label>}
+      {depth > 1 && <label>상위 카테고리<select name="parentId" defaultValue={category?.parentId ?? parentId ?? ''} required disabled={!!category}>{parents.map((parent) => <option key={parent.id} value={parent.id}>{categoryPath(categories, parent.id)}{categoryEnabled(categories, parent.id) ? '' : ' (미사용)'}</option>)}</select>{category && <input type="hidden" name="parentId" value={category.parentId ?? ''} />}</label>}
       <label>노출 순서<input name="order" type="number" required min={0} max={9999} step={1} defaultValue={category?.order ?? categoryChildren(categories, parentId).length + 1} /></label></div>
     <label className="adm-check"><input type="checkbox" name="enabled" defaultChecked={category?.enabled ?? (parentId ? categoryEnabled(categories, parentId) : true)} />사용 카테고리</label>
     {category && <p className="adm-note">현재 경로: {categoryPath(categories, category.id)} · 적용 상태: {categoryEnabled(categories, category.id) ? '사용' : '미사용 (상위 분류 포함)'}</p>}

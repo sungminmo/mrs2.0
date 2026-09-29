@@ -226,7 +226,7 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
     if (!name || !storage) return
     const receivedAt = new Intl.DateTimeFormat('sv-SE').format(new Date()).replaceAll('-', '.')
     const asset: Asset = {
-      code: `EMX-NEW-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, name, categoryId: 'CAT-019',
+      code: `EMX-NEW-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, name, categoryId: '030101',
       grade: String(data.get('grade')), quantity: String(data.get('quantity')), unit: String(data.get('unit')),
       location: storage, appraisalValue: number(Number(data.get('value'))), receivedAt, storageDays: '0일',
       status: '대기 중', salePrice: '0',

@@ -39,7 +39,7 @@ model Product {
 model Campaign {
   id          String   @id @db.VarChar(20)
   name        String   @db.VarChar(120)
-  categoryId  String   @db.VarChar(20)
+  categoryId  String   @db.VarChar(6)
   description String   @db.VarChar(1000)
   enabled     Boolean  @default(false)
   sortOrder   Int      @default(0) @db.UnsignedSmallInt

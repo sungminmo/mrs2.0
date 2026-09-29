@@ -15,10 +15,10 @@ type Product = { name: string; price: number; original: number; unit: string; ba
 type Basket = Record<string, number>
 const money = (value: number) => `₩${value.toLocaleString('ko-KR')}`
 const materialImages: Record<string, { path: string; file: string; author: string; license: string }> = {
-  'CAT-001': { path: '5/59/A_bunch_of_rebar_up_close.jpg/500px-A_bunch_of_rebar_up_close.jpg', file: 'A_bunch_of_rebar_up_close.jpg', author: 'W.carter', license: 'CC BY-SA 4.0' },
-  'CAT-007': { path: 'd/da/Track%2C_Cattle_Grid_and_Lumber_Stack_at_North_Plantation_-_geograph.org.uk_-_5176324.jpg/500px-Track%2C_Cattle_Grid_and_Lumber_Stack_at_North_Plantation_-_geograph.org.uk_-_5176324.jpg', file: 'Track,_Cattle_Grid_and_Lumber_Stack_at_North_Plantation_-_geograph.org.uk_-_5176324.jpg', author: 'Peter Wood', license: 'CC BY-SA 2.0' },
-  'CAT-013': { path: '0/03/Concrete-block%2Cjapan.JPG/500px-Concrete-block%2Cjapan.JPG', file: 'Concrete-block,japan.JPG', author: 'katorisi', license: 'CC BY 2.5' },
-  'CAT-010': { path: 'a/a7/120_inch_HDPE_pipe_installation.jpg/500px-120_inch_HDPE_pipe_installation.jpg', file: '120_inch_HDPE_pipe_installation.jpg', author: 'Tomascastelazo', license: 'CC BY-SA 4.0' },
+  '010000': { path: '5/59/A_bunch_of_rebar_up_close.jpg/500px-A_bunch_of_rebar_up_close.jpg', file: 'A_bunch_of_rebar_up_close.jpg', author: 'W.carter', license: 'CC BY-SA 4.0' },
+  '010402': { path: 'd/da/Track%2C_Cattle_Grid_and_Lumber_Stack_at_North_Plantation_-_geograph.org.uk_-_5176324.jpg/500px-Track%2C_Cattle_Grid_and_Lumber_Stack_at_North_Plantation_-_geograph.org.uk_-_5176324.jpg', file: 'Track,_Cattle_Grid_and_Lumber_Stack_at_North_Plantation_-_geograph.org.uk_-_5176324.jpg', author: 'Peter Wood', license: 'CC BY-SA 2.0' },
+  '020200': { path: '0/03/Concrete-block%2Cjapan.JPG/500px-Concrete-block%2Cjapan.JPG', file: 'Concrete-block,japan.JPG', author: 'katorisi', license: 'CC BY 2.5' },
+  '020101': { path: 'a/a7/120_inch_HDPE_pipe_installation.jpg/500px-120_inch_HDPE_pipe_installation.jpg', file: '120_inch_HDPE_pipe_installation.jpg', author: 'Tomascastelazo', license: 'CC BY-SA 4.0' },
 }
 const beamImage = { path: '4/40/I-Beam_002.JPG/500px-I-Beam_002.JPG', file: 'I-Beam_002.JPG', author: 'Todd Murray', license: 'CC BY-SA 3.0' }
 const imageFor = (product: Pick<Product, 'name' | 'category'> & { categoryId?: string }) => product.name.includes('H빔') ? beamImage : materialImages[categoryChain(materialCategories, product.categoryId ?? product.category)[0]?.id]

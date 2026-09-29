@@ -13,7 +13,7 @@ enum ItemUnit {
 model MasterItem {
   id            String   @id @db.VarChar(20)
   name          String   @db.VarChar(160)
-  categoryId    String   @db.VarChar(20)
+  categoryId    String   @db.VarChar(6)
   specification String   @db.VarChar(255)
   brand         String   @default("") @db.VarChar(160)
   unit          ItemUnit

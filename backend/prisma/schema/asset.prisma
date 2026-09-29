@@ -28,7 +28,7 @@ model Asset {
   customerId    String             @db.VarChar(20) // 자산 소유 고객(User) ID(외부 참조, 관계 미정의)
   receiptId     String?            @db.VarChar(20) // 검수증 ID(선택, 외부 참조)
   locationId    String?            @db.VarChar(20) // 보관 위치 ID(선택, 외부 참조), 출고완료 시 점유 해제
-  categoryId    String             @db.VarChar(20) // MaterialCategory 참조, 품목과 별도로 자산 단위 분류 보관
+  categoryId    String             @db.VarChar(6) // MaterialCategory 참조, 품목과 별도로 자산 단위 분류 보관
   name          String             @db.VarChar(160)
   specification String             @db.VarChar(500)
   brand         String             @default("") @db.VarChar(160)

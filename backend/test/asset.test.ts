@@ -36,7 +36,7 @@ async function fixture(customerId: string | null = 'TEST-CUST-001') {
           itemId: 'TEST-ITEM-001',
           receivingId: 'TEST-RCV-001',
           name: 'Test Aluminum Sheet',
-          category: { id: 'TEST-CAT-003', name: 'Aluminum', path: 'Test Materials > Metals > Aluminum' },
+          category: { id: '990101', name: 'Aluminum', path: 'Test Materials > Metals > Aluminum' },
           specification: 'A5052',
           brand: 'Test Metal',
           grade: 'S',
@@ -73,12 +73,12 @@ test('asset list requires authentication and a linked customer', async () => {
 test('asset list passes all filters and returns paginated serialized records', async () => {
   const { app, token, captured } = await fixture()
   const parameters = new URLSearchParams({
-    page: '2', size: '10', q: 'Aluminum', storageStatus: 'STORED', saleStatus: 'ON_SALE', grade: 'S', categoryId: 'TEST-CAT-002', locationId: 'TEST-LOC-A1', receivedFrom: '2026-09-01', receivedTo: '2026-09-30', storageDaysFrom: '1', storageDaysTo: '60', sort: 'nameAsc',
+    page: '2', size: '10', q: 'Aluminum', storageStatus: 'STORED', saleStatus: 'ON_SALE', grade: 'S', categoryId: '990100', locationId: 'TEST-LOC-A1', receivedFrom: '2026-09-01', receivedTo: '2026-09-30', storageDaysFrom: '1', storageDaysTo: '60', sort: 'nameAsc',
   })
   const response = await app.request(`/api/assets?${parameters}`, { headers: { Authorization: `Bearer ${token}` } })
   assert.equal(response.status, 200)
   assert.deepEqual(captured()?.query, {
-    page: 2, size: 10, q: 'Aluminum', storageStatus: 'STORED', saleStatus: 'ON_SALE', grade: 'S', categoryId: 'TEST-CAT-002', locationId: 'TEST-LOC-A1', receivedFrom: '2026-09-01', receivedTo: '2026-09-30', storageDaysFrom: 1, storageDaysTo: 60, sort: 'nameAsc',
+    page: 2, size: 10, q: 'Aluminum', storageStatus: 'STORED', saleStatus: 'ON_SALE', grade: 'S', categoryId: '990100', locationId: 'TEST-LOC-A1', receivedFrom: '2026-09-01', receivedTo: '2026-09-30', storageDaysFrom: 1, storageDaysTo: 60, sort: 'nameAsc',
   })
   assert.equal(captured()?.customerId, 'TEST-CUST-001')
   const body = await response.json() as { data: Array<{ receivedAt: string; storageDays: number; appraisalValue: string; category: { path: string } }>; meta: Record<string, number> }
