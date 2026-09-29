@@ -90,15 +90,6 @@ try {
         id: '900001', name: 'Test Aluminum Sheet', categoryId: '990101', specification: 'A5052, 2.0mm x 1000mm x 2000mm', brand: 'Test Metal', unit: 'EA', inboundPrice: 45000, outboundPrice: 62000, standardPrice: 55000, enabled: true, note: 'Test seed item',
       },
     })
-    await transaction.masterItem.upsert({
-      where: { id: '900002' },
-      update: {
-        name: 'Test Steel Pipe', categoryId: '990102', specification: 'SS400, 50mm x 50mm x 3.2mm', brand: 'Test Steel', unit: 'M', inboundPrice: 12000, outboundPrice: 18000, standardPrice: 15000, enabled: true, note: 'Test seed item',
-      },
-      create: {
-        id: '900002', name: 'Test Steel Pipe', categoryId: '990102', specification: 'SS400, 50mm x 50mm x 3.2mm', brand: 'Test Steel', unit: 'M', inboundPrice: 12000, outboundPrice: 18000, standardPrice: 15000, enabled: true, note: 'Test seed item',
-      },
-    })
 
     await transaction.asset.upsert({
       where: { id: '260901-0001' },
