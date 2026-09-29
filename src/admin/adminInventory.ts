@@ -6,6 +6,16 @@ export function nextCode(prefix: string, records: { id: string }[], digits: numb
   return `${prefix}${String(highest + 1).padStart(digits, '0')}`
 }
 
+export function nextAssetCode(receivedAt: string, assets: { id: string }[]) {
+  const date = new Date(receivedAt)
+  if (Number.isNaN(date.getTime())) throw new Error('유효한 입고일을 확인할 수 없습니다.')
+  const dateCode = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: '2-digit', month: '2-digit', day: '2-digit' }).format(date).replaceAll('-', '')
+  const pattern = new RegExp(`^${dateCode}-(\\d{4})$`)
+  const highest = assets.reduce((value, asset) => Math.max(value, Number(asset.id.match(pattern)?.[1] ?? 0)), 0)
+  if (highest >= 9999) throw new Error('해당 입고일의 자산 코드를 더 이상 생성할 수 없습니다.')
+  return `${dateCode}-${String(highest + 1).padStart(4, '0')}`
+}
+
 export function validateMasterItem(item: MasterItem, items: MasterItem[], assets: Inventory[], categories: MaterialCategory[] = materialCategories, previousId?: string) {
   if (!/^\d{6}$/.test(item.id)) throw new Error('품목코드는 숫자 6자리로 입력해 주세요.')
   if (items.some((candidate) => candidate.id === item.id && candidate.id !== previousId)) throw new Error('이미 사용 중인 품목코드입니다.')

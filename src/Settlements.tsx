@@ -13,7 +13,7 @@ type LedgerEntry = { id: string; date: string; type: string; name: string; amoun
 const entryLabel = (type: string) => type === '판매' ? '판매 수익' : type === '폐기' ? '폐기 비용' : '보관 비용'
 const storageInvoices = [{
   id: 'STORAGE-20260829', date: '2026.08.29 16:45', status: '결제완료',
-  locations: [{ location: 'C-07 야적장', amount: 45000, materials: [{ code: 'EMX-PIP-240827', name: '고밀도 폴리에틸렌 파이프 DN100', quantity: '200', unit: 'm' }] }],
+  locations: [{ location: 'C-07 야적장', amount: 45000, materials: [{ code: '260818-0001', name: '고밀도 폴리에틸렌 파이프 DN100', quantity: '200', unit: 'm' }] }],
 }]
 
 export function Settlements({ navigation, transactions, assets, disposals, onInspection, initialKind = '전체' }: { navigation: ReactNode; transactions: string[][]; assets: Asset[]; disposals: DisposalRecord[]; onInspection: (id: string) => void; initialKind?: string }) {

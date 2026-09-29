@@ -15,7 +15,7 @@ enum MarketEntityType {
 /// 자산 단위 판매 상품. 한 자산은 하나의 상품으로만 등록할 수 있다.
 model Product {
   id                   String              @id @db.VarChar(20)
-  assetId              String              @unique @db.VarChar(20)
+  assetId              String              @unique @db.VarChar(11)
   name                 String              @db.VarChar(160) // 마켓 노출 상품명 스냅샷
   originalUnitPrice    Decimal             @db.Decimal(19, 0) // 할인 전 단가, 원 단위·VAT 포함
   discountRate         Int                 @default(0) @db.UnsignedTinyInt // 0~100 정수

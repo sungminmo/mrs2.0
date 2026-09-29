@@ -32,7 +32,7 @@ async function fixture(customerId: string | null = 'TEST-CUST-001') {
       return {
         totalElements: 21,
         records: [{
-          id: 'TEST-ASSET-001',
+          id: '260901-0001',
           itemId: '900001',
           receivingId: 'TEST-RCV-001',
           name: 'Test Aluminum Sheet',

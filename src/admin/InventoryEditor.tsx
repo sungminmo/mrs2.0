@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, Save, Upload, X } from 'lucide-react'
-import { customerForSite, customers, itemUnits, receivings, sites, type AdminImage, type Inventory, type Location, type MasterItem } from './adminData'
+import { customerForSite, customers, inspections, itemUnits, receivings, sites, type AdminImage, type Inventory, type Location, type MasterItem } from './adminData'
 import { categoryEnabled, type MaterialCategory } from '../categories'
 import CategorySelect from '../CategorySelect'
-import { nextCode, prepareInventory, validateMasterItem } from './adminInventory'
+import { nextAssetCode, prepareInventory, validateMasterItem } from './adminInventory'
 
 type Props = { kind: 'items' | 'inventory'; items: MasterItem[]; assets: Inventory[]; categories: MaterialCategory[]; locations: Location[]; id: string | null; cancelHref: string; onSaveItem: (item: MasterItem, previousId: string | null) => void; onSaveAsset: (asset: Inventory) => void }
 
@@ -61,7 +61,8 @@ function AssetForm({ items, assets, categories, locations, id, onSaveAsset }: Pr
   const receiving = receivings.find((candidate) => candidate.id === receivingId)
   const customer = receiving ? customers.find((candidate) => candidate.id === customerForSite(receiving.siteId)) : null
   const availableItems = items.filter((candidate) => candidate.id === itemId || candidate.enabled && categoryEnabled(categories, candidate.category) && [candidate.id, candidate.name, candidate.specification, candidate.brand].join(' ').toLocaleLowerCase('ko-KR').includes(query.trim().toLocaleLowerCase('ko-KR')))
-  const code = asset?.id ?? nextCode('AST-', assets, 3)
+  const receivedAt = inspections.find((inspection) => inspection.receivingId === receivingId)?.date
+  const code = asset?.id ?? (receivedAt ? nextAssetCode(receivedAt, assets) : '')
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
@@ -72,7 +73,7 @@ function AssetForm({ items, assets, categories, locations, id, onSaveAsset }: Pr
   return <form onSubmit={submit} className="adm-edit-form">
     <h2>연결 정보</h2>
     <div className="adm-edit-fields">
-      <label>재고번호<input value={code} readOnly /></label>
+      <label>재고번호<input value={code} readOnly placeholder="입고 신청 선택 시 생성" /></label>
       <label>입고 신청번호<select value={receivingId} onChange={(event) => setReceivingId(event.target.value)} disabled={!!asset} required autoFocus><option value="" disabled>입고 신청 선택</option>{receivings.filter((request) => request.status !== '취소').map((request) => <option key={request.id} value={request.id}>{request.id} · {request.summary}</option>)}</select></label>
       <label>고객사<input value={customer?.name ?? ''} readOnly placeholder="입고 신청 선택 시 자동 연결" /></label>
       <label>현장<input value={sites.find((site) => site.id === receiving?.siteId)?.name ?? ''} readOnly /></label>

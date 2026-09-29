@@ -201,7 +201,7 @@ Query:
 ```json
 {
   "id": "PRD-000002",
-  "assetId": "AST-000002",
+  "assetId": "260902-0001",
   "name": "회수 참나무 구조목",
   "category": {
     "id": "020101",
@@ -335,7 +335,7 @@ Query:
 
 ```json
 {
-  "id": "AST-000002",
+  "id": "260902-0001",
   "itemId": "000002",
   "name": "회수 참나무 구조목",
   "category": { "id": "020101", "name": "구조목", "path": "목재 > 구조재 > 구조목" },
@@ -390,7 +390,7 @@ Header: `Idempotency-Key: <UUID>`
   "success": true,
   "data": {
     "id": "SAL-20260922-000001",
-    "assetId": "AST-000002",
+    "assetId": "260902-0001",
     "action": "START_SALE",
     "status": "PENDING",
     "desiredAmount": "3750000",
@@ -429,7 +429,7 @@ Header: `Idempotency-Key: <UUID>`
   "success": true,
   "data": {
     "id": "SAL-20260922-000002",
-    "assetId": "AST-000002",
+    "assetId": "260902-0001",
     "action": "CANCEL_SALE",
     "status": "PENDING",
     "reason": "다음 현장 재사용 일정 확정",

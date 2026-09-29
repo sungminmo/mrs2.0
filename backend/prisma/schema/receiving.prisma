@@ -118,7 +118,7 @@ model Inspection {
 model InspectionItem {
   id               String      @id @default(uuid()) @db.VarChar(36)
   inspectionId     String      @db.VarChar(20)
-  assetId          String?     @unique @db.VarChar(20)
+  assetId          String?     @unique @db.VarChar(11)
   name             String      @db.VarChar(160)
   specification    String      @default("") @db.VarChar(500)
   grade            AssetGrade?

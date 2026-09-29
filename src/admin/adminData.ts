@@ -53,9 +53,9 @@ export const receivings: Receiving[] = [
   { id: 'REQ-0914-02', siteId: 'SITE-004', date: '2026-09-14T08:00:00+09:00', channel: '카카오톡', volume: '1톤 트럭 이하', summary: '재사용 바닥 타일', status: '입고 완료', scheduledAt: '2026-09-14T11:00:00+09:00', termsAt: '2026-09-14T08:00:00+09:00', estimate: 80000, note: '운반비 견적 예시' },
 ]
 export const inspections: Inspection[] = [
-  { id: 'RCV-0908', receivingId: 'REQ-0907-01', date: '2026-09-08T10:00:00+09:00', inspectedAt: '2026-09-09T09:30:00+09:00', notifiedAt: '2026-09-09T10:00:00+09:00', status: '결과 확인 대기', acknowledgedAt: null, disposalStatus: '미처리', materials: [{ assetId: 'AST-001', name: '콘크리트 블록', grade: 'B', unit: 'EA', received: 550, usable: 500, disposal: 50, processed: 0, reason: '균열 및 모서리 파손' }], evidence: null },
-  { id: 'RCV-0902', receivingId: 'REQ-0901-01', date: '2026-09-02T10:00:00+09:00', inspectedAt: '2026-09-03T11:00:00+09:00', notifiedAt: '2026-09-03T11:30:00+09:00', status: '검수 종료', acknowledgedAt: '2026-09-04T10:00:00+09:00', disposalStatus: '처리 예정', materials: [{ assetId: 'AST-002', name: '회수 참나무 구조목', grade: 'S', unit: 'M', received: 85, usable: 80, disposal: 5, processed: 0, reason: '부패 및 심한 변형' }], evidence: null },
-  { id: 'RCV-0827', receivingId: 'REQ-0826-01', date: '2026-08-27T10:00:00+09:00', inspectedAt: '2026-08-28T08:30:00+09:00', notifiedAt: '2026-08-28T09:00:00+09:00', status: '검수 종료', acknowledgedAt: '2026-08-28T14:00:00+09:00', disposalStatus: '폐기 완료', materials: [{ assetId: 'AST-003', name: '폴리에틸렌 파이프 DN100', grade: 'A', unit: 'M', received: 220, usable: 200, disposal: 20, processed: 20, reason: '관벽 손상 및 접합부 변형' }], evidence: 'DEMO-DSP-0830 · 처리 수량 20M (문서 원본 미등록)' },
+  { id: 'RCV-0908', receivingId: 'REQ-0907-01', date: '2026-09-08T10:00:00+09:00', inspectedAt: '2026-09-09T09:30:00+09:00', notifiedAt: '2026-09-09T10:00:00+09:00', status: '결과 확인 대기', acknowledgedAt: null, disposalStatus: '미처리', materials: [{ assetId: '260908-0001', name: '콘크리트 블록', grade: 'B', unit: 'EA', received: 550, usable: 500, disposal: 50, processed: 0, reason: '균열 및 모서리 파손' }], evidence: null },
+  { id: 'RCV-0902', receivingId: 'REQ-0901-01', date: '2026-09-02T10:00:00+09:00', inspectedAt: '2026-09-03T11:00:00+09:00', notifiedAt: '2026-09-03T11:30:00+09:00', status: '검수 종료', acknowledgedAt: '2026-09-04T10:00:00+09:00', disposalStatus: '처리 예정', materials: [{ assetId: '260902-0001', name: '회수 참나무 구조목', grade: 'S', unit: 'M', received: 85, usable: 80, disposal: 5, processed: 0, reason: '부패 및 심한 변형' }], evidence: null },
+  { id: 'RCV-0827', receivingId: 'REQ-0826-01', date: '2026-08-27T10:00:00+09:00', inspectedAt: '2026-08-28T08:30:00+09:00', notifiedAt: '2026-08-28T09:00:00+09:00', status: '검수 종료', acknowledgedAt: '2026-08-28T14:00:00+09:00', disposalStatus: '폐기 완료', materials: [{ assetId: '260827-0001', name: '폴리에틸렌 파이프 DN100', grade: 'A', unit: 'M', received: 220, usable: 200, disposal: 20, processed: 20, reason: '관벽 손상 및 접합부 변형' }], evidence: 'DEMO-DSP-0830 · 처리 수량 20M (문서 원본 미등록)' },
   { id: 'RCV-0914', receivingId: 'REQ-0914-02', date: '2026-09-14T11:00:00+09:00', inspectedAt: null, notifiedAt: null, status: '검수 대기', acknowledgedAt: null, disposalStatus: '판정 대기', materials: [{ assetId: null, name: '재사용 바닥 타일', grade: null, unit: 'EA', received: 120, usable: null, disposal: null, processed: null, reason: '검수 전' }], evidence: null },
 ]
 export const locations: Location[] = [
@@ -71,18 +71,18 @@ export const masterItems: MasterItem[] = [
   { id: '000004', name: '알루미늄 프레임', category: '010401', specification: '40 × 40 mm', brand: '', unit: '본', inboundPrice: null, outboundPrice: null, standardPrice: null, enabled: false, note: '미사용 품목 예시', images: [] },
 ]
 export const inventory: Inventory[] = [
-  { id: 'AST-001', itemId: '000001', receivingId: 'REQ-0907-01', customerId: 'CUS-001', receiptId: 'RCV-0908', locationId: 'LOC-B08', name: '콘크리트 블록', category: '020400', brand: '', grade: 'B', quantity: 500, unit: 'EA', appraisal: 390000, status: '보관중', saleStatus: '판매대기', specification: '390 × 190 × 190 mm', images: [], history: [] },
-  { id: 'AST-002', itemId: '000002', receivingId: 'REQ-0901-01', customerId: 'CUS-002', receiptId: 'RCV-0902', locationId: 'LOC-A03', name: '회수 참나무 구조목', category: '020101', brand: '', grade: 'S', quantity: 80, unit: 'M', appraisal: 3480000, status: '보관중', saleStatus: '판매중', specification: '38 × 89 mm, 2.4 m', images: [], history: [] },
-  { id: 'AST-003', itemId: '000003', receivingId: 'REQ-0826-01', customerId: 'CUS-001', receiptId: 'RCV-0827', locationId: 'LOC-C07', name: '폴리에틸렌 파이프 DN100', category: '020103', brand: '', grade: 'A', quantity: 200, unit: 'M', appraisal: 698000, status: '보관중', saleStatus: '판매중', specification: 'DN100, SDR17, 6 m', images: [], history: [] },
+  { id: '260908-0001', itemId: '000001', receivingId: 'REQ-0907-01', customerId: 'CUS-001', receiptId: 'RCV-0908', locationId: 'LOC-B08', name: '콘크리트 블록', category: '020400', brand: '', grade: 'B', quantity: 500, unit: 'EA', appraisal: 390000, status: '보관중', saleStatus: '판매대기', specification: '390 × 190 × 190 mm', images: [], history: [] },
+  { id: '260902-0001', itemId: '000002', receivingId: 'REQ-0901-01', customerId: 'CUS-002', receiptId: 'RCV-0902', locationId: 'LOC-A03', name: '회수 참나무 구조목', category: '020101', brand: '', grade: 'S', quantity: 80, unit: 'M', appraisal: 3480000, status: '보관중', saleStatus: '판매중', specification: '38 × 89 mm, 2.4 m', images: [], history: [] },
+  { id: '260827-0001', itemId: '000003', receivingId: 'REQ-0826-01', customerId: 'CUS-001', receiptId: 'RCV-0827', locationId: 'LOC-C07', name: '폴리에틸렌 파이프 DN100', category: '020103', brand: '', grade: 'A', quantity: 200, unit: 'M', appraisal: 698000, status: '보관중', saleStatus: '판매중', specification: 'DN100, SDR17, 6 m', images: [], history: [] },
 ]
 export const saleRequests: SaleRequest[] = [
-  { id: 'SALE-001', assetId: 'AST-001', date: '2026-09-10T10:00:00+09:00', quantity: 500, desiredAmount: 425000, status: '승인 대기', inspection: '판매용 정밀 검수 대기' },
-  { id: 'SALE-002', assetId: 'AST-002', date: '2026-09-05T10:00:00+09:00', quantity: 80, desiredAmount: 3750000, status: '승인 완료', inspection: '판매용 정밀 검수 완료 · S등급' },
-  { id: 'SALE-003', assetId: 'AST-003', date: '2026-09-01T10:00:00+09:00', quantity: 200, desiredAmount: 760000, status: '승인 완료', inspection: '판매용 정밀 검수 완료 · A등급' },
+  { id: 'SALE-001', assetId: '260908-0001', date: '2026-09-10T10:00:00+09:00', quantity: 500, desiredAmount: 425000, status: '승인 대기', inspection: '판매용 정밀 검수 대기' },
+  { id: 'SALE-002', assetId: '260902-0001', date: '2026-09-05T10:00:00+09:00', quantity: 80, desiredAmount: 3750000, status: '승인 완료', inspection: '판매용 정밀 검수 완료 · S등급' },
+  { id: 'SALE-003', assetId: '260827-0001', date: '2026-09-01T10:00:00+09:00', quantity: 200, desiredAmount: 760000, status: '승인 완료', inspection: '판매용 정밀 검수 완료 · A등급' },
 ]
 export const products: Product[] = [
-  { id: 'PRD-002', assetId: 'AST-002', name: '회수 참나무 구조목', price: 43500, discountRate: 0, unit: 'M', status: '판매 중' },
-  { id: 'PRD-003', assetId: 'AST-003', name: '폴리에틸렌 파이프 DN100', price: 3490, discountRate: 0, unit: 'M', status: '판매 중' },
+  { id: 'PRD-002', assetId: '260902-0001', name: '회수 참나무 구조목', price: 43500, discountRate: 0, unit: 'M', status: '판매 중' },
+  { id: 'PRD-003', assetId: '260827-0001', name: '폴리에틸렌 파이프 DN100', price: 3490, discountRate: 0, unit: 'M', status: '판매 중' },
 ]
 export const quotes: Quote[] = [
   { id: 'QUO-0914', customerId: 'CUS-003', date: '2026-09-14T10:00:00+09:00', dueAt: '2026-09-21T09:00:00+09:00', status: '접수 대기', lines: [{ productId: 'PRD-002', name: '회수 참나무 구조목', quantity: 10, unit: 'M', unitPrice: null }, { productId: 'PRD-003', name: '폴리에틸렌 파이프 DN100', quantity: 30, unit: 'M', unitPrice: null }], address: '경기 수원시 · 예시 납품지', note: '일괄 배송 및 운반비 확인 요청' },

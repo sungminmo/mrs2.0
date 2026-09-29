@@ -237,7 +237,7 @@ function RecordDetail({ row }: { row: AdminRow }) {
 
 function ProductPhoto({ id }: { id: string }) {
   const [failed, setFailed] = useState(false)
-  const photo = materialPhotos.find(([code]) => code === (id === 'PRD-002' ? 'EMX-WOD-240902' : 'EMX-PIP-240827'))!
+  const photo = materialPhotos.find(([code]) => code === (id === 'PRD-002' ? '260902-0001' : '260818-0001'))!
   return <figure className="adm-product-photo">{failed ? <p>참고 사진을 불러오지 못했습니다.</p> : <img src={`https://thumb.wikimedia.org/wikipedia/commons/thumb/${photo[1]}`} alt={id === 'PRD-002' ? '적재된 목재 참고 사진' : '폴리에틸렌 파이프 참고 사진'} onError={() => setFailed(true)} />}<figcaption>자재 참고 사진 · 검수 증빙 아님<br /><a href={`https://commons.wikimedia.org/wiki/File:${photo[4]}`} target="_blank" rel="noreferrer">{photo[2]} · {photo[3]}</a></figcaption></figure>
 }
 
