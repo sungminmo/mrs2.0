@@ -19,9 +19,10 @@ export function nextAssetCode(receivedAt: string, assets: { id: string }[]) {
 export function validateMasterItem(item: MasterItem, items: MasterItem[], assets: Inventory[], categories: MaterialCategory[] = materialCategories, previousId?: string) {
   if (!/^\d{6}$/.test(item.id)) throw new Error('품목코드는 숫자 6자리로 입력해 주세요.')
   if (items.some((candidate) => candidate.id === item.id && candidate.id !== previousId)) throw new Error('이미 사용 중인 품목코드입니다.')
-  if (!item.name.trim() || !item.specification.trim()) throw new Error('품목명과 규격을 입력해 주세요.')
+  if (!item.name.trim()) throw new Error('품목명을 입력해 주세요.')
   if (!itemUnits.includes(item.unit as typeof itemUnits[number])) throw new Error('유효한 단위를 선택해 주세요.')
-  validateLeafCategory(categories, item.category, previousId ? items.find((candidate) => candidate.id === previousId)?.category : undefined)
+  if (item.category) validateLeafCategory(categories, item.category, previousId ? items.find((candidate) => candidate.id === previousId)?.category : undefined)
+  if (item.inboundPrice === null || item.outboundPrice === null) throw new Error('입고단가와 출고단가를 입력해 주세요.')
   if ([item.inboundPrice, item.outboundPrice, item.standardPrice].some((price) => price !== null && (!Number.isFinite(price) || price < 0 || price > 1e12))) throw new Error('단가는 0~1조 원 범위로 입력해 주세요. 미입력은 미산정으로 관리합니다.')
   const previous = previousId ? items.find((candidate) => candidate.id === previousId) : undefined
   if (previous && previous.unit !== item.unit && assets.some((asset) => asset.itemId === item.id)) throw new Error('연결된 자산이 있는 품목의 기준 단위는 변경할 수 없습니다.')

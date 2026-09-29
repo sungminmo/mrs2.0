@@ -12,7 +12,7 @@ export default function CategorySelect({ categories, value, defaultValue = '', o
   const complete = Boolean(current) && categoryChildren(categories, current).length === 0
   const update = (id: string) => { setSelected(id); onChange?.(id) }
   return <fieldset className="category-select"><legend>카테고리{required ? ' (최종 분류 필수)' : ''}</legend>
-    {required && <input type="hidden" name={name} value={complete ? current : ''} />}
+    {!onChange && <input type="hidden" name={name} value={complete ? current : ''} />}
     <div className="category-select-levels">{[0, 1, 2].map((depth) => {
       const parent = depth === 0 ? null : chain[depth - 1]?.id
       const children = parent === undefined ? [] : categoryChildren(categories, parent).filter((category) => !required || categoryEnabled(categories, category.id) || retained.includes(category.id))

@@ -39,15 +39,15 @@ function ItemForm({ items, assets, categories, id, onSaveItem }: Props) {
   return <form onSubmit={submit} className="adm-edit-form">
     <h2>품목 기본 정보</h2>
     <div className="adm-edit-fields">
-      <label>품목코드<input name="id" defaultValue={item?.id ?? ''} required inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} placeholder="숫자 6자리" autoFocus /></label>
-      <label>품목명<input name="name" defaultValue={item?.name} required maxLength={120} /></label>
-      <CategorySelect categories={categories} defaultValue={item?.category} retainedId={item?.category} required />
-      <label>규격<input name="specification" defaultValue={item?.specification} required maxLength={160} /></label>
+      <label>품목코드 <span className="adm-required" aria-label="필수">*</span><input name="id" defaultValue={item?.id ?? ''} required inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} placeholder="숫자 6자리" autoFocus /></label>
+      <label>품목명 <span className="adm-required" aria-label="필수">*</span><input name="name" defaultValue={item?.name} required maxLength={120} /></label>
+      <CategorySelect categories={categories} defaultValue={item?.category} retainedId={item?.category} />
+      <label>규격<input name="specification" defaultValue={item?.specification} maxLength={160} /></label>
       <label>브랜드 (선택)<input name="brand" defaultValue={item?.brand} maxLength={80} /></label>
-      <label>기준 단위<select name="unit" defaultValue={item?.unit ?? ''} disabled={linked} required><option value="" disabled>선택</option>{itemUnits.map((unit) => <option key={unit}>{unit}</option>)}</select>{linked && <small>연결 자산이 있어 단위를 변경할 수 없습니다.</small>}</label>
+      <label>기준 단위 <span className="adm-required" aria-label="필수">*</span><select name="unit" defaultValue={item?.unit ?? ''} disabled={linked} required><option value="" disabled>선택</option>{itemUnits.map((unit) => <option key={unit}>{unit}</option>)}</select>{linked && <small>연결 자산이 있어 단위를 변경할 수 없습니다.</small>}</label>
     </div>
     <h2>단가 정보 <small>원 / 기준 단위 · 부가세 포함</small></h2>
-    <div className="adm-edit-fields adm-price-fields">{([['inboundPrice', '입고단가'], ['outboundPrice', '출고단가'], ['standardPrice', '표준단가']] as const).map(([name, label]) => <label key={name}>{label}<input type="number" name={name} min={0} max={1e12} step="any" defaultValue={item?.[name] ?? ''} placeholder="미산정" /></label>)}</div>
+    <div className="adm-edit-fields adm-price-fields">{([['inboundPrice', '입고단가', true], ['outboundPrice', '출고단가', true], ['standardPrice', '표준단가', false]] as const).map(([name, label, required]) => <label key={name}>{label}{required && <> <span className="adm-required" aria-label="필수">*</span></>}<input type="number" name={name} required={required} min={0} max={1e12} step="any" defaultValue={item?.[name] ?? ''} placeholder={required ? undefined : '미산정'} /></label>)}</div>
     <ImagePicker images={images} onChange={setImages} limit={1} onBusy={setBusy} label="대표 이미지" />
     <label className="adm-check"><input name="enabled" type="checkbox" defaultChecked={item?.enabled ?? true} />사용 품목</label>
     <label className="adm-edit-memo">적요 (선택)<textarea name="note" defaultValue={item?.note} rows={4} maxLength={2000} /></label>

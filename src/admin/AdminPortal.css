@@ -34,6 +34,7 @@
 .adm-search input { border: 0; outline: 0; background: transparent; width: 100%; min-width: 0; height: 100%; color: #303a33; font-size: 12px; }
 .adm-search > div:focus-within { outline: 2px solid #36745a; outline-offset: 2px; }
 .adm-button, .adm-icon { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #bfc8c1; border-radius: 4px; background: #fff; color: #38443b; min-height: 38px; padding: 8px 12px; }
+.adm-required { color: #b42318; font-weight: 800; }
 .adm-search-button { min-width: 92px; font-weight: 700; transition: background-color 160ms cubic-bezier(.25, 1, .5, 1), transform 120ms cubic-bezier(.25, 1, .5, 1); }
 .adm-search-button:hover:not(:disabled) { background: #1f5138; text-decoration: none; }
 .adm-search-button:active:not(:disabled) { transform: scale(.97); }
