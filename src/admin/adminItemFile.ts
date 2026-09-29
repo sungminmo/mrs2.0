@@ -39,9 +39,11 @@ export function parseItemFile(source: string, items: MasterItem[], assets: Inven
   const unknown = headers.filter((header) => !columns.includes(header as typeof columns[number]))
   if (missing.length || unknown.length) throw new Error([missing.length ? `필수 열 누락: ${missing.join(', ')}` : '', unknown.length ? `알 수 없는 열: ${unknown.join(', ')}` : ''].filter(Boolean).join(' · '))
   if (!result.data.length) throw new Error('등록할 품목 데이터가 없습니다.')
-  if (result.data.length > 1000) throw new Error('한 파일에 최대 1,000개 품목을 등록할 수 있습니다.')
 
   const imported: MasterItem[] = []
+  const usedIds = new Set(items.map((item) => item.id))
+  const itemKey = (item: MasterItem) => [item.name, item.category, item.specification, item.brand, item.unit].map((value) => value.trim().toLocaleLowerCase('ko-KR')).join('\u0000')
+  const usedKeys = new Set(items.map(itemKey))
   for (const [index, row] of result.data.entries()) {
     try {
       const enabled = row.사용구분.trim()
@@ -62,7 +64,12 @@ export function parseItemFile(source: string, items: MasterItem[], assets: Inven
         note: row.적요.trim(),
         images: [],
       }
-      validateMasterItem(item, [...items, ...imported], assets, categories)
+      if (usedIds.has(item.id)) throw new Error('이미 사용 중인 품목코드입니다.')
+      const key = itemKey(item)
+      if (usedKeys.has(key)) throw new Error('같은 품목명·카테고리·규격·브랜드·단위의 품목이 이미 있습니다.')
+      validateMasterItem(item, [], assets, categories)
+      usedIds.add(item.id)
+      usedKeys.add(key)
       imported.push(item)
     } catch (error) {
       throw new Error(`${index + 2}행: ${error instanceof Error ? error.message : '품목 데이터를 확인해 주세요.'}`)
