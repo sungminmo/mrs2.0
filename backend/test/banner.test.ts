@@ -48,7 +48,7 @@ test('administrator can save a placement with multiple linked images', async () 
   const records: BannerPlacementRecord[] = []
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, banners: repository(records), auth: { secret: 'test-only-secret-at-least-32-characters', expiresIn: '1h', repository: { findByEmail: async () => admin, findById: async () => admin, createRegistration: async () => { throw new Error('Not used') }, listMembers: async () => [], approveMember: async () => null } } })
   assert.equal((await app.request('/api/admin/banners')).status, 401)
-  const login = await app.request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: admin.email, password: 'admin-password' }) })
+  const login = await app.request('/api/admin/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: admin.email, password: 'admin-password' }) })
   const token = (await login.json() as { data: { accessToken: string } }).data.accessToken
   const entry = (id: string, sortOrder: number) => ({ id, desktopImageUrl: '/mrs2.0/desktop.jpg', mobileImageUrl: '/mrs2.0/mobile.jpg', linkUrl: 'https://example.com/event', enabled: true, sortOrder, startsAt: null, endsAt: null })
   const response = await app.request('/api/admin/banners/customer-market-top', { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '마켓 상단', enabled: true, items: [entry('11111111-1111-4111-8111-111111111111', 1), entry('22222222-2222-4222-8222-222222222222', 2)] }) })

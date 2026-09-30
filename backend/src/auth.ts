@@ -55,6 +55,10 @@ export const loginSchema = z.object({
   email: z.string().trim().pipe(z.email()).transform((value) => value.toLowerCase()),
   password: z.string().min(8).max(128),
 })
+export const adminLoginSchema = z.object({
+  id: z.string().trim().min(1).max(254),
+  password: z.string().min(1).max(128),
+}).strict()
 
 const registrationFields = {
   email: z.string().trim().pipe(z.email()).transform((value) => value.toLowerCase()),
@@ -90,23 +94,37 @@ async function issueToken(user: AuthUser, secret: string, expiresIn: string) {
   return new SignJWT({ email: user.email, sessionVersion: user.sessionVersion ?? 0, customerVersion: user.customer?.accessVersion ?? null })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(user.id)
+    .setAudience(user.role === 'ADMIN' ? 'admin' : 'customer')
     .setIssuedAt()
     .setExpirationTime(expiresIn)
     .sign(tokenKey(secret))
 }
 
-export function authRoutes(repository: AuthRepository, secret: string, expiresIn: string) {
-  return async (context: Context) => {
-    const credentials = loginSchema.parse(await context.req.json())
-    const user = await repository.findByEmail(credentials.email)
-    if (!user || !(await verifyPassword(credentials.password, user.passwordHash))) {
-      throw new AppError(401, ErrorCode.UNAUTHORIZED, 'Email or password is incorrect')
+async function login(repository: AuthRepository, secret: string, expiresIn: string, identifier: string, password: string, role: AuthUser['role']) {
+    const user = await repository.findByEmail(identifier)
+    if (!user || user.role !== role || !(await verifyPassword(password, user.passwordHash))) {
+      throw new AppError(401, ErrorCode.UNAUTHORIZED, '아이디 또는 비밀번호가 올바르지 않습니다.')
     }
     if (user.status === 'PENDING') throw new AppError(403, ErrorCode.ACCOUNT_PENDING, 'Account approval is pending')
     if (user.status !== 'ACTIVE') throw new AppError(403, ErrorCode.FORBIDDEN, 'Account is not available')
     if (user.role === 'CUSTOMER' && (!user.customerId || user.customer?.id !== user.customerId || user.customer.status !== 'ACTIVE')) throw new AppError(403, ErrorCode.FORBIDDEN, '고객사 승인 또는 소속 확인이 필요합니다.')
     const accessToken = await issueToken(user, secret, expiresIn)
-    return success(context, { accessToken, tokenType: 'Bearer', user: memberProfile(user) })
+    return { accessToken, tokenType: 'Bearer' as const, user: memberProfile(user) }
+}
+
+export function customerLogin(repository: AuthRepository, secret: string, expiresIn: string) {
+  return async (context: Context) => {
+    context.header('Cache-Control', 'no-store')
+    const credentials = loginSchema.parse(await context.req.json())
+    return success(context, await login(repository, secret, expiresIn, credentials.email, credentials.password, 'CUSTOMER'))
+  }
+}
+
+export function adminLogin(repository: AuthRepository, secret: string, expiresIn: string) {
+  return async (context: Context) => {
+    context.header('Cache-Control', 'no-store')
+    const credentials = adminLoginSchema.parse(await context.req.json())
+    return success(context, await login(repository, secret, expiresIn, credentials.id, credentials.password, 'ADMIN'))
   }
 }
 
@@ -125,19 +143,19 @@ export function register(repository: AuthRepository) {
   }
 }
 
-export function requireAuth(repository: AuthRepository, secret: string): MiddlewareHandler {
+export function requireAuth(repository: AuthRepository, secret: string, role: AuthUser['role'] = 'CUSTOMER'): MiddlewareHandler {
   return async (context, next) => {
     const authorization = context.req.header('Authorization')
     if (!authorization?.startsWith('Bearer ')) throw new AppError(401, ErrorCode.UNAUTHORIZED, 'Bearer token is required')
     let payload
     try {
-      ;({ payload } = await jwtVerify(authorization.slice(7), tokenKey(secret), { algorithms: ['HS256'] }))
+      ;({ payload } = await jwtVerify(authorization.slice(7), tokenKey(secret), { algorithms: ['HS256'], audience: role === 'ADMIN' ? 'admin' : 'customer' }))
       if (!payload.sub || typeof payload.email !== 'string') throw new Error('Invalid token payload')
     } catch {
       throw new AppError(401, ErrorCode.UNAUTHORIZED, 'Invalid or expired access token')
     }
     const user = await repository.findById(payload.sub)
-    if (!user || user.status !== 'ACTIVE') throw new AppError(401, ErrorCode.UNAUTHORIZED, 'Account is not available')
+    if (!user || user.role !== role || user.status !== 'ACTIVE') throw new AppError(401, ErrorCode.UNAUTHORIZED, 'Account is not available')
     if (payload.sessionVersion !== (user.sessionVersion ?? 0)) throw new AppError(401, ErrorCode.UNAUTHORIZED, '다시 로그인해 주세요.')
     if (user.role === 'CUSTOMER' && (!user.customerId || user.customer?.id !== user.customerId || user.customer.status !== 'ACTIVE' || payload.customerVersion !== user.customer.accessVersion)) throw new AppError(401, ErrorCode.UNAUTHORIZED, '고객사 접근 권한이 변경되었습니다.')
     context.header('Cache-Control', 'no-store')

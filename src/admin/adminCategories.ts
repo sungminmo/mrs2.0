@@ -1,10 +1,10 @@
-import { authenticatedFetch } from '../authSession'
+import { adminAuthenticatedFetch } from '../adminAuthSession'
 import type { MaterialCategory } from '../categories'
 
 type CategoryResponse = { success: true; data: { category: MaterialCategory } } | { success: false; error: { message?: string } }
 
 export async function saveAdminCategory(category: MaterialCategory) {
-  const response = await authenticatedFetch(`/api/admin/categories/${category.id}`, {
+  const response = await adminAuthenticatedFetch(`/api/admin/categories/${category.id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ parentId: category.parentId, name: category.name, enabled: category.enabled, order: category.order }),

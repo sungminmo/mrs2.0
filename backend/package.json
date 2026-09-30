@@ -18,7 +18,8 @@
     "db:status": "prisma migrate status",
     "customers:check": "node --env-file=../.env --import tsx src/customer-audit.ts",
     "db:dev": "prisma migrate dev",
-    "db:seed": "node --env-file=../.env --import tsx src/seed.ts"
+    "db:seed": "node --env-file=../.env --import tsx src/seed.ts",
+    "db:seed:admin": "node --env-file=../.env --import tsx src/seed-admin.ts"
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",

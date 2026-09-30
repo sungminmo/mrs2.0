@@ -4,6 +4,7 @@
 - 기준일: 2026-09-22
 - Base URL: `/api`
 - 인증: JWT Bearer (`Authorization: Bearer <accessToken>`)
+- 고객과 관리자는 로그인 API·세션·JWT audience를 분리한다. 관리자 로그인은 `/api/admin/auth/login`, 고객 로그인은 `/api/auth/login`이며 서로의 계정·토큰을 사용할 수 없다.
 - Content-Type: `application/json`
 - 시간: ISO 8601 UTC (`2026-09-22T01:23:45.000Z`)
 - 금액: 원 단위 정수 문자열. 예: `"1375000"`

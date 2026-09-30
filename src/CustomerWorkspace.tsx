@@ -31,7 +31,6 @@ export default function CustomerWorkspace() {
     if (stored) {
       accountRequest<{ user: AuthSession['user'] }>('/api/auth/me', { signal: controller.signal }).then(({ user }) => {
         if (controller.signal.aborted) return
-        if (user.role === 'ADMIN') { window.location.replace('/admin/#/admin/dashboard'); return }
         setSession({ accessToken: stored.accessToken, user })
         setError('')
       }).catch((reason) => { if (!controller.signal.aborted) { setSession(null); setError(reason instanceof Error ? reason.message : '계정 확인에 실패했습니다.') } }).finally(() => { if (!controller.signal.aborted) setChecking(false) })
@@ -43,7 +42,6 @@ export default function CustomerWorkspace() {
   if (guest) return <ShopifyMarket products={[]} navigation={<button className="nav-button" onClick={() => setGuest(false)}><UserRound />로그인</button>} basket={{}} onBasketChange={() => {}} isGuest onLogin={() => setGuest(false)} />
   return <>{error && <div className="customer-session" role="alert">{error}<button className="sa-button" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={16} />다시 확인</button></div>}<LoginPage onLogin={async (email, password) => {
     const next = await signIn(email, password)
-    if (next.user.role === 'ADMIN') { window.location.href = '/admin/#/admin/dashboard'; return }
     setSession(next)
     setError('')
   }} onBrowse={() => setGuest(true)} onCustomerAccess={() => setRevision((value) => value + 1)} /></>

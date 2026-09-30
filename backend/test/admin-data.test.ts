@@ -28,7 +28,7 @@ async function fixture(role: AuthUser['role']) {
     },
   }
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret, expiresIn: '1h' }, adminData: adminData as never })
-  const login = await app.request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email, password: 'test-password' }) })
+  const login = await app.request(role === 'ADMIN' ? '/api/admin/auth/login' : '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(role === 'ADMIN' ? { id: user.email, password: 'test-password' } : { email: user.email, password: 'test-password' }) })
   const token = (await login.json() as { data: { accessToken: string } }).data.accessToken
   return { app, token, data, created, savedCategories }
 }
@@ -41,7 +41,7 @@ test('admin data endpoint requires an authenticated administrator', async () => 
   assert.deepEqual((await response.json() as { data: unknown }).data, admin.data)
 
   const customer = await fixture('CUSTOMER')
-  assert.equal((await customer.app.request('/api/admin/data', { headers: { Authorization: `Bearer ${customer.token}` } })).status, 403)
+  assert.equal((await customer.app.request('/api/admin/data', { headers: { Authorization: `Bearer ${customer.token}` } })).status, 401)
 })
 
 test('administrator can register individual and file items in one request', async () => {
@@ -64,7 +64,7 @@ test('item registration requires an administrator and rejects duplicate request 
   assert.equal((await admin.app.request('/api/admin/items', { method: 'POST', headers: { Authorization: `Bearer ${admin.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [item, item] }) })).status, 409)
 
   const customer = await fixture('CUSTOMER')
-  assert.equal((await customer.app.request('/api/admin/items', { method: 'POST', headers: { Authorization: `Bearer ${customer.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [item] }) })).status, 403)
+  assert.equal((await customer.app.request('/api/admin/items', { method: 'POST', headers: { Authorization: `Bearer ${customer.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [item] }) })).status, 401)
 })
 
 test('administrator can save a category to the database', async () => {
@@ -83,7 +83,7 @@ test('category saving requires an administrator and valid input', async () => {
   assert.equal((await admin.app.request('/api/admin/categories/not-a-code', { method: 'PUT', headers: { Authorization: `Bearer ${admin.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(category) })).status, 400)
 
   const customer = await fixture('CUSTOMER')
-  assert.equal((await customer.app.request('/api/admin/categories/040000', { method: 'PUT', headers: { Authorization: `Bearer ${customer.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(category) })).status, 403)
+  assert.equal((await customer.app.request('/api/admin/categories/040000', { method: 'PUT', headers: { Authorization: `Bearer ${customer.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(category) })).status, 401)
 })
 
 test('category repository upserts the material category record', async () => {
