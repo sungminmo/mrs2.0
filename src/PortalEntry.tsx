@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useSyncExternalStore } from 'react'
-import App from './App'
+import App from './CustomerWorkspace'
 
 const ServiceInquiryPage = lazy(() => import('./ServiceInquiryPage'))
 const PrivacyPolicyPage = lazy(() => import('./PrivacyPolicyPage'))

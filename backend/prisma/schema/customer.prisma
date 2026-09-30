@@ -1,0 +1,92 @@
+enum CustomerStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum CustomerRole {
+  VIEWER
+  MANAGER
+}
+
+enum CustomerApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Customer {
+  id                 String         @id @db.VarChar(20)
+  name               String         @db.VarChar(160)
+  businessNumber     String?        @unique @db.VarChar(10)
+  representativeName String         @default("") @db.VarChar(80)
+  address            String         @default("") @db.VarChar(500)
+  phone              String         @default("") @db.VarChar(30)
+  status             CustomerStatus @default(PENDING)
+  accessVersion      Int            @default(0)
+  version            Int            @default(0)
+  approvedAt         DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  users        User[]
+  assets       Asset[]
+  receivings   Receiving[]
+  applications CustomerApplication[]
+  changes      CustomerChange[]
+
+  @@index([status, name])
+  @@map("customers")
+}
+
+model CustomerApplication {
+  id                 String                    @id @default(uuid()) @db.VarChar(36)
+  userId             String                    @unique @db.VarChar(36)
+  customerId         String?                   @db.VarChar(20)
+  name               String                    @db.VarChar(160)
+  businessNumber     String                    @db.VarChar(10)
+  representativeName String                    @db.VarChar(80)
+  address            String                    @db.VarChar(500)
+  phone              String                    @db.VarChar(30)
+  status             CustomerApplicationStatus @default(PENDING)
+  reviewReason       String                    @default("") @db.VarChar(500)
+  reviewedAt         DateTime?
+  version            Int                       @default(0)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([businessNumber])
+  @@map("customer_applications")
+}
+
+model CustomerChange {
+  id           String   @id @default(uuid()) @db.VarChar(36)
+  customerId   String?  @db.VarChar(20)
+  actorUserId  String   @db.VarChar(36)
+  targetUserId String?  @db.VarChar(36)
+  action       String   @db.VarChar(80)
+  reason       String   @db.VarChar(500)
+  changes      Json
+  createdAt    DateTime @default(now())
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  actor    User      @relation("CustomerChangeActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  target   User?     @relation("CustomerChangeTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+
+  @@index([customerId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@map("customer_changes")
+}
+
+model CustomerRateLimit {
+  key       String   @id @db.VarChar(64)
+  count     Int      @default(1)
+  expiresAt DateTime
+
+  @@index([expiresAt])
+  @@map("customer_rate_limits")
+}

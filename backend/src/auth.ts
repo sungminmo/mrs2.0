@@ -4,6 +4,7 @@ import { SignJWT, jwtVerify } from 'jose'
 import { z } from 'zod'
 import { AppError, ErrorCode, success } from './http.js'
 import type { Context, MiddlewareHandler } from 'hono'
+import { customerFieldsSchema, memberDecisionSchema, type MemberDecision } from './customer.js'
 
 const scrypt = promisify(scryptCallback)
 const hashLength = 64
@@ -11,6 +12,10 @@ const hashLength = 64
 export type AuthUser = {
   id: string
   customerId?: string | null
+  customerRole?: 'VIEWER' | 'MANAGER'
+  sessionVersion?: number
+  customer?: { id: string; name: string; businessNumber: string | null; representativeName: string; address: string; phone: string; status: 'PENDING' | 'ACTIVE' | 'SUSPENDED'; accessVersion: number } | null
+  customerApplication?: { id: string; status: string } | null
   email: string
   passwordHash: string
   companyName: string
@@ -27,7 +32,10 @@ export type AuthUser = {
 export type RegistrationInput = {
   email: string
   passwordHash: string
-  companyName: string
+  companyName?: string
+  customerType: 'existing' | 'new'
+  customerId?: string
+  customer?: z.infer<typeof customerFieldsSchema>
   companyPhone?: string
   managerName: string
   managerPhone: string
@@ -39,7 +47,8 @@ export type AuthRepository = {
   findById: (id: string) => Promise<AuthUser | null>
   createRegistration: (input: RegistrationInput) => Promise<AuthUser>
   listMembers: () => Promise<AuthUser[]>
-  approveMember: (id: string, approvedAt: Date) => Promise<AuthUser | null>
+  approveMember: (id: string, approvedAt: Date, decision?: MemberDecision, actor?: string) => Promise<AuthUser | null>
+  changeMember?: (id: string, decision: MemberDecision, actor: string) => Promise<AuthUser | null>
 }
 
 export const loginSchema = z.object({
@@ -47,15 +56,16 @@ export const loginSchema = z.object({
   password: z.string().min(8).max(128),
 })
 
-export const registrationSchema = z.object({
+const registrationFields = {
   email: z.string().trim().pipe(z.email()).transform((value) => value.toLowerCase()),
   password: z.string().min(8).max(128),
-  companyName: z.string().trim().min(1).max(160),
-  companyPhone: z.string().trim().max(30).optional(),
   managerName: z.string().trim().min(1).max(80),
   managerPhone: z.string().trim().min(1).max(30),
-  address: z.string().trim().max(500).optional(),
-})
+}
+export const registrationSchema = z.discriminatedUnion('customerType', [
+  z.object({ ...registrationFields, customerType: z.literal('existing'), customerId: z.string().trim().min(1).max(20) }).strict(),
+  z.object({ ...registrationFields, customerType: z.literal('new'), customer: customerFieldsSchema }).strict(),
+])
 
 export async function hashPassword(password: string) {
   const salt = randomBytes(16)
@@ -77,7 +87,7 @@ function tokenKey(secret: string) {
 }
 
 async function issueToken(user: AuthUser, secret: string, expiresIn: string) {
-  return new SignJWT({ email: user.email, companyName: user.companyName, managerName: user.managerName, role: user.role })
+  return new SignJWT({ email: user.email, sessionVersion: user.sessionVersion ?? 0, customerVersion: user.customer?.accessVersion ?? null })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(user.id)
     .setIssuedAt()
@@ -94,9 +104,9 @@ export function authRoutes(repository: AuthRepository, secret: string, expiresIn
     }
     if (user.status === 'PENDING') throw new AppError(403, ErrorCode.ACCOUNT_PENDING, 'Account approval is pending')
     if (user.status !== 'ACTIVE') throw new AppError(403, ErrorCode.FORBIDDEN, 'Account is not available')
+    if (user.role === 'CUSTOMER' && (!user.customerId || user.customer?.id !== user.customerId || user.customer.status !== 'ACTIVE')) throw new AppError(403, ErrorCode.FORBIDDEN, '고객사 승인 또는 소속 확인이 필요합니다.')
     const accessToken = await issueToken(user, secret, expiresIn)
-    const { passwordHash: _passwordHash, status: _status, customerId: _customerId, ...profile } = user
-    return success(context, { accessToken, tokenType: 'Bearer', user: profile })
+    return success(context, { accessToken, tokenType: 'Bearer', user: memberProfile(user) })
   }
 }
 
@@ -119,17 +129,20 @@ export function requireAuth(repository: AuthRepository, secret: string): Middlew
   return async (context, next) => {
     const authorization = context.req.header('Authorization')
     if (!authorization?.startsWith('Bearer ')) throw new AppError(401, ErrorCode.UNAUTHORIZED, 'Bearer token is required')
+    let payload
     try {
-      const { payload } = await jwtVerify(authorization.slice(7), tokenKey(secret), { algorithms: ['HS256'] })
+      ;({ payload } = await jwtVerify(authorization.slice(7), tokenKey(secret), { algorithms: ['HS256'] }))
       if (!payload.sub || typeof payload.email !== 'string') throw new Error('Invalid token payload')
-      const user = await repository.findById(payload.sub)
-      if (!user || user.status !== 'ACTIVE') throw new AppError(401, ErrorCode.UNAUTHORIZED, 'Account is not available')
-      context.set('authUser', user)
-      await next()
-    } catch (error) {
-      if (error instanceof AppError) throw error
+    } catch {
       throw new AppError(401, ErrorCode.UNAUTHORIZED, 'Invalid or expired access token')
     }
+    const user = await repository.findById(payload.sub)
+    if (!user || user.status !== 'ACTIVE') throw new AppError(401, ErrorCode.UNAUTHORIZED, 'Account is not available')
+    if (payload.sessionVersion !== (user.sessionVersion ?? 0)) throw new AppError(401, ErrorCode.UNAUTHORIZED, '다시 로그인해 주세요.')
+    if (user.role === 'CUSTOMER' && (!user.customerId || user.customer?.id !== user.customerId || user.customer.status !== 'ACTIVE' || payload.customerVersion !== user.customer.accessVersion)) throw new AppError(401, ErrorCode.UNAUTHORIZED, '고객사 접근 권한이 변경되었습니다.')
+    context.header('Cache-Control', 'no-store')
+    context.set('authUser', user)
+    await next()
   }
 }
 
@@ -139,11 +152,16 @@ export const requireAdmin: MiddlewareHandler = async (context, next) => {
   await next()
 }
 
-function memberProfile(user: AuthUser) {
+export function memberProfile(user: AuthUser) {
   return {
     id: user.id,
     email: user.email,
-    companyName: user.companyName,
+    companyName: user.customer?.name ?? user.companyName,
+    customerId: user.customerId ?? null,
+    customerRole: user.customerRole ?? 'VIEWER',
+    sessionVersion: user.sessionVersion ?? 0,
+    customer: user.customer ? { id: user.customer.id, name: user.customer.name, businessNumber: user.customer.businessNumber, representativeName: user.customer.representativeName, address: user.customer.address, phone: user.customer.phone, status: user.customer.status } : null,
+    customerApplication: user.customerApplication ? { id: user.customerApplication.id, status: user.customerApplication.status } : null,
     companyPhone: user.companyPhone ?? null,
     managerName: user.managerName,
     managerPhone: user.managerPhone ?? '',
@@ -165,7 +183,8 @@ export function approveMember(repository: AuthRepository) {
     const user = await repository.findById(id)
     if (!user) throw new AppError(404, ErrorCode.NOT_FOUND, 'Member application was not found')
     if (user.status !== 'PENDING') throw new AppError(409, ErrorCode.CONFLICT, 'Member application is not pending')
-    const approved = await repository.approveMember(user.id, new Date())
+    const decision = memberDecisionSchema.parse({ ...await context.req.json(), action: 'approve' })
+    const approved = await repository.approveMember(user.id, new Date(), decision, (context.get('authUser') as AuthUser).id)
     if (!approved) throw new AppError(409, ErrorCode.CONFLICT, 'Member application status changed')
     return success(context, { member: memberProfile(approved) })
   }
@@ -173,6 +192,15 @@ export function approveMember(repository: AuthRepository) {
 
 export function currentUser(context: Context) {
   const user = context.get('authUser') as AuthUser
-  const { passwordHash: _passwordHash, status: _status, customerId: _customerId, ...profile } = user
-  return success(context, { user: profile })
+  return success(context, { user: memberProfile(user) })
+}
+
+export function updateMember(repository: AuthRepository) {
+  return async (context: Context) => {
+    if (!repository.changeMember) throw new AppError(503, ErrorCode.SERVICE_UNAVAILABLE, '회원 관리를 사용할 수 없습니다.')
+    const id = z.string().uuid().parse(context.req.param('id'))
+    const member = await repository.changeMember(id, memberDecisionSchema.parse(await context.req.json()), (context.get('authUser') as AuthUser).id)
+    if (!member) throw new AppError(404, ErrorCode.NOT_FOUND, '회원을 찾을 수 없습니다.')
+    return success(context, { member: memberProfile(member) })
+  }
 }

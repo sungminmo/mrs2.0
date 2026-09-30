@@ -8,6 +8,10 @@ export type AuthSession = {
     companyName: string
     managerName: string
     role: Role
+    managerPhone?: string
+    customerId?: string | null
+    customerRole?: 'VIEWER' | 'MANAGER'
+    customer?: { id: string; name: string; businessNumber: string | null; representativeName: string; address: string; phone: string; status: string } | null
   }
 }
 
@@ -52,10 +56,15 @@ export async function signIn(email: string, password: string) {
 
 export async function authenticatedFetch(path: string, init: RequestInit = {}) {
   const session = readAuthSession()
-  if (!session) throw new Error('관리자 로그인이 필요합니다.')
+  if (!session) throw new Error('로그인이 필요합니다.')
   const headers = new Headers(init.headers)
   headers.set('Authorization', `Bearer ${session.accessToken}`)
-  return fetch(path, { ...init, headers })
+  const response = await fetch(path, { ...init, headers, cache: 'no-store' })
+  if (response.status === 401 && readAuthSession()?.accessToken === session.accessToken) {
+    window.sessionStorage.removeItem(sessionKey)
+    window.dispatchEvent(new Event('mrs-auth-expired'))
+  }
+  return response
 }
 
 export function signOut(destination = '/mrs2.0/') {

@@ -42,6 +42,7 @@ model Asset {
   updatedAt     DateTime           @updatedAt
 
   item           MasterItem       @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  customer       Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
   category       MaterialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   images         AssetImage[]
   history        AssetChange[] // 수동 수정 감사 이력

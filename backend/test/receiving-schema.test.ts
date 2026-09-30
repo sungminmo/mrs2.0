@@ -24,6 +24,7 @@ test('receiving schema on isolated MySQL 8.4', { skip: process.env.RUN_RECEIVING
   }
 
   sql(`
+    INSERT INTO customers (id, name, updatedAt) VALUES ('CUS-TEST', 'Test customer', NOW(3));
     INSERT INTO receivings (id, customerId, siteName, managerName, managerPhone, channel, volume, status, receivedAt, termsAgreedAt, termsVersion, termsText, updatedAt)
     VALUES ('REQ-TEST-1', 'CUS-TEST', 'Test site', 'Manager', '01000000000', 'MRS고객포탈', 'UNDER_ONE_TON', '입고 완료', NOW(3), NOW(3), 'v1', 'Disposal terms', NOW(3)),
            ('REQ-TEST-2', 'CUS-TEST', 'Test site', 'Manager', '01000000000', '홈페이지', 'OTHER', '입고 완료', NOW(3), NOW(3), 'v1', 'Disposal terms', NOW(3));
@@ -63,7 +64,7 @@ test('receiving schema on isolated MySQL 8.4', { skip: process.env.RUN_RECEIVING
   await context.test('one inspection per receiving and same-inspection disposal items', () => {
     reject("INSERT INTO inspections (id, receivingId, updatedAt) VALUES ('RCV-DUPLICATE', 'REQ-TEST-1', NOW(3))", /Duplicate entry/)
     reject("INSERT INTO disposal_items (inspectionItemId, inspectionId, updatedAt) VALUES ('ITEM-TEST-2', 'RCV-TEST-1', NOW(3))", /disposal_items_inspectionItemId_inspectionId_fkey/)
-    reject("UPDATE inspection_items SET assetId = 'MISSING-ASSET' WHERE id = 'ITEM-TEST-1'", /inspection_items_assetId_fkey/)
+    reject("UPDATE inspection_items SET assetId = '991231-9999' WHERE id = 'ITEM-TEST-1'", /inspection_items_assetId_fkey/)
     reject("DELETE FROM receivings WHERE id = 'REQ-TEST-1'", /foreign key constraint fails/)
   })
 

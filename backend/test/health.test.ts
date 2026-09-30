@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { z } from 'zod'
 import { createApp } from '../src/app.js'
-import { hashPassword, type AuthUser, type RegistrationInput } from '../src/auth.js'
+import { hashPassword, memberProfile, type AuthUser, type RegistrationInput } from '../src/auth.js'
 import { AppError, ErrorCode } from '../src/http.js'
 import { databaseUrl, readConfig, readDatabaseConfig } from '../src/config.js'
 import { createDatabase, databaseOptions } from '../src/database.js'
@@ -10,6 +10,7 @@ import { createDatabase, databaseOptions } from '../src/database.js'
 const environment = {
   DB_HOST: 'db', DB_NAME: 'b2b_mall', DB_USER: 'b2b_app', DB_PASSWORD: 'test-only', JWT_SECRET: 'test-only-secret-at-least-32-characters',
 }
+const customer = { id: 'CUS-TEST', name: 'Test', businessNumber: '2208162517', representativeName: 'Manager', address: 'Seoul', phone: '0212345678', status: 'ACTIVE' as const, accessVersion: 0 }
 
 test('liveness does not depend on the database', async () => {
   const app = createApp({
@@ -65,7 +66,7 @@ test('unknown API routes return JSON 404', async () => {
 
 test('JWT login issues tokens only for approved users and protects account APIs', async () => {
   const passwordHash = await hashPassword('correct-password')
-  const activeUser = { id: 'user-active', email: 'active@example.com', passwordHash, companyName: 'MRS 건설', managerName: '홍길동', role: 'CUSTOMER' as const, status: 'ACTIVE' as const }
+  const activeUser = { id: 'user-active', customer, customerId: customer.id, email: 'active@example.com', passwordHash, companyName: 'MRS 건설', managerName: '홍길동', role: 'CUSTOMER' as const, status: 'ACTIVE' as const }
   const pendingUser = { ...activeUser, id: 'user-pending', email: 'pending@example.com', status: 'PENDING' as const }
   const users = [activeUser, pendingUser]
   const app = createApp({
@@ -94,7 +95,7 @@ test('JWT login issues tokens only for approved users and protects account APIs'
 
   const meResponse = await app.request('/api/auth/me', { headers: { Authorization: `Bearer ${loginBody.data.accessToken}` } })
   assert.equal(meResponse.status, 200)
-  assert.deepEqual(await meResponse.json(), { success: true, data: { user: { id: activeUser.id, email: activeUser.email, companyName: activeUser.companyName, managerName: activeUser.managerName, role: 'CUSTOMER' } } })
+  assert.deepEqual(await meResponse.json(), { success: true, data: { user: JSON.parse(JSON.stringify(memberProfile(activeUser))) } })
 
   const pendingResponse = await app.request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: pendingUser.email, password: 'correct-password' }), headers: { 'Content-Type': 'application/json' } })
   assert.equal(pendingResponse.status, 403)
@@ -116,7 +117,7 @@ test('registration requires administrator approval before login', async () => {
     findByEmail: async (email: string) => users.find((user) => user.email === email) ?? null,
     findById: async (id: string) => users.find((user) => user.id === id) ?? null,
     createRegistration: async (input: RegistrationInput) => {
-      const user: AuthUser = { ...input, id: '33333333-3333-4333-8333-333333333333', role: 'CUSTOMER', status: 'PENDING', createdAt: new Date('2026-09-22T00:00:00Z') }
+      const user: AuthUser = { customer, customerId: customer.id, email: input.email, passwordHash: input.passwordHash, companyName: input.customer?.name ?? '고객사', managerName: input.managerName, managerPhone: input.managerPhone, id: '33333333-3333-4333-8333-333333333333', role: 'CUSTOMER', status: 'PENDING', createdAt: new Date('2026-09-22T00:00:00Z') }
       users.push(user)
       return user
     },
@@ -129,11 +130,12 @@ test('registration requires administrator approval before login', async () => {
       return user
     },
   }
+  for (const user of users) if (user.role === 'CUSTOMER') { user.customer = customer; user.customerId = customer.id }
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository, secret: environment.JWT_SECRET, expiresIn: '1h' } })
   const jsonHeaders = { 'Content-Type': 'application/json' }
   const login = (email: string, password: string) => app.request('/api/auth/login', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email, password }) })
 
-  const registrationResponse = await app.request('/api/auth/register', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: ' New@Example.com ', password: 'new-password', companyName: '새 회사', managerName: '신청자', managerPhone: '010-1234-5678' }) })
+  const registrationResponse = await app.request('/api/auth/register', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: ' New@Example.com ', password: 'new-password', customerType: 'existing', customerId: customer.id, managerName: '신청자', managerPhone: '010-1234-5678' }) })
   assert.equal(registrationResponse.status, 201)
   assert.equal(users.at(-1)?.email, 'new@example.com')
   assert.equal((await login('new@example.com', 'new-password')).status, 403)
@@ -149,11 +151,11 @@ test('registration requires administrator approval before login', async () => {
   assert.equal(membersResponse.status, 200)
   assert.match(JSON.stringify(await membersResponse.json()), /new@example.com/)
 
-  const approvalResponse = await app.request('/api/admin/members/33333333-3333-4333-8333-333333333333/approve', { method: 'POST', headers: authorization })
+  const approvalResponse = await app.request('/api/admin/members/33333333-3333-4333-8333-333333333333/approve', { method: 'POST', headers: { ...authorization, ...jsonHeaders }, body: JSON.stringify({ reason: 'Verified membership', version: 0, customerRole: 'VIEWER' }) })
   assert.equal(approvalResponse.status, 200)
   assert.equal((await login('new@example.com', 'new-password')).status, 200)
 
-  const duplicateResponse = await app.request('/api/auth/register', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: 'new@example.com', password: 'new-password', companyName: '중복', managerName: '중복', managerPhone: '010-9999-9999' }) })
+  const duplicateResponse = await app.request('/api/auth/register', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: 'new@example.com', password: 'new-password', customerType: 'existing', customerId: customer.id, managerName: '중복', managerPhone: '010-9999-9999' }) })
   assert.equal(duplicateResponse.status, 409)
 })
 

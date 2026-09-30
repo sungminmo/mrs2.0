@@ -15,7 +15,7 @@ export const menus: { id: MenuId; label: string; tabs: { id: string; label: stri
   { id: 'market', label: '마켓 운영', tabs: [{ id: 'sales', label: '판매 요청' }, { id: 'products', label: '상품' }, { id: 'quotes', label: '구매 견적' }, { id: 'campaigns', label: '기획전' }] },
   { id: 'content', label: '콘텐츠 관리', tabs: [{ id: 'banners', label: '배너 관리' }] },
   { id: 'billing', label: '보관료·정산', tabs: [{ id: 'storage', label: '보관료' }, { id: 'payouts', label: '판매 정산' }, { id: 'disposal', label: '폐기 청구' }] },
-  { id: 'customers', label: '고객·문의', tabs: [{ id: 'companies', label: '고객사' }, { id: 'sites', label: '현장' }, { id: 'inquiries', label: '문의' }] },
+  { id: 'customers', label: '고객사 관리', tabs: [{ id: 'companies', label: '고객사' }, { id: 'applications', label: '고객사 등록 신청' }, { id: 'sites', label: '현장' }, { id: 'inquiries', label: '문의' }] },
   { id: 'members', label: '회원 관리', tabs: [{ id: 'list', label: '회원 목록' }, { id: 'applications', label: '가입 신청' }] },
   { id: 'settings', label: '기준정보', tabs: [{ id: 'grades', label: '등급·단위' }, { id: 'rates', label: '요금 기준' }, { id: 'policies', label: '안내 정책' }] },
 ]
@@ -26,8 +26,6 @@ export const adminHref = (link: AdminLink) => {
   if (link.customer) params.set('customer', link.customer)
   return `#/admin/${link.menu}?${params}`
 }
-const customerName = (id: string) => customers.find((customer) => customer.id === id)?.name ?? id
-const customerLink = (id: string): AdminLink => ({ label: customerName(id), menu: 'customers', tab: 'companies', id })
 const receiptLink = (id: string): AdminLink => ({ label: id, menu: 'receiving', tab: 'primary', id })
 const assetLink = (id: string): AdminLink => ({ label: id, menu: 'inventory', tab: 'stock', id })
 const requestLink = (id: string): AdminLink => ({ label: id, menu: 'receiving', tab: 'requests', id })
@@ -36,12 +34,15 @@ const invoiceTab = (type: string) => type === '보관료' ? 'storage' : type ===
 const qty = (value: number | null, unit: string) => value === null ? '미확정' : `${value.toLocaleString('ko-KR')} ${unit}`
 const campaignDateText = (value: string) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value))
 
-export function createAdminViews(inventory: Inventory[], masterItems: MasterItem[], categories: MaterialCategory[] = materialCategories, market: MarketData = { sales: saleRequests, products, quotes, campaigns }, members: MemberAccount[] = memberAccounts, locationRecords: Location[] = locations, receivingRecords: Receiving[] = receivings, inspectionRecords: Inspection[] = []): Record<string, AdminView> {
+export function createAdminViews(inventory: Inventory[], masterItems: MasterItem[], categories: MaterialCategory[] = materialCategories, market: MarketData = { sales: saleRequests, products, quotes, campaigns }, members: MemberAccount[] = memberAccounts, locationRecords: Location[] = locations, receivingRecords: Receiving[] = receivings, inspectionRecords: Inspection[] = [], customerRecords = customers): Record<string, AdminView> {
+const customers = customerRecords
+const customerName = (id: string) => customers.find((customer) => customer.id === id)?.name ?? id
+const customerLink = (id: string): AdminLink => ({ label: customerName(id), menu: 'customers', tab: 'companies', id })
 const { sales: saleRequests, products, quotes, campaigns } = market
 const categoryLink = (id: string): AdminLink => ({ label: categoryPath(categories, id), menu: 'basic', tab: 'categories', id })
 const receivingRows: AdminRow[] = receivingRecords.map((request) => {
   const site = sites.find((item) => item.id === request.siteId)
-  const customerId = site?.customerId ?? ('customerId' in request && typeof request.customerId === 'string' ? request.customerId : request.id)
+  const customerId = 'customerId' in request && typeof request.customerId === 'string' ? request.customerId : site?.customerId ?? request.id
   const customer = customers.find((item) => item.id === customerId)
   return { id: request.id, title: request.summary, status: request.status, customerId, date: request.date,
     cells: [request.id, dateText(request.date), request.channel, customer?.name ?? customerId, site?.name ?? request.siteId, request.volume, request.status],
@@ -53,7 +54,7 @@ const inspectionRows: AdminRow[] = inspectionRecords.map((receipt) => {
   const receiving = receivingRecords.find((request) => request.id === receipt.receivingId)
   const siteId = receiving?.siteId ?? receipt.receivingId
   const site = sites.find((candidate) => candidate.id === siteId)
-  const customerId = site?.customerId ?? (receiving && 'customerId' in receiving && typeof receiving.customerId === 'string' ? receiving.customerId : receipt.receivingId)
+  const customerId = receiving && 'customerId' in receiving && typeof receiving.customerId === 'string' ? receiving.customerId : site?.customerId ?? receipt.receivingId
   const createdAssets = inventory.filter((asset) => asset.receiptId === receipt.id)
   const disposalQuantity = receipt.materials.reduce((sum, material) => sum + (material.disposal ?? 0), 0)
   return { id: receipt.id, title: `${site?.name ?? siteId} 검수`, customerId, date: receipt.date, status: receipt.status,
@@ -79,7 +80,7 @@ const disposalRows: AdminRow[] = inspectionRecords.filter((receipt) => receipt.m
   const receiving = receivingRecords.find((request) => request.id === receipt.receivingId)
   const siteId = receiving?.siteId ?? receipt.receivingId
   const site = sites.find((candidate) => candidate.id === siteId)
-  const customerId = site?.customerId ?? (receiving && 'customerId' in receiving && typeof receiving.customerId === 'string' ? receiving.customerId : receipt.receivingId)
+  const customerId = receiving && 'customerId' in receiving && typeof receiving.customerId === 'string' ? receiving.customerId : site?.customerId ?? receipt.receivingId
   const disposalMaterials = receipt.materials.filter((material) => (material.disposal ?? 0) > 0)
   return { id: receipt.id, title: `${site?.name ?? siteId} 폐기`, customerId, date: receipt.inspectedAt ?? receipt.date, status: receipt.disposalStatus,
     cells: [receipt.receivingId, receipt.id, customerName(customerId), `${disposalMaterials.length}종`, receipt.disposalStatus],

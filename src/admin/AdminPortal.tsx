@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, Images, ImageOff, LayoutDashboard, ListChecks, LoaderCircle, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
 import { authenticatedFetch, signOut } from '../authSession'
-import { customers, dateText, invoiceAmount, invoices, locations, money, receivingStatuses, referenceDate, type Campaign, type Inspection, type Inventory, type MasterItem, type MemberAccount, type Product, type Receiving, type ReceivingStatus } from './adminData'
+import { dateText, invoiceAmount, invoices, locations, money, receivingStatuses, referenceDate, type Campaign, type Inspection, type Inventory, type MasterItem, type MemberAccount, type Product, type Receiving, type ReceivingStatus } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
 import { materialPhotos } from '../assetPhotos'
 import InventoryEditor from './InventoryEditor'
@@ -13,6 +13,8 @@ import CategoryManager from './CategoryManager'
 import { saveAdminCategory } from './adminCategories'
 import CampaignEditor, { MarketStatusEditor, ProductDiscountEditor } from './MarketEditor'
 import BannerManager from './BannerManager'
+import CustomerManager from './CustomerManager'
+import type { CustomerAccount } from '../customerAccounts'
 import ItemFileActions from './ItemFileActions'
 import { changeMarketStatus, marketStatusOptions, type MarketData, type MarketStatusTab } from './adminMarket'
 import './AdminPortal.css'
@@ -27,6 +29,8 @@ export default function AdminPortal({ hash }: { hash: string }) {
   const [categories, setCategories] = useState<MaterialCategory[]>([])
   const [market, setMarket] = useState<MarketData>({ sales: [], products: [], quotes: [], campaigns: [] })
   const [members, setMembers] = useState<MemberAccount[]>([])
+  const [customerRecords, setCustomerRecords] = useState<CustomerAccount[]>([])
+  const [accountRevision, setAccountRevision] = useState(0)
   const [locationRecords, setLocationRecords] = useState(() => structuredClone(locations))
   const [receivingRecords, setReceivingRecords] = useState<Receiving[]>([])
   const [inspectionRecords, setInspectionRecords] = useState<Inspection[]>([])
@@ -35,13 +39,16 @@ export default function AdminPortal({ hash }: { hash: string }) {
   const setNotice = (next: { scope: string; text: string }) => setNoticeState({ ...next, text: next.text.replace('파일에서 임시 등록', '파일에서 DB에 등록') })
   useEffect(() => {
     let active = true
-    Promise.all([authenticatedFetch('/api/admin/data'), authenticatedFetch('/api/admin/members')]).then(async ([dataResponse, memberResponse]) => {
+    Promise.all([authenticatedFetch('/api/admin/data'), authenticatedFetch('/api/admin/members'), authenticatedFetch('/api/admin/customers')]).then(async ([dataResponse, memberResponse, customerResponse]) => {
+      if (!customerResponse.ok) throw new Error('고객사 정보를 불러오지 못했습니다.')
+      const customerBody = await customerResponse.json() as { data: { customers: CustomerAccount[] } }
       if (!dataResponse.ok) throw new Error('개발 DB의 관리자 데이터를 불러오지 못했습니다.')
       if (!memberResponse.ok) throw new Error('회원 정보를 불러오지 못했습니다.')
       const database = await dataResponse.json() as { data: AdminDatabaseData }
       const response = memberResponse
       const body = await response.json() as { data: { members: Array<{ id: string; email: string; companyName: string; companyPhone: string | null; managerName: string; managerPhone: string; role: 'CUSTOMER' | 'ADMIN'; status: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'; createdAt: string }> } }
       if (!active) return
+      setCustomerRecords(customerBody.data.customers)
       setAssets(database.data.assets)
       setItems(database.data.items)
       setCategories(database.data.categories)
@@ -53,8 +60,9 @@ export default function AdminPortal({ hash }: { hash: string }) {
       if (active) setNotice({ scope: 'database', text: error instanceof Error ? error.message : '개발 DB의 관리자 데이터를 불러오지 못했습니다.' })
     }).finally(() => { if (active) setLoadingData(false) })
     return () => { active = false }
-  }, [])
-  const views = createAdminViews(assets, items, categories, market, members, locationRecords, receivingRecords, inspectionRecords)
+  }, [accountRevision])
+  const liveCustomers = customerRecords.map((customer) => ({ id: customer.id, name: customer.name, manager: customer.representativeName, phone: customer.phone, email: '', status: customer.status === 'ACTIVE' ? '이용 중' as const : customer.status === 'SUSPENDED' ? '이용 정지' as const : '상담 중' as const }))
+  const views = createAdminViews(assets, items, categories, market, members, locationRecords, receivingRecords, inspectionRecords, liveCustomers)
   const url = new URL(hash.slice(1), 'https://mrs.example')
   const rawRoute = url.pathname.split('/')[2] || 'dashboard'
   const legacyRoute = rawRoute === 'items' ? { menu: 'basic' as const, tab: 'items' } : rawRoute === 'categories' ? { menu: 'basic' as const, tab: 'categories' } : rawRoute === 'inspections' ? { menu: 'receiving' as const, tab: url.searchParams.get('tab') || 'primary' } : null
@@ -69,7 +77,7 @@ export default function AdminPortal({ hash }: { hash: string }) {
   const locationEditing = menu.id === 'inventory' && tab?.id === 'locations'
   const itemManagement = menu.id === 'basic' && tab?.id === 'items'
   const categoryManagement = menu.id === 'basic' && tab?.id === 'categories'
-  const editable = itemManagement || menu.id === 'inventory' && (tab?.id === 'stock' || locationEditing) || campaignEditing
+  const editable = itemManagement || menu.id === 'inventory' && locationEditing || campaignEditing
   const recordKind = campaignEditing ? '기획전' : locationEditing ? '로케이션' : itemManagement ? '품목' : '자산'
   const statusTab = menu.id === 'market' && tab && Object.hasOwn(marketStatusOptions, tab.id) ? tab.id as MarketStatusTab : undefined
   const receivingRequest = menu.id === 'receiving' && tab?.id === 'requests'
@@ -143,7 +151,7 @@ export default function AdminPortal({ hash }: { hash: string }) {
       {notice.scope === 'database' && <p className="adm-form-error" role="alert">{notice.text}</p>}
       {menu.id === 'dashboard' ? <Dashboard views={views} /> : <>
         <nav className="adm-tabs" aria-label={`${menu.label} 보기`}>{menu.tabs.map((item) => <a key={item.id} href={adminHref({ label: item.label, menu: menu.id, tab: item.id })} aria-current={item.id === tab?.id ? 'page' : undefined}>{item.label}</a>)}</nav>
-        {menu.id === 'content' && tab?.id === 'banners' ? <BannerManager params={url.searchParams} /> : categoryManagement ? <CategoryManager categories={categories} items={items} assets={assets} params={url.searchParams} onSave={async (category) => { const savedCategory = await saveAdminCategory(category); setCategories((current) => current.some((entry) => entry.id === savedCategory.id) ? current.map((entry) => entry.id === savedCategory.id ? savedCategory : entry) : [...current, savedCategory]); window.location.hash = `/admin/basic?tab=categories&id=${savedCategory.id}` }} /> : <>
+        {menu.id === 'members' || menu.id === 'customers' && ['companies', 'applications'].includes(tab?.id ?? '') ? <CustomerManager params={url.searchParams} membersOnly={menu.id === 'members'} onChanged={() => setAccountRevision((value) => value + 1)} /> : menu.id === 'content' && tab?.id === 'banners' ? <BannerManager params={url.searchParams} /> : categoryManagement ? <CategoryManager categories={categories} items={items} assets={assets} params={url.searchParams} onSave={async (category) => { const savedCategory = await saveAdminCategory(category); setCategories((current) => current.some((entry) => entry.id === savedCategory.id) ? current.map((entry) => entry.id === savedCategory.id ? savedCategory : entry) : [...current, savedCategory]); window.location.hash = `/admin/basic?tab=categories&id=${savedCategory.id}` }} /> : <>
         {notice.scope === noticeScope && !editing && !discountEditing && <p className="adm-note" role="status">{notice.text}</p>}
         {statusTab && <p className="adm-note">상태는 임시 저장되며 새로고침·고객 포털 이동 시 초기화됩니다. 실제 판매·발송·재고 차감·정산은 실행하지 않습니다.</p>}
         {discountEditing ? <ProductDiscountEditor product={market.products.find((product) => product.id === id)!} cancelHref={cancelHref} onSave={(product) => { setMarket((current) => ({ ...current, products: current.products.map((entry) => entry.id === product.id ? product : entry) })); setNotice({ scope: `market/products/${product.id}`, text: `${product.id} 상품 할인율을 ${product.discountRate}%로 임시 저장했습니다.` }); saved(product.id) }} /> : occupancyEditing ? <LocationOccupancyEditor location={locationRecords.find((location) => location.id === id)!} locations={locationRecords} assets={assets} items={items} categories={categories} cancelHref={cancelHref} onSave={(changedAssets) => { const replacements = new Map(changedAssets.map((asset) => [asset.id, asset])); setAssets((current) => current.map((asset) => replacements.get(asset.id) ?? asset)); setNotice({ scope: `inventory/locations/${id}`, text: `${changedAssets.length}건의 점유 재고를 임시 저장했습니다.` }); saved(id!) }} /> : editing && campaignEditing ? <CampaignEditor key={`${mode}/${id}`} campaign={mode === 'edit' ? market.campaigns.find((entry) => entry.id === id) : undefined} campaigns={market.campaigns} categories={categories} cancelHref={cancelHref} onSave={(campaign) => { setMarket((current) => ({ ...current, campaigns: current.campaigns.some((entry) => entry.id === campaign.id) ? current.campaigns.map((entry) => entry.id === campaign.id ? campaign : entry) : [...current.campaigns, campaign] })); setNotice({ scope: `market/campaigns/${campaign.id}`, text: '기획전이 임시 저장되었습니다.' }); saved(campaign.id) }} /> : editing && locationEditing ? <LocationEditor key={`${mode}/${id}`} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSave={(location) => { setLocationRecords((current) => current.some((entry) => entry.id === location.id) ? current.map((entry) => entry.id === location.id ? location : entry) : [...current, location]); setNotice({ scope: `inventory/locations/${location.id}`, text: `${location.id} 로케이션이 임시 저장되었습니다.` }); saved(location.id) }} /> : editing ? <InventoryEditor key={`${menu.id}/${mode}/${id}`} kind={itemManagement ? 'items' : 'inventory'} items={items} assets={assets} categories={categories} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSaveItem={(item, previousId) => { setItems((current) => previousId ? current.map((entry) => entry.id === previousId ? item : entry) : [...current, item]); if (previousId && previousId !== item.id) setAssets((current) => current.map((asset) => asset.itemId === previousId ? { ...asset, itemId: item.id } : asset)); saved(item.id) }} onSaveAsset={(asset) => { setAssets((current) => current.some((entry) => entry.id === asset.id) ? current.map((entry) => entry.id === asset.id ? asset : entry) : [...current, asset]); saved(asset.id) }} /> : <>
@@ -183,6 +191,7 @@ function Status({ value }: { value: string }) {
 }
 
 function RecordList({ view, params, path, categories, statusTab, onStatusChange }: { view: AdminView; params: URLSearchParams; path: string; categories: MaterialCategory[]; statusTab?: MarketStatusTab; onStatusChange: (ids: string[], status: string) => void }) {
+  const customers = [...new Map(view.rows.flatMap((row) => row.customerId ? [[row.customerId, { id: row.customerId, name: row.fields.find(([label]) => label === '고객사')?.[1] ?? row.customerId }] as const] : [])).values()]
   const scope = params.toString()
   const [selection, setSelection] = useState<{ scope: string; ids: string[] }>({ scope, ids: [] })
   if (selection.scope !== scope) setSelection({ scope, ids: [] })
