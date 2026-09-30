@@ -8,6 +8,10 @@ const secret = 'test-only-secret-at-least-32-characters'
 
 async function fixture(role: AuthUser['role']) {
   const user: AuthUser = { id: '11111111-1111-4111-8111-111111111111', email: `${role.toLowerCase()}@example.test`, passwordHash: await hashPassword('test-password'), companyName: 'Test', managerName: 'Manager', role, status: 'ACTIVE' }
+  if (role === 'CUSTOMER') {
+    user.customerId = 'CUS-TEST'
+    user.customer = { id: 'CUS-TEST', name: 'Test', businessNumber: '2208162517', representativeName: 'Owner', address: 'Seoul', phone: '0212345678', status: 'ACTIVE', accessVersion: 0 }
+  }
   const auth: AuthRepository = { findByEmail: async () => user, findById: async () => user, createRegistration: async () => user, listMembers: async () => [], approveMember: async () => null }
   const data = { categories: [], items: [{ id: '000001' }], assets: [], receivings: [], inspections: [], products: [], campaigns: [] }
   const created: unknown[][] = []

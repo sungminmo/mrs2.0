@@ -11,6 +11,7 @@ async function fixture(customerId: string | null = 'TEST-CUST-001') {
   const user: AuthUser = {
     id: '11111111-1111-4111-8111-111111111111',
     customerId,
+    customer: customerId ? { id: customerId, name: 'Test Customer', businessNumber: '2208162517', representativeName: 'Manager', address: 'Seoul', phone: '0212345678', status: 'ACTIVE', accessVersion: 0 } : null,
     email: 'customer@example.test',
     passwordHash: await hashPassword('customer-password'),
     companyName: 'Test Customer',
@@ -56,8 +57,8 @@ async function fixture(customerId: string | null = 'TEST-CUST-001') {
   }
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret, expiresIn: '1h' }, assets })
   const login = await app.request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email, password: 'customer-password' }) })
-  const token = (await login.json() as { data: { accessToken: string } }).data.accessToken
-  return { app, token, captured: () => captured }
+  const token = (await login.json() as { data?: { accessToken: string } }).data?.accessToken ?? ''
+  return { app, token, loginStatus: login.status, captured: () => captured }
 }
 
 test('asset list requires authentication and a linked customer', async () => {
@@ -66,8 +67,8 @@ test('asset list requires authentication and a linked customer', async () => {
 
   const unlinked = await fixture(null)
   const response = await unlinked.app.request('/api/assets', { headers: { Authorization: `Bearer ${unlinked.token}` } })
-  assert.equal(response.status, 403)
-  assert.match((await response.json() as { error: { message: string } }).error.message, /not linked/)
+  assert.equal(unlinked.loginStatus, 403)
+  assert.equal(response.status, 401)
 })
 
 test('asset list passes all filters and returns paginated serialized records', async () => {
@@ -101,6 +102,7 @@ test('Prisma repository scopes ownership and expands descendant categories', asy
   let countWhere: Prisma.AssetWhereInput | undefined
   let findArguments: { where?: Prisma.AssetWhereInput; orderBy?: Prisma.AssetOrderByWithRelationInput[] } | undefined
   const client = {
+    $queryRaw: async () => [],
     materialCategory: { findMany: async () => [
       { id: 'ROOT', parentId: null, name: 'Root' },
       { id: 'CHILD', parentId: 'ROOT', name: 'Child' },

@@ -2,7 +2,7 @@ export const referenceDate = '2026-09-14T12:00:00+09:00'
 export const money = (amount: number | null) => amount === null ? '미산정' : `₩${amount.toLocaleString('ko-KR')}`
 export const dateText = (value: string | null) => value ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value)) : '미등록'
 
-type Customer = { id: string; name: string; manager: string; phone: string; email: string; status: '이용 중' | '상담 중' }
+type Customer = { id: string; name: string; manager: string; phone: string; email: string; status: '이용 중' | '상담 중' | '이용 정지' }
 type Site = { id: string; customerId: string; name: string; address: string; status: '운영 중' | '종료' }
 export const receivingStatuses = ['입고 신청', '입고 승인', '입고 완료', '입고 반려', '취소'] as const
 export type ReceivingStatus = typeof receivingStatuses[number]

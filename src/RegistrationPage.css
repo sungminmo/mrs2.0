@@ -41,6 +41,13 @@
 .registration-fields input { display: block; width: 100%; min-height: 44px; margin-top: 8px; padding: 10px 12px; border: 1px solid #b5bfb8; border-radius: 5px; background: #fdfefd; color: var(--reg-ink); font-size: 13px; }
 .registration-fields input:focus { border-color: var(--reg-green); outline: 2px solid #b8d2be; outline-offset: 1px; }
 .registration-field-wide { grid-column: 1 / -1; }
+.registration-form-group { margin: 0; padding: 0; border: 0; min-width: 0; }
+.registration-form-group h3 { margin: 28px 0 16px; font-size: 16px; }
+.registration-new-customer { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.registration-new-customer input { width: 18px; height: 18px; accent-color: var(--reg-green); }
+.registration-lookup { display: flex; align-items: end; gap: 8px; }
+.registration-lookup input { min-width: 0; }
+.registration-lookup button { flex: 0 0 auto; }
 .registration-error { grid-column: 1 / -1; margin: -7px 0 0; color: #a63d36; font-size: 11px; }
 .registration-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--reg-line); }
 .registration-actions > a, .registration-actions > button, .registration-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 17px; border: 1px solid #bcc7be; border-radius: 6px; background: #fdfefd; color: var(--reg-ink); font-size: 13px; font-weight: 600; text-decoration: none; }

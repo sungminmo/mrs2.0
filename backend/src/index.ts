@@ -5,19 +5,11 @@ import type { BannerPlacementInput } from './banner.js'
 import { readConfig } from './config.js'
 import { createDatabase } from './database.js'
 import { createAdminDataRepository } from './admin-data.js'
+import { createAuthRepository, createCustomerRepository } from './customer.js'
 
 const config = readConfig()
 const database = createDatabase(config.database)
-const authRepository = {
-  findByEmail: (email: string) => database.client.user.findUnique({ where: { email } }),
-  findById: (id: string) => database.client.user.findUnique({ where: { id } }),
-  createRegistration: (input: Parameters<typeof database.client.user.create>[0]['data']) => database.client.user.create({ data: input }),
-  listMembers: () => database.client.user.findMany({ orderBy: { createdAt: 'desc' } }),
-  approveMember: async (id: string, approvedAt: Date) => {
-    const result = await database.client.user.updateMany({ where: { id, status: 'PENDING' }, data: { status: 'ACTIVE', approvedAt } })
-    return result.count === 1 ? database.client.user.findUnique({ where: { id } }) : null
-  },
-}
+const authRepository = createAuthRepository(database.client)
 const bannerRepository = {
   list: () => database.client.bannerPlacement.findMany({ include: { items: true }, orderBy: { id: 'asc' } }),
   findByIds: (ids: string[]) => database.client.bannerPlacement.findMany({ where: { id: { in: ids } }, include: { items: true } }),
@@ -28,7 +20,7 @@ const bannerRepository = {
     return { ...placement, items: await transaction.bannerItem.findMany({ where: { placementId: id }, orderBy: { sortOrder: 'asc' } }) }
   }),
 }
-const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt }, assets: createAssetRepository(database.client), banners: bannerRepository, adminData: createAdminDataRepository(database.client) })
+const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt }, assets: createAssetRepository(database.client), banners: bannerRepository, adminData: createAdminDataRepository(database.client), customers: createCustomerRepository(database.client) })
 const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: config.port }, (info) => {
   console.info(`Backend listening on port ${info.port}`)
 })

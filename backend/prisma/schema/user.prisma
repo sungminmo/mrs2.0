@@ -16,6 +16,8 @@ enum UserStatus {
 model User {
   id           String     @id @default(uuid()) @db.VarChar(36)
   customerId   String?    @db.VarChar(20) // 기존 자산 소유 고객 코드. 같은 고객사에 여러 계정 연결 가능
+  customerRole CustomerRole @default(VIEWER)
+  sessionVersion Int      @default(0)
   email        String     @unique @db.VarChar(254)
   passwordHash String     @db.VarChar(255) // 해시 저장, 평문 비밀번호는 저장하지 않음
   companyName  String     @db.VarChar(160)
@@ -30,6 +32,10 @@ model User {
   updatedAt    DateTime   @updatedAt
 
   marketChanges    MarketChange[]
+  customer         Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  customerApplication CustomerApplication?
+  customerChanges CustomerChange[] @relation("CustomerChangeActor")
+  membershipChanges CustomerChange[] @relation("CustomerChangeTarget")
   inspections      Inspection[]
   disposalComments DisposalComment[]
   receivingChanges ReceivingChange[]

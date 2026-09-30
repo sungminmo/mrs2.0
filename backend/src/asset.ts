@@ -45,8 +45,13 @@ type AssetListRecord = {
   updatedAt: Date
 }
 
+type AssetDetail = { id: string; name: string; itemId: string; receivingId: string; specification: string; brand: string; grade: string; quantity: string; unit: string; appraisalValue: string | null; storageStatus: string; saleStatus: string; locationId: string | null; category: { id: string; name: string; path: string }; createdAt: Date; images: Array<{ id: string; name: string; url: string }> }
+type AssetSummary = { total: number; appraisalValue: string | null; unappraised: number; groups: Array<{ storageStatus: string; saleStatus: string; count: number }>; quantities: Array<{ unit: string; quantity: string }> }
+
 export type AssetRepository = {
   list: (customerId: string, query: AssetListQuery, now: Date) => Promise<{ records: AssetListRecord[]; totalElements: number }>
+  detail?: (customerId: string, id: string) => Promise<AssetDetail | null>
+  summary?: (customerId: string) => Promise<AssetSummary>
 }
 
 const categorySchema = z.object({
@@ -85,6 +90,51 @@ const errorSchema = z.object({
     details: z.array(z.object({ path: z.string(), message: z.string(), code: z.string() })).optional(),
   }),
 }).openapi('ErrorResponse')
+
+const readResponses = { 401: { description: '인증 필요' }, 403: { description: '고객 권한 필요' }, 404: { description: '자산 없음' }, 503: { description: '자산 귀속 확인 필요' } }
+export const assetDetailRoute = createRoute({ method: 'get', path: '/api/assets/{id}', tags: ['Assets'], summary: '자사 자산 상세 조회', security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string().regex(/^\d{6}-\d{4}$/) }) }, responses: { ...readResponses, 200: { description: '고객 공개 필드 및 보호된 저장 이미지', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ asset: assetSchema.omit({ thumbnailUrl: true, receivedAt: true, storageDays: true, updatedAt: true }).extend({ images: z.array(z.object({ id: z.string(), name: z.string(), url: z.string() })) }) }) }) } } } } })
+export const assetSummaryRoute = createRoute({ method: 'get', path: '/api/assets/summary', tags: ['Assets'], summary: '자사 전체 보유 자산 집계 (출고완료 제외)', security: [{ BearerAuth: [] }], responses: { ...readResponses, 200: { description: '페이지와 무관한 전체 집계. 평가금액은 자산 총평가액의 합.', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ total: z.number(), appraisalValue: z.string().nullable(), unappraised: z.number(), groups: z.array(z.object({ storageStatus: z.string(), saleStatus: z.string(), count: z.number() })), quantities: z.array(z.object({ unit: z.string(), quantity: z.string() })) }) }) } } } } })
+
+function assetOwner(context: Context) {
+  const user = context.get('authUser') as AuthUser
+  if (user.role !== 'CUSTOMER' || !user.customerId) throw new AppError(403, ErrorCode.FORBIDDEN, '고객사 소속 계정이 필요합니다.')
+  return user.customerId
+}
+
+export function assetDetail(repository: AssetRepository) {
+  return async (context: Context) => {
+    const owner = assetOwner(context)
+    if (!repository.detail) throw new AppError(503, ErrorCode.SERVICE_UNAVAILABLE, '상세 조회를 사용할 수 없습니다.')
+    const asset = await repository.detail(owner, context.req.param('id')!)
+    if (!asset) throw new AppError(404, ErrorCode.NOT_FOUND, '자산을 찾을 수 없습니다.')
+    return context.json({ success: true as const, data: { asset } })
+  }
+}
+
+export function assetSummary(repository: AssetRepository) {
+  return async (context: Context) => {
+    const owner = assetOwner(context)
+    if (!repository.summary) throw new AppError(503, ErrorCode.SERVICE_UNAVAILABLE, '집계를 사용할 수 없습니다.')
+    return context.json({ success: true as const, data: await repository.summary(owner) })
+  }
+}
+
+export function privateImage(url: string) {
+  return url.length <= 4_200_000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(url) ? url : null
+}
+
+async function assertOwnerConsistency(client: PrismaClient, customerId: string) {
+  const mismatches = await client.$queryRaw<Array<{ id: string }>>`
+    SELECT asset.id FROM assets asset
+    LEFT JOIN receivings receiving ON receiving.id = asset.receivingId
+    LEFT JOIN inspection_items item ON item.assetId = asset.id
+    LEFT JOIN inspections inspection ON inspection.id = item.inspectionId
+    LEFT JOIN receivings inspected ON inspected.id = inspection.receivingId
+    WHERE (asset.customerId = ${customerId} OR receiving.customerId = ${customerId} OR inspected.customerId = ${customerId})
+      AND ((receiving.id IS NOT NULL AND asset.customerId <> receiving.customerId)
+        OR (inspected.id IS NOT NULL AND asset.customerId <> inspected.customerId)) LIMIT 1`
+  if (mismatches.length) throw new AppError(503, ErrorCode.SERVICE_UNAVAILABLE, '자산 귀속 확인이 필요합니다. MRS에 문의해 주세요.')
+}
 
 export const assetListRoute = createRoute({
   method: 'get',
@@ -177,6 +227,7 @@ function categoryPath(categories: Array<{ id: string; parentId: string | null; n
 export function createAssetRepository(client: PrismaClient): AssetRepository {
   return {
     list: async (customerId, query, now) => {
+      await assertOwnerConsistency(client, customerId)
       const categories = await client.materialCategory.findMany({ select: { id: true, parentId: true, name: true } })
       const and: Prisma.AssetWhereInput[] = []
       if (query.q) and.push({ OR: [{ id: { contains: query.q } }, { name: { contains: query.q } }, { specification: { contains: query.q } }, { brand: { contains: query.q } }] })
@@ -227,12 +278,30 @@ export function createAssetRepository(client: PrismaClient): AssetRepository {
           storageStatus: record.storageStatus,
           saleStatus: record.saleStatus,
           locationId: record.locationId,
-          thumbnailUrl: record.images[0]?.url ?? null,
+          thumbnailUrl: record.images[0] ? privateImage(record.images[0].url) : null,
           receivedAt: record.createdAt,
           createdAt: record.createdAt,
           updatedAt: record.updatedAt,
         })),
       }
+    },
+    detail: async (customerId, id) => {
+      await assertOwnerConsistency(client, customerId)
+      const record = await client.asset.findFirst({ where: { id, customerId }, include: { category: true, images: { orderBy: { sortOrder: 'asc' } } } })
+      if (!record) return null
+      const categories = await client.materialCategory.findMany({ select: { id: true, parentId: true, name: true } })
+      return { id: record.id, itemId: record.itemId, receivingId: record.receivingId, name: record.name, specification: record.specification, brand: record.brand, grade: record.grade, quantity: record.quantity.toString(), unit: record.unit, appraisalValue: record.appraisal?.toString() ?? null, storageStatus: record.storageStatus, saleStatus: record.saleStatus, locationId: record.locationId, createdAt: record.createdAt, category: { id: record.category.id, name: record.category.name, path: categoryPath(categories, record.category.id) }, images: record.images.flatMap((image) => { const url = privateImage(image.url); return url ? [{ id: image.id, name: image.name, url }] : [] }) }
+    },
+    summary: async (customerId) => {
+      await assertOwnerConsistency(client, customerId)
+      const where: Prisma.AssetWhereInput = { customerId, storageStatus: { not: 'RELEASED' } }
+      const [total, unappraised, groups, quantities] = await client.$transaction([
+        client.asset.aggregate({ where, _count: true, _sum: { appraisal: true } }),
+        client.asset.count({ where: { ...where, appraisal: null } }),
+        client.asset.groupBy({ by: ['storageStatus', 'saleStatus'], where, _count: true }),
+        client.asset.groupBy({ by: ['unit'], where, _sum: { quantity: true } }),
+      ], { isolationLevel: 'RepeatableRead' })
+      return { total: total._count, appraisalValue: total._sum.appraisal?.toString() ?? null, unappraised, groups: groups.map((group) => ({ storageStatus: group.storageStatus, saleStatus: group.saleStatus, count: group._count })), quantities: quantities.map((group) => ({ unit: group.unit, quantity: group._sum.quantity?.toString() ?? '0' })) }
     },
   }
 }

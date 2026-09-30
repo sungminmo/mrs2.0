@@ -13,6 +13,8 @@ try {
   ])
 
   await database.client.$transaction(async (transaction) => {
+    await transaction.customer.upsert({ where: { id: 'TEST-CUST-001' }, update: {}, create: { id: 'TEST-CUST-001', name: 'MRS Test Customer', businessNumber: '2208162517', representativeName: 'Test Owner', address: 'Test address', phone: '010-0000-0002', status: 'ACTIVE', approvedAt: new Date() } })
+    await transaction.customer.upsert({ where: { id: 'TEST-CUST-002' }, update: {}, create: { id: 'TEST-CUST-002', name: 'Other Test Customer' } })
     await transaction.materialCategory.upsert({
       where: { id: '990000' },
       update: { name: 'Test Materials', parentId: null, enabled: true, sortOrder: 9000 },
