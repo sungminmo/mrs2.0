@@ -13,6 +13,16 @@
 
 ## 관리자 계정 관리 (구현)
 
+### 관리자 목록 페이지 조회
+
+- 관리자 진입 시 업무·회원·고객사 전체 목록을 미리 조회하지 않는다. 현재 메뉴에서 필요한 API만 호출한다.
+- `/api/admin/data?scope=items&page=1&rows=25`는 선택 업무 목록과 카테고리 기준정보만 반환한다. `scope`: `items`, `assets`, `receivings`, `inspections`, `disposals`, `products`, `campaigns`, `categories`, `locations`, `dashboard`. 미지정 시 품목 1페이지다.
+- `page`는 1부터, `rows`는 기본 25·최대 100이다. 응답 `data.pagination`은 `{ page, rows, total }`. 페이지 크기 초과·잘못된 페이지·미지원 scope는 400이다. 업무별 `q`, `status`, `category`, `customer`, 자산 `grade`, `saleStatus`, `itemId`, `locationId`, 기록 `period=YYYY-MM`, `sort=recent|name`을 DB에서 적용한다. `id`는 페이지와 관계없이 해당 레코드만 조회한다.
+- 고객사·회원·고객사 신청·관리자·배너 목록 API도 `page`, `rows`와 전체 건수 응답을 사용한다. 고객사·회원·신청·관리자는 `q`, `status`, `id`, 관리자는 `role` 필터를 지원한다. 회원 API는 고객 회원만, 관리자 API는 관리자만 조회하며 기존 인증·시스템 관리자 제한은 유지한다.
+- 배너 목록에서는 이미지 본문을 제외하고 `id` 상세 조회에서 편성 이미지를 가져온다. 자산 목록은 대표 이미지 1장과 이력 없는 데이터를, 상세는 최대 8장·최근이 아닌 기존 정렬의 이력 최대 100건을 반환한다.
+- 대시보드는 입고·검수 건수 집계와 입고 10건·기획전 5건 미리보기만 조회한다. 로케이션은 자산 위치별 집계와 선택 위치의 페이지 자산을 조회한다. 로케이션 정의·판매 요청·구매 견적·명세·현장·문의·기준정보 등 DB 미연결 예시 목록은 기존 로컬 페이지 표시를 유지한다. 카테고리는 계층 탐색·분류 선택용 트리 기준정보로 조회하며 업무 레코드 전체를 가져오지 않는다.
+- 목록 조회 중 공통 테이블 스켈레톤과 접근성 상태를 표시한다. 이전 요청은 메뉴·페이지 변경 시 취소하며 `prefers-reduced-motion`에서는 스켈레톤 애니메이션을 끈다. 스키마 마이그레이션은 없다. 관리자 프론트와 백엔드를 함께 배포해야 한다.
+
 - 시스템 관리자만 `/api/admin/accounts`를 조회·생성하고 `/api/admin/accounts/{id}`를 수정할 수 있습니다. 관리자·영업·물류는 이 API에 403을 받습니다. 기존 업무 메뉴별 영업·물류 권한 제한은 이번 변경 범위에 포함하지 않습니다.
 - 권한은 `SYSTEM_ADMIN`(시스템 관리자), `ADMIN`(관리자), `SALES`(영업), `LOGISTICS`(물류)입니다. 고객 회원의 `customerRole`과 독립적이며 공개 가입으로 관리자 계정을 만들 수 없습니다.
 - `GET /api/admin/accounts`: `{ accounts: [...] }`. 각 항목은 `id`, `email`(로그인 아이디), `managerName`, `managerPhone`, `adminRole`, `status`, `sessionVersion`, `createdAt`, `updatedAt`입니다. 비밀번호·해시는 반환하지 않습니다.

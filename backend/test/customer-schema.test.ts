@@ -8,6 +8,8 @@ import { createAuthRepository, createCustomerRepository } from '../src/customer.
 import { createAssetRepository } from '../src/asset.js'
 import { createAdminAccountRepository } from '../src/admin-accounts.js'
 import { hashPassword } from '../src/auth.js'
+import { adminDataQuery, createAdminDataRepository } from '../src/admin-data.js'
+import { adminListQuery } from '../src/admin-pagination.js'
 
 test('customer migration and repositories on isolated MySQL', { skip: process.env.RUN_CUSTOMER_SCHEMA_TEST !== '1' }, async (context) => {
   const container = `mrs-customer-test-${randomUUID()}`
@@ -138,6 +140,20 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     assert.deepEqual(detail?.images.map((image) => image.id), ['image-safe'])
     assert.equal(detail?.appraisalValue, null)
     assert.equal((await assets.detail!(company.id, '260930-0002'))?.appraisalValue, '0')
+    const adminData = createAdminDataRepository(client)
+    const first = await adminData.load(adminDataQuery.parse({ scope: 'assets', customer: company.id, page: 1, rows: 10 }))
+    const second = await adminData.load(adminDataQuery.parse({ scope: 'assets', customer: company.id, page: 2, rows: 10 }))
+    assert.equal(first.assets.length, 10)
+    assert.equal(second.assets.length, 10)
+    assert.equal(first.pagination.total, 102)
+    assert.equal(second.assets.some((entry) => first.assets.some((previous) => previous.id === entry.id)), false)
+    assert.equal(first.items.length, 0)
+    assert.equal(first.assets.every((entry) => entry.history.length === 0), true)
+    const selected = await adminData.load(adminDataQuery.parse({ scope: 'assets', id: second.assets[0]!.id, page: 50 }))
+    assert.equal(selected.assets[0]?.id, second.assets[0]!.id)
+    const companyPage = adminListQuery.parse({ rows: 1, page: 2 })
+    assert.equal((await customers.list(companyPage)).length, 1)
+    assert.ok(await customers.count(companyPage) >= 2)
     await client.receiving.create({ data: { id: 'MISMATCH', customerId: other.id, siteName: 'Other site', managerName: 'Manager', managerPhone: '010', channel: 'ADMIN', volume: 'OTHER', termsAgreedAt: new Date(), termsVersion: 'v1', termsText: 'Test' } })
     await client.asset.update({ where: { id: '260930-0001' }, data: { receivingId: 'MISMATCH' } })
     await assert.rejects(assets.summary!(company.id), /귀속 확인/)

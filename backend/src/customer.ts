@@ -1,3 +1,4 @@
+import { adminListQuery, listPaging, listPagination, type AdminListQuery } from './admin-pagination.js'
 import { createHash, randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import type { Context } from 'hono'
@@ -53,6 +54,8 @@ async function audit(transaction: Transaction, actorUserId: string, customerId: 
 }
 
 export function createCustomerRepository(client: PrismaClient) {
+  const companyWhere = (query: AdminListQuery): Prisma.CustomerWhereInput => query.id ? { id: query.id } : { ...(query.status && ['ACTIVE', 'PENDING', 'SUSPENDED'].includes(query.status) ? { status: query.status as 'ACTIVE' | 'PENDING' | 'SUSPENDED' } : {}), ...(query.q ? { OR: [{ name: { contains: query.q } }, { id: { contains: query.q } }, { businessNumber: { contains: query.q } }] } : {}) }
+  const applicationWhere = (query: AdminListQuery): Prisma.CustomerApplicationWhereInput => query.id ? { id: query.id } : { ...(query.status && ['PENDING', 'APPROVED', 'REJECTED'].includes(query.status) ? { status: query.status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}), ...(query.q ? { OR: [{ name: { contains: query.q } }, { businessNumber: { contains: query.q } }, { user: { email: { contains: query.q } } }] } : {}) }
   return {
     lookup: async (businessNumber: string) => client.customer.findFirst({ where: { businessNumber, status: 'ACTIVE' }, select: { id: true, name: true } }),
     throttle: async (scope: string, identifier: string, maximum: number) => {
@@ -64,12 +67,14 @@ export function createCustomerRepository(client: PrismaClient) {
       await client.customerRateLimit.deleteMany({ where: { expiresAt: { lt: new Date() } } })
       if (bucket.count > maximum) throw new AppError(429, ErrorCode.RATE_LIMITED, '요청이 많습니다. 잠시 후 다시 시도해 주세요.')
     },
-    list: () => client.customer.findMany({ orderBy: { createdAt: 'desc' }, include: { _count: { select: { users: true, assets: true } } } }),
-    applications: () => client.customerApplication.findMany({ orderBy: { createdAt: 'desc' }, include: { user: { select: { id: true, email: true, managerName: true, managerPhone: true } } } }),
+    list: (query = adminListQuery.parse({})) => client.customer.findMany({ where: companyWhere(query), ...listPaging(query), orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], include: { _count: { select: { users: true, assets: true } } } }),
+    count: (query: AdminListQuery) => client.customer.count({ where: companyWhere(query) }),
+    applications: (query = adminListQuery.parse({})) => client.customerApplication.findMany({ where: applicationWhere(query), ...listPaging(query), orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], include: { user: { select: { id: true, email: true, managerName: true, managerPhone: true } } } }),
+    countApplications: (query: AdminListQuery) => client.customerApplication.count({ where: applicationWhere(query) }),
     detail: async (id: string) => {
       const customer = await client.customer.findUnique({ where: { id }, include: {
-        users: { select: { id: true, email: true, managerName: true, status: true, customerRole: true } },
-        _count: { select: { assets: true } },
+        users: { take: 25, orderBy: { id: 'asc' }, select: { id: true, email: true, managerName: true, status: true, customerRole: true } },
+        _count: { select: { assets: true, users: true } },
         changes: { orderBy: { createdAt: 'desc' }, take: 100 },
       } })
       if (!customer) throw new AppError(404, ErrorCode.NOT_FOUND, '고객사를 찾을 수 없습니다.')
@@ -125,10 +130,12 @@ export type CustomerRepository = ReturnType<typeof createCustomerRepository>
 
 export function createAuthRepository(client: PrismaClient): AuthRepository {
   const include = { customer: true, customerApplication: true } as const
+  const where = (query: AdminListQuery): Prisma.UserWhereInput => ({ role: 'CUSTOMER', ...(query.id ? { id: query.id } : { ...(query.status && query.status !== 'APPROVED' ? { status: query.status } : {}), ...(query.customer ? { customerId: query.customer } : {}), ...(query.q ? { OR: [{ managerName: { contains: query.q } }, { companyName: { contains: query.q } }, { email: { contains: query.q } }] } : {}) }) })
   return {
     findByEmail: (email) => client.user.findUnique({ where: { email }, include }),
     findById: (id) => client.user.findUnique({ where: { id }, include }),
-    listMembers: () => client.user.findMany({ orderBy: { createdAt: 'desc' }, include }),
+    listMembers: (query = adminListQuery.parse({})) => client.user.findMany({ where: where(query), ...listPaging(query), orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], include }),
+    countMembers: (query) => client.user.count({ where: where(query) }),
     createRegistration: (input: RegistrationInput) => customerTransaction(client, async (transaction) => {
       const { customerType, customerId, customer: fields, ...user } = input
       if (customerType === 'existing') {
@@ -186,8 +193,8 @@ export function customerHandlers(repository: CustomerRepository) {
       context.header('Cache-Control', 'no-store')
       return success(context, { customer: await repository.lookup(businessNumber) })
     },
-    list: async (context: Context) => success(context, { customers: await repository.list() }),
-    applications: async (context: Context) => success(context, { applications: await repository.applications() }),
+    list: async (context: Context) => { const query = adminListQuery.parse(context.req.query()); return success(context, { customers: await repository.list(query), pagination: listPagination(query, await repository.count(query)) }) },
+    applications: async (context: Context) => { const query = adminListQuery.parse(context.req.query()); return success(context, { applications: await repository.applications(query), pagination: listPagination(query, await repository.countApplications(query)) }) },
     detail: async (context: Context) => success(context, { customer: await repository.detail(id(context)) }),
     create: async (context: Context) => {
       const { reason, ...fields } = customerFieldsSchema.extend({ reason: decisionSchema.shape.reason }).parse(await context.req.json())

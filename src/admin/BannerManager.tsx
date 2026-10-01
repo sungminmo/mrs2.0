@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowLeft, ArrowUp, ImagePlus, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react'
 import { adminAuthenticatedFetch } from '../adminAuthSession'
 import type { CustomerBannerItem, CustomerBannerPlacement } from '../banners'
+import AdminPagination, { LoadingTable, type Pagination } from './AdminPagination'
 
 type AdminBannerItem = CustomerBannerItem & { createdAt?: string; updatedAt?: string }
 type AdminPlacement = CustomerBannerPlacement & { items: AdminBannerItem[]; createdAt: string; updatedAt: string }
@@ -46,31 +47,39 @@ export default function BannerManager({ params }: { params: URLSearchParams }) {
   const [placements, setPlacements] = useState<AdminPlacement[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [pagination, setPagination] = useState<Pagination>({ page: 1, rows: 25, total: 0 })
+  const [page, setPage] = useState(1)
+  const [rows, setRows] = useState(25)
+  const [loadedKey, setLoadedKey] = useState('')
   const id = params.get('id') ?? ''
   const mode = params.get('mode')
   const selected = placements.find((placement) => placement.id === id)
   const editing = mode === 'new' || mode === 'edit' && !!selected
+  const loadKey = `${id}/${page}/${rows}`
 
   useEffect(() => {
-    let active = true
-    adminAuthenticatedFetch('/api/admin/banners').then(async (response) => {
+    const controller = new AbortController()
+    const search = new URLSearchParams({ page: String(page), rows: String(rows) })
+    if (id) search.set('id', id)
+    adminAuthenticatedFetch(`/api/admin/banners?${search}`, { signal: controller.signal }).then(async (response) => {
       if (!response.ok) throw new Error('배너 노출 위치를 불러오지 못했습니다.')
-      const body = await response.json() as { data?: { placements?: AdminPlacement[] } }
-      if (active) setPlacements(body.data?.placements ?? [])
-    }).catch((failure) => { if (active) setError(failure instanceof Error ? failure.message : '배너 노출 위치를 불러오지 못했습니다.') }).finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
-  }, [])
+      const body = await response.json() as { data: { placements: AdminPlacement[]; pagination: Pagination } }
+      if (!controller.signal.aborted) { setPlacements(body.data.placements); setPagination(body.data.pagination); setError('') }
+    }).catch((failure) => { if (!controller.signal.aborted) { setPlacements([]); setError(failure instanceof Error ? failure.message : '배너 노출 위치를 불러오지 못했습니다.') } }).finally(() => { if (!controller.signal.aborted) { setLoading(false); setLoadedKey(loadKey) } })
+    return () => controller.abort()
+  }, [id, page, rows, loadKey])
 
-  if (loading) return <p className="adm-note" role="status">배너 노출 위치를 불러오는 중입니다.</p>
+  if (loading || loadedKey !== loadKey) return <LoadingTable />
   if (editing) return <PlacementEditor placement={selected} cancelHref={selected ? `#/admin/content?tab=banners&id=${selected.id}` : '#/admin/content?tab=banners'} onSaved={(placement) => { setPlacements((current) => current.some((item) => item.id === placement.id) ? current.map((item) => item.id === placement.id ? placement : item) : [...current, placement]); window.location.hash = `/admin/content?tab=banners&id=${placement.id}` }} />
   if (id) return selected ? <PlacementDetail placement={selected} /> : <div className="adm-empty"><h2>노출 위치를 찾을 수 없습니다</h2><a href="#/admin/content?tab=banners">목록으로</a></div>
 
   return <>
     {error && <p className="adm-form-error" role="alert">{error}</p>}
     <div className="adm-management-actions"><p className="adm-note">노출 위치 ID를 고객 프론트에 연결한 뒤, 위치별로 여러 배너를 순서대로 편성합니다.</p><a className="adm-button adm-primary" href="#/admin/content?tab=banners&mode=new"><Plus size={16} />노출 위치 추가</a></div>
-    <div className="adm-list-heading"><h2>배너 노출 위치 <span>{placements.length}개</span></h2></div>
+    <div className="adm-list-heading"><h2>배너 노출 위치 <span>{pagination.total}개</span></h2></div>
     <div className="adm-table-scroll" tabIndex={0} role="region" aria-label="배너 노출 위치 표"><table><thead><tr><th scope="col">노출 위치 ID</th><th scope="col">위치명</th><th scope="col">편성 배너</th><th scope="col">현재 노출</th><th scope="col">상태</th><th scope="col">상세</th></tr></thead><tbody>{placements.map((placement) => { const active = placement.items.filter((item) => statusOf(item) === '노출 중').length; return <tr key={placement.id}><td><strong>{placement.id}</strong></td><td>{placement.name}</td><td>{placement.items.length}개</td><td>{placement.enabled ? `${active}개` : '0개'}</td><td><span className={`adm-status adm-status-${placement.enabled ? 'active' : 'muted'}`}>{placement.enabled ? '사용' : '중지'}</span></td><td><a className="adm-detail-link" href={`#/admin/content?tab=banners&id=${placement.id}`}>상세보기</a></td></tr> })}</tbody></table></div>
     {!placements.length && <div className="adm-empty"><ImagePlus size={24} /><h2>등록된 노출 위치가 없습니다</h2><a href="#/admin/content?tab=banners&mode=new">첫 노출 위치 추가</a></div>}
+    <AdminPagination pagination={{ ...pagination, page, rows }} loading={loading} onChange={(next, size) => { setPage(next); setRows(size) }} />
   </>
 }
 

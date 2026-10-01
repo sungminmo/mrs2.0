@@ -6,7 +6,7 @@ export type MenuId = 'dashboard' | 'basic' | 'receiving' | 'inventory' | 'market
 export type AdminLink = { label: string; menu: MenuId; tab: string; id?: string; status?: string; customer?: string }
 export type DetailSection = { title: string; headers: string[]; rows: string[][] }
 export type AdminRow = { id: string; title: string; status: string; customerId?: string; date?: string; cells: string[]; fields: [string, string][]; sections?: DetailSection[]; links: AdminLink[]; note?: string; images?: AdminImage[]; grade?: string; saleStatus?: string; inspectionStatus?: string; itemId?: string; locationId?: string; categoryId?: string }
-export type AdminView = { title: string; headers: string[]; rows: AdminRow[]; note?: string }
+export type AdminView = { title: string; headers: string[]; rows: AdminRow[]; note?: string; pagination?: { page: number; rows: number; total: number } }
 export const menus: { id: MenuId; label: string; tabs: { id: string; label: string }[] }[] = [
   { id: 'dashboard', label: '대시보드', tabs: [] },
   { id: 'basic', label: '기초 정보 관리', tabs: [{ id: 'items', label: '품목 관리' }, { id: 'categories', label: '카테고리 관리' }] },
@@ -56,7 +56,7 @@ const inspectionRows: AdminRow[] = inspectionRecords.map((receipt) => {
   const siteId = receiving?.siteId ?? receipt.receivingId
   const site = sites.find((candidate) => candidate.id === siteId)
   const customerId = receiving && 'customerId' in receiving && typeof receiving.customerId === 'string' ? receiving.customerId : site?.customerId ?? receipt.receivingId
-  const createdAssets = inventory.filter((asset) => asset.receiptId === receipt.id)
+  const createdAssets = { length: receipt.assetCount ?? inventory.filter((asset) => asset.receiptId === receipt.id).length }
   const disposalQuantity = receipt.materials.reduce((sum, material) => sum + (material.disposal ?? 0), 0)
   return { id: receipt.id, title: `${site?.name ?? siteId} 검수`, customerId, date: receipt.date, status: receipt.status,
     cells: [receipt.receivingId, receipt.id, customerName(customerId), dateText(receipt.date), `${createdAssets.length}건`, disposalQuantity ? disposalQuantity.toLocaleString('ko-KR') : '없음', receipt.status],
@@ -112,6 +112,9 @@ const itemRows: AdminRow[] = masterItems.map((item) => ({
 }))
 const locationRows: AdminRow[] = locationRecords.map((location) => {
   const stock = inventory.filter((asset) => asset.locationId === location.id && asset.status === '보관중' && asset.quantity > 0)
+  if (location.assetCount !== undefined && location.assetCount !== stock.length) {
+    return { id: location.id, title: location.name, status: location.assetCount ? '사용 중' : '비어 있음', cells: [location.id, location.name, location.zone, `${location.assetCount}건`, location.assetCount ? '사용 중' : '비어 있음'], fields: [['로케이션', location.name], ['구역', location.zone], ['점유 재고', `${location.assetCount}건`]], links: [], note: '점유 재고 목록은 자산 메뉴에서 로케이션 코드로 조회합니다.' }
+  }
   const status = stock.length ? '사용 중' : '비어 있음'
   return { id: location.id, title: location.name, status, cells: [location.id, location.name, location.zone, `${stock.length}건`, status], fields: [['로케이션', location.name], ['구역', location.zone], ['점유 재고', `${stock.length}건`], ['요금 단가', location.rate === null ? '미설정' : money(location.rate)]], sections: [{ title: '점유 재고', headers: ['재고번호', '자재', '수량'], rows: stock.map((asset) => [asset.id, asset.name, qty(asset.quantity, asset.unit)]) }], links: stock.map((asset) => assetLink(asset.id)), note: '서로 다른 단위의 수량은 합산하지 않습니다. 면적·용량 기준 미설정으로 가동률을 계산하지 않습니다.' }
 })
@@ -138,6 +141,10 @@ const siteRows: AdminRow[] = sites.map((site) => ({ id: site.id, title: site.nam
 const inquiryRows: AdminRow[] = inquiries.map((inquiry) => ({ id: inquiry.id, title: inquiry.title, customerId: inquiry.customerId, date: inquiry.date, status: inquiry.status, cells: [inquiry.id, dateText(inquiry.date), inquiry.type, customerName(inquiry.customerId), inquiry.title, inquiry.status], fields: [['문의번호', inquiry.id], ['문의 유형', inquiry.type], ['접수일', dateText(inquiry.date)], ['고객사', customerName(inquiry.customerId)], ['문의 원문', inquiry.text], ['답변', inquiry.answer ?? '미답변']], links: [customerLink(inquiry.customerId), ...(inquiry.receiptId ? [receiptLink(inquiry.receiptId)] : []), ...(inquiry.receivingId ? [requestLink(inquiry.receivingId)] : []), ...(inquiry.quoteId ? [{ label: inquiry.quoteId, menu: 'market' as const, tab: 'quotes', id: inquiry.quoteId }] : [])] }))
 
 const referenceRows = (items: [string, string, string][]): AdminRow[] => items.map(([id, title, content]) => ({ id, title, status: '참고 기준', cells: [id, title, content], fields: [['코드', id], ['항목', title], ['내용', content]], links: [] }))
+for (const row of campaignRows) {
+  const campaign = campaigns.find((entry) => entry.id === row.id)
+  if (campaign?.productCount !== undefined) { row.cells[4] = `${campaign.productCount}개`; row.sections = [] }
+}
 return {
   'basic/items': { title: '품목 관리', headers: ['품목코드', '품목명', '카테고리', '규격', '브랜드', '단위', '입고단가', '출고단가', '표준단가', '사용 구분'], rows: itemRows, note: '원 / 기준 단위 · 부가세 포함 · 미사용 품목 및 분류는 신규 자산 연결 제외' },
   'receiving/requests': { title: '입고 신청', headers: ['신청번호', '접수일', '신청 경로', '고객사', '현장', '예상물량', '상태'], rows: receivingRows },

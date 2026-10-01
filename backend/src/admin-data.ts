@@ -1,4 +1,4 @@
-import type { PrismaClient } from './generated/prisma/client.js'
+import type { PrismaClient, Prisma } from './generated/prisma/client.js'
 import type { Context } from 'hono'
 import { z } from 'zod'
 import { AppError, ErrorCode, success } from './http.js'
@@ -16,23 +16,71 @@ const inspectionStatus = { PENDING: '검수 대기', AWAITING_ACKNOWLEDGEMENT: '
 const disposalStatus = { UNPROCESSED: '미처리', SCHEDULED: '처리 예정', COMPLETED: '폐기 완료' } as const
 const itemBatchSize = 1000
 
+export const adminDataQuery = z.object({
+  scope: z.enum(['items', 'assets', 'locations', 'receivings', 'inspections', 'disposals', 'products', 'campaigns', 'categories', 'dashboard']).default('items'),
+  page: z.coerce.number().int().min(1).max(100000).default(1),
+  rows: z.coerce.number().int().min(1).max(100).default(25),
+  id: z.string().max(80).optional(), q: z.string().max(160).default(''),
+  status: z.string().max(40).default(''), customer: z.string().max(80).default(''),
+  category: z.string().regex(/^\d{6}$/).optional(), grade: z.enum(['S', 'A', 'B', 'F']).optional(),
+  saleStatus: z.string().max(40).optional(), itemId: z.string().max(6).optional(), locationId: z.string().max(80).optional(),
+  period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(), sort: z.enum(['recent', 'name']).default('recent'),
+})
+type AdminDataQuery = z.infer<typeof adminDataQuery>
+const enumKey = <T extends Record<string, string>>(values: T, value: string) => Object.keys(values).find((key) => values[key] === value) as keyof T | undefined
+
 function chunks<T>(values: T[]) {
   return Array.from({ length: Math.ceil(values.length / itemBatchSize) }, (_, index) => values.slice(index * itemBatchSize, (index + 1) * itemBatchSize))
 }
 
 export function createAdminDataRepository(client: PrismaClient) {
   return {
-    load: async () => {
-      const [categories, items, assets, receivings, inspections, products, campaigns] = await Promise.all([
-        client.materialCategory.findMany({ orderBy: [{ parentId: 'asc' }, { sortOrder: 'asc' }, { id: 'asc' }] }),
-        client.masterItem.findMany({ include: { images: { orderBy: { sortOrder: 'asc' } } }, orderBy: { id: 'asc' } }),
-        client.asset.findMany({ include: { images: { orderBy: { sortOrder: 'asc' } }, history: { orderBy: { createdAt: 'asc' } } }, orderBy: { id: 'asc' } }),
-        client.receiving.findMany({ orderBy: { requestedAt: 'desc' } }),
-        client.inspection.findMany({ include: { items: { include: { disposal: true }, orderBy: { sortOrder: 'asc' } }, disposal: true }, orderBy: { createdAt: 'desc' } }),
-        client.product.findMany({ include: { asset: true }, orderBy: { id: 'asc' } }),
-        client.campaign.findMany({ orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] }),
+    load: async (query: AdminDataQuery = adminDataQuery.parse({})) => {
+      const { scope, page, rows, id, q, status, customer, category } = query
+      const categories = await client.materialCategory.findMany({ orderBy: [{ parentId: 'asc' }, { sortOrder: 'asc' }, { id: 'asc' }] })
+      const descendants = category ? [category] : []
+      for (let index = 0; index < descendants.length; index++) for (const entry of categories) if (entry.parentId === descendants[index] && !descendants.includes(entry.id)) descendants.push(entry.id)
+      const categoryWhere = category ? { categoryId: { in: descendants } } : {}
+      const search = q.trim() ? { OR: [{ id: { contains: q.trim() } }, { name: { contains: q.trim() } }] } : {}
+      const dates = query.period ? { gte: new Date(`${query.period}-01T00:00:00Z`), lt: new Date(Date.UTC(Number(query.period.slice(0, 4)), Number(query.period.slice(5)), 1)) } : undefined
+      const itemWhere: Prisma.MasterItemWhereInput = id ? { id } : { ...search, ...categoryWhere, ...(status ? { enabled: status === '사용' } : {}) }
+      const assetWhere: Prisma.AssetWhereInput = id ? { id } : { ...search, ...categoryWhere, ...(customer ? { customerId: customer } : {}), ...(status ? { storageStatus: enumKey(storageStatus, status) ?? 'PENDING' } : {}), ...(query.saleStatus ? { saleStatus: enumKey(saleStatus, query.saleStatus) ?? 'PENDING' } : {}), ...(query.grade ? { grade: query.grade } : {}), ...(query.itemId ? { itemId: query.itemId } : {}), ...(query.locationId ? { locationId: query.locationId } : {}), ...(dates ? { createdAt: dates } : {}) }
+      const receivingWhere: Prisma.ReceivingWhereInput = id ? { id } : { ...(q.trim() ? { OR: [{ id: { contains: q.trim() } }, { summary: { contains: q.trim() } }, { siteName: { contains: q.trim() } }] } : {}), ...(customer ? { customerId: customer } : {}), ...(status ? { status: enumKey(receivingStatus, status) ?? 'REQUESTED' } : {}), ...(dates ? { requestedAt: dates } : {}) }
+      const inspectionWhere: Prisma.InspectionWhereInput = { ...(id ? { id } : { ...(q.trim() ? { OR: [{ id: { contains: q.trim() } }, { receivingId: { contains: q.trim() } }] } : {}), ...(customer ? { receiving: { customerId: customer } } : {}), ...(dates ? { createdAt: dates } : {}), ...(scope === 'inspections' && status ? { status: enumKey(inspectionStatus, status) ?? 'PENDING' } : {}) }), ...(scope === 'disposals' ? { items: { some: { disposalQuantity: { gt: 0 } } }, ...(status ? { disposal: { status: enumKey(disposalStatus, status) ?? 'UNPROCESSED' } } : {}) } : {}) }
+      const productWhere: Prisma.ProductWhereInput = id ? { id } : { ...search, ...(status ? { status: enumKey(productStatus, status) ?? 'DRAFT' } : {}), ...(category || customer ? { asset: { ...categoryWhere, ...(customer ? { customerId: customer } : {}) } } : {}) }
+      const campaignWhere: Prisma.CampaignWhereInput = id ? { id } : { ...search, ...categoryWhere, ...(dates ? { startsAt: dates } : {}), ...(status ? status === '중지' ? { enabled: false } : { enabled: true, ...(status === '예약' ? { startsAt: { gt: new Date('2026-09-14T00:00:00+09:00') } } : status === '종료' ? { endsAt: { lte: new Date('2026-09-14T00:00:00+09:00') } } : { startsAt: { lte: new Date('2026-09-14T00:00:00+09:00') }, endsAt: { gt: new Date('2026-09-14T00:00:00+09:00') } }) } : {}) }
+      const paging = { skip: id ? 0 : (page - 1) * rows, take: id ? 1 : rows }
+      const locationAssets = scope === 'locations' && id ? await client.asset.findMany({ where: { locationId: id, storageStatus: 'STORED', quantity: { gt: 0 } }, skip: (page - 1) * rows, take: rows, include: { images: { take: 0 }, history: { take: 0 } }, orderBy: { id: 'asc' } }) : []
+      const locationCounts = scope === 'locations' ? await client.asset.groupBy({ by: ['locationId'], where: { storageStatus: 'STORED', quantity: { gt: 0 } }, _count: true }) : undefined
+      const [items, pageAssets, pageReceivings, inspections, products, campaigns] = await Promise.all([
+        scope === 'items' ? client.masterItem.findMany({ where: itemWhere, ...paging, include: { images: { orderBy: { sortOrder: 'asc' }, take: 1 } }, orderBy: query.sort === 'name' ? [{ name: 'asc' }, { id: 'asc' }] : { id: 'asc' } }) : [],
+        scope === 'assets' ? client.asset.findMany({ where: assetWhere, ...paging, include: { images: { orderBy: { sortOrder: 'asc' }, take: id ? 8 : 1 }, history: { orderBy: { createdAt: 'asc' }, take: id ? 100 : 0 } }, orderBy: query.sort === 'name' ? [{ name: 'asc' }, { id: 'asc' }] : { id: 'asc' } }) : [],
+        scope === 'receivings' || scope === 'dashboard' ? client.receiving.findMany({ where: scope === 'dashboard' ? { status: { in: ['REQUESTED', 'APPROVED'] } } : receivingWhere, ...(scope === 'dashboard' ? { skip: 0, take: 10 } : paging), orderBy: query.sort === 'name' ? [{ summary: 'asc' }, { id: 'asc' }] : [{ requestedAt: 'desc' }, { id: 'asc' }] }) : [],
+        scope === 'inspections' || scope === 'disposals' ? client.inspection.findMany({ where: inspectionWhere, ...paging, include: { items: { include: { disposal: true }, orderBy: { sortOrder: 'asc' } }, disposal: true }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] }) : [],
+        scope === 'products' ? client.product.findMany({ where: productWhere, ...paging, include: { asset: true }, orderBy: query.sort === 'name' ? [{ name: 'asc' }, { id: 'asc' }] : { id: 'asc' } }) : [],
+        scope === 'campaigns' || scope === 'dashboard' ? client.campaign.findMany({ where: campaignWhere, ...(scope === 'dashboard' ? { skip: 0, take: 5 } : paging), orderBy: query.sort === 'name' ? [{ name: 'asc' }, { id: 'asc' }] : [{ sortOrder: 'asc' }, { id: 'asc' }] }) : [],
       ])
-      return {
+      const assets = scope === 'products' ? await client.asset.findMany({ where: { id: { in: products.map((product) => product.assetId) } }, include: { images: { take: 0 }, history: { take: 0 } } }) : scope === 'locations' ? locationAssets : pageAssets
+      const receivings = scope === 'inspections' || scope === 'disposals' ? await client.receiving.findMany({ where: { id: { in: inspections.map((inspection) => inspection.receivingId) } } }) : pageReceivings
+      const customerIds = [...new Set([...assets.map((asset) => asset.customerId), ...receivings.map((receiving) => receiving.customerId)])]
+      const customers = customerIds.length ? await client.customer.findMany({ where: { id: { in: customerIds } }, select: { id: true, name: true, representativeName: true, phone: true, status: true } }) : []
+      const metrics = scope === 'dashboard' ? {
+        'receiving/requests': await client.receiving.count({ where: { status: 'REQUESTED' } }),
+        'receiving/primary': await client.inspection.count({ where: { status: 'PENDING' } }),
+      } : undefined
+      const total = await (scope === 'items' ? client.masterItem.count({ where: itemWhere }) : scope === 'assets' ? client.asset.count({ where: assetWhere }) : scope === 'receivings' ? client.receiving.count({ where: receivingWhere }) : scope === 'inspections' || scope === 'disposals' ? client.inspection.count({ where: inspectionWhere }) : scope === 'products' ? client.product.count({ where: productWhere }) : scope === 'campaigns' ? client.campaign.count({ where: campaignWhere }) : Promise.resolve(categories.length))
+      const categoryIds = scope === 'categories' && id ? [id] : []
+      for (let index = 0; index < categoryIds.length; index++) for (const entry of categories) if (entry.parentId === categoryIds[index] && !categoryIds.includes(entry.id)) categoryIds.push(entry.id)
+      const categoryCounts = categoryIds.length ? { items: await client.masterItem.count({ where: { categoryId: { in: categoryIds } } }), assets: await client.asset.count({ where: { categoryId: { in: categoryIds } } }) } : undefined
+      const campaignCounts = new Map(await Promise.all(campaigns.map(async (campaign) => {
+        const ids = [campaign.categoryId]
+        for (let index = 0; index < ids.length; index++) for (const entry of categories) if (entry.parentId === ids[index] && !ids.includes(entry.id)) ids.push(entry.id)
+        return [campaign.id, await client.product.count({ where: { status: 'AVAILABLE', asset: { categoryId: { in: ids.filter((code) => { let current = categories.find((entry) => entry.id === code); while (current) { if (!current.enabled) return false; current = categories.find((entry) => entry.id === current?.parentId) } return true }) } } } })] as const
+      })))
+      const inspectionCounts = new Map(await Promise.all(inspections.map(async (inspection) => [inspection.id, await client.asset.count({ where: { receiptId: inspection.id } })] as const)))
+      const payload = {
+        pagination: { page, rows, total },
+        customers, metrics, categoryCounts, locationCounts,
         categories: categories.map((category) => ({ id: category.id, parentId: category.parentId, name: category.name, enabled: category.enabled, order: category.sortOrder })),
         items: items.map(itemPayload),
         assets: assets.map((asset) => ({ id: asset.id, itemId: asset.itemId, receivingId: asset.receivingId, customerId: asset.customerId, receiptId: asset.receiptId, locationId: asset.locationId ?? '', name: asset.name, category: asset.categoryId, brand: asset.brand, grade: asset.grade, quantity: Number(asset.quantity), unit: unit[asset.unit], appraisal: asset.appraisal === null ? null : Number(asset.appraisal), status: storageStatus[asset.storageStatus], saleStatus: saleStatus[asset.saleStatus], specification: asset.specification, images: asset.images.map((image) => ({ id: image.id, name: image.name, url: image.url })), history: asset.history.map((entry) => ({ at: entry.createdAt.toISOString(), reason: entry.reason, changes: entry.changes })) })),
@@ -41,6 +89,7 @@ export function createAdminDataRepository(client: PrismaClient) {
         products: products.map((product) => ({ id: product.id, assetId: product.assetId, name: product.name, price: Number(product.originalUnitPrice), discountRate: product.discountRate, unit: unit[product.asset.unit], status: productStatus[product.status] })),
         campaigns: campaigns.map((campaign) => ({ id: campaign.id, name: campaign.name, category: campaign.categoryId, description: campaign.description, enabled: campaign.enabled, order: campaign.sortOrder, startsAt: campaign.startsAt.toISOString(), endsAt: campaign.endsAt.toISOString() })),
       }
+      return { ...payload, campaigns: payload.campaigns.map((campaign) => ({ ...campaign, productCount: campaignCounts.get(campaign.id) ?? 0 })), inspections: payload.inspections.map((inspection) => ({ ...inspection, assetCount: inspectionCounts.get(inspection.id) ?? 0 })) }
     },
     createItems: (items: AdminItemInput[]) => client.$transaction(async (transaction) => {
       const records = items.map((item) => ({
@@ -80,7 +129,7 @@ export function createAdminDataRepository(client: PrismaClient) {
 export type AdminDataRepository = ReturnType<typeof createAdminDataRepository>
 
 export function loadAdminData(repository: AdminDataRepository) {
-  return async (context: Context) => success(context, await repository.load())
+  return async (context: Context) => success(context, await repository.load(adminDataQuery.parse(context.req.query())))
 }
 
 const imageInput = z.object({ id: z.uuid(), name: z.string().trim().min(1).max(255), url: z.string().min(1).max(7_000_000) })

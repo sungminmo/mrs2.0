@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { AppError, ErrorCode, success } from './http.js'
 import type { Context, MiddlewareHandler } from 'hono'
 import { customerFieldsSchema, memberDecisionSchema, type MemberDecision } from './customer.js'
+import { adminListQuery, listPagination, type AdminListQuery } from './admin-pagination.js'
 
 const scrypt = promisify(scryptCallback)
 const hashLength = 64
@@ -47,7 +48,8 @@ export type AuthRepository = {
   findByEmail: (email: string) => Promise<AuthUser | null>
   findById: (id: string) => Promise<AuthUser | null>
   createRegistration: (input: RegistrationInput) => Promise<AuthUser>
-  listMembers: () => Promise<AuthUser[]>
+  listMembers: (query?: AdminListQuery) => Promise<AuthUser[]>
+  countMembers?: (query: AdminListQuery) => Promise<number>
   approveMember: (id: string, approvedAt: Date, decision?: MemberDecision, actor?: string) => Promise<AuthUser | null>
   changeMember?: (id: string, decision: MemberDecision, actor: string) => Promise<AuthUser | null>
 }
@@ -194,7 +196,7 @@ export function memberProfile(user: AuthUser) {
 }
 
 export function listMembers(repository: AuthRepository) {
-  return async (context: Context) => success(context, { members: (await repository.listMembers()).filter((user) => user.role === 'CUSTOMER').map(memberProfile) })
+  return async (context: Context) => { const query = adminListQuery.parse(context.req.query()); const members = (await repository.listMembers(query)).filter((user) => user.role === 'CUSTOMER').map(memberProfile); return success(context, { members, pagination: listPagination(query, await repository.countMembers?.(query) ?? members.length) }) }
 }
 
 export function approveMember(repository: AuthRepository) {

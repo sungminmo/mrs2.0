@@ -56,6 +56,10 @@
 .adm-search-button:hover:not(:disabled) { background: #1f5138; text-decoration: none; }
 .adm-search-button:active:not(:disabled) { transform: scale(.97); }
 .adm-spinner { animation: adm-spin 700ms linear infinite; }
+.adm-loading-status { display: block; padding: 8px 0; color: #496458; }
+.adm-table-skeleton { display: block; height: 14px; min-width: 60px; max-width: 180px; background: #e3ece7; border-radius: 3px; animation: adm-skeleton-pulse 1.2s ease-in-out infinite alternate; }
+@keyframes adm-skeleton-pulse { to { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .adm-table-skeleton { animation: none; } }
 @keyframes adm-spin { to { transform: rotate(360deg); } }
 .adm-item-file-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .adm-item-file-actions .adm-form-error { flex-basis: 100%; margin: 0; text-align: right; }

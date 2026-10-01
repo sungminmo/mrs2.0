@@ -7,12 +7,14 @@ import { createDatabase } from './database.js'
 import { createAdminDataRepository } from './admin-data.js'
 import { createAuthRepository, createCustomerRepository } from './customer.js'
 import { createAdminAccountRepository } from './admin-accounts.js'
+import { adminListQuery, listPaging } from './admin-pagination.js'
 
 const config = readConfig()
 const database = createDatabase(config.database)
 const authRepository = createAuthRepository(database.client)
 const bannerRepository = {
-  list: () => database.client.bannerPlacement.findMany({ include: { items: true }, orderBy: { id: 'asc' } }),
+  list: async (query = adminListQuery.parse({})) => (await database.client.bannerPlacement.findMany({ ...listPaging(query), include: { items: { select: { id: true, placementId: true, linkUrl: true, enabled: true, sortOrder: true, startsAt: true, endsAt: true, createdAt: true, updatedAt: true } } }, orderBy: { id: 'asc' } })).map((placement) => ({ ...placement, items: placement.items.map((item) => ({ ...item, desktopImageUrl: '', mobileImageUrl: '' })) })),
+  count: () => database.client.bannerPlacement.count(),
   findByIds: (ids: string[]) => database.client.bannerPlacement.findMany({ where: { id: { in: ids } }, include: { items: true } }),
   replace: (id: string, data: BannerPlacementInput) => database.client.$transaction(async (transaction) => {
     const placement = await transaction.bannerPlacement.upsert({ where: { id }, create: { id, name: data.name, enabled: data.enabled }, update: { name: data.name, enabled: data.enabled } })

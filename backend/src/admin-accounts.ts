@@ -4,6 +4,7 @@ import type { Prisma, PrismaClient } from './generated/prisma/client.js'
 import { hashPassword, type AuthUser } from './auth.js'
 import { customerTransaction } from './customer.js'
 import { AppError, ErrorCode, success } from './http.js'
+import { adminListQuery, listPaging, listPagination, type AdminListQuery } from './admin-pagination.js'
 
 export const adminAccountFields = z.object({
   name: z.string().trim().min(1).max(80),
@@ -30,12 +31,14 @@ export const requireSystemAdmin: MiddlewareHandler = async (context, next) => {
 }
 
 export function createAdminAccountRepository(client: PrismaClient) {
+  const where = (query: AdminListQuery): Prisma.UserWhereInput => ({ role: 'ADMIN', ...(query.id ? { id: query.id } : { ...(query.status === 'ACTIVE' || query.status === 'SUSPENDED' ? { status: query.status } : {}), ...(query.role ? { adminRole: query.role } : {}), ...(query.q ? { OR: [{ email: { contains: query.q } }, { managerName: { contains: query.q } }, { managerPhone: { contains: query.q } }] } : {}) }) })
   const verifyActor = async (transaction: Prisma.TransactionClient, actor: string) => {
     const user = await transaction.user.findUnique({ where: { id: actor } })
     if (!user || user.role !== 'ADMIN' || user.adminRole !== 'SYSTEM_ADMIN' || user.status !== 'ACTIVE') throw new AppError(403, ErrorCode.FORBIDDEN, '시스템 관리자 권한이 필요합니다.')
   }
   return {
-    list: () => client.user.findMany({ where: { role: 'ADMIN' }, select, orderBy: { createdAt: 'desc' } }),
+    list: (query = adminListQuery.parse({})) => client.user.findMany({ where: where(query), ...listPaging(query), select, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] }),
+    count: (query: AdminListQuery) => client.user.count({ where: where(query) }),
     create: async (input: z.infer<typeof adminAccountCreate>, actor: string) => {
       const passwordHash = await hashPassword(input.password)
       return customerTransaction(client, async (transaction) => {
@@ -68,7 +71,7 @@ export type AdminAccountRepository = ReturnType<typeof createAdminAccountReposit
 export function adminAccountHandlers(repository: AdminAccountRepository) {
   const actor = (context: Context) => (context.get('authUser') as AuthUser).id
   return {
-    list: async (context: Context) => success(context, { accounts: await repository.list() }),
+    list: async (context: Context) => { const query = adminListQuery.parse(context.req.query()); return success(context, { accounts: await repository.list(query), pagination: listPagination(query, await repository.count(query)) }) },
     create: async (context: Context) => success(context, { account: await repository.create(adminAccountCreate.parse(await context.req.json()), actor(context)) }, 201),
     update: async (context: Context) => success(context, { account: await repository.update(z.string().uuid().parse(context.req.param('id')), adminAccountUpdate.parse(await context.req.json()), actor(context)) }),
   }

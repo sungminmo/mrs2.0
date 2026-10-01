@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createApp } from '../src/app.js'
 import { hashPassword, type AuthRepository, type AuthUser } from '../src/auth.js'
-import { createAdminDataRepository } from '../src/admin-data.js'
+import { adminDataQuery, createAdminDataRepository } from '../src/admin-data.js'
 
 const secret = 'test-only-secret-at-least-32-characters'
 
@@ -39,9 +39,30 @@ test('admin data endpoint requires an authenticated administrator', async () => 
   const response = await admin.app.request('/api/admin/data', { headers: { Authorization: `Bearer ${admin.token}` } })
   assert.equal(response.status, 200)
   assert.deepEqual((await response.json() as { data: unknown }).data, admin.data)
+  assert.equal((await admin.app.request('/api/admin/data?rows=101', { headers: { Authorization: `Bearer ${admin.token}` } })).status, 400)
+  assert.equal((await admin.app.request('/api/admin/data?page=0', { headers: { Authorization: `Bearer ${admin.token}` } })).status, 400)
+  assert.equal((await admin.app.request('/api/admin/data?scope=unknown', { headers: { Authorization: `Bearer ${admin.token}` } })).status, 400)
 
   const customer = await fixture('CUSTOMER')
   assert.equal((await customer.app.request('/api/admin/data', { headers: { Authorization: `Bearer ${customer.token}` } })).status, 401)
+})
+
+test('admin item pages query only the selected table with bounded paging and matching count filters', async () => {
+  let options: Record<string, unknown> = {}
+  const repository = createAdminDataRepository({
+    materialCategory: { findMany: async () => [{ id: '010000', parentId: null }, { id: '010100', parentId: '010000' }] },
+    masterItem: { findMany: async (input: Record<string, unknown>) => { options = input; return [] }, count: async ({ where }: { where: unknown }) => { assert.deepEqual(where, options.where); return 57 } },
+  } as never)
+  const data = await repository.load(adminDataQuery.parse({ scope: 'items', page: '3', rows: '10', q: 'bulb', category: '010000', status: '사용', sort: 'name' }))
+  assert.equal(options.skip, 20)
+  assert.equal(options.take, 10)
+  assert.deepEqual(options.where, { OR: [{ id: { contains: 'bulb' } }, { name: { contains: 'bulb' } }], categoryId: { in: ['010000', '010100'] }, enabled: true })
+  assert.deepEqual(data.pagination, { page: 3, rows: 10, total: 57 })
+  assert.deepEqual(data.assets, [])
+  await repository.load(adminDataQuery.parse({ scope: 'items', id: '000003', page: 20, rows: 100 }))
+  assert.equal(options.skip, 0)
+  assert.equal(options.take, 1)
+  assert.deepEqual(options.where, { id: '000003' })
 })
 
 test('administrator can register individual and file items in one request', async () => {

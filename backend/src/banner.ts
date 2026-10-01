@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { AppError, ErrorCode, success } from './http.js'
 import type { Context } from 'hono'
+import { adminListQuery, listPagination, type AdminListQuery } from './admin-pagination.js'
 
 export type BannerItemRecord = {
   id: string
@@ -29,7 +30,8 @@ export type BannerItemInput = Omit<BannerItemRecord, 'placementId' | 'createdAt'
 export type BannerPlacementInput = Pick<BannerPlacementRecord, 'name' | 'enabled'> & { items: BannerItemInput[] }
 
 export type BannerRepository = {
-  list: () => Promise<BannerPlacementRecord[]>
+  list: (query?: AdminListQuery) => Promise<BannerPlacementRecord[]>
+  count?: () => Promise<number>
   findByIds: (ids: string[]) => Promise<BannerPlacementRecord[]>
   replace: (id: string, input: BannerPlacementInput) => Promise<BannerPlacementRecord>
 }
@@ -79,7 +81,9 @@ export function listPublicBanners(repository: BannerRepository) {
 export function listAdminBanners(repository: BannerRepository) {
   return async (context: Context) => {
     context.header('Cache-Control', 'no-store')
-    return success(context, { placements: (await repository.list()).map((placement) => placementPayload(placement, [...placement.items].sort((first, second) => first.sortOrder - second.sortOrder))) })
+    const query = adminListQuery.parse(context.req.query())
+    const placements = query.id ? await repository.findByIds([query.id]) : await repository.list(query)
+    return success(context, { placements: placements.map((placement) => placementPayload(placement, [...placement.items].sort((first, second) => first.sortOrder - second.sortOrder))), pagination: listPagination(query, query.id ? placements.length : await repository.count?.() ?? placements.length) })
   }
 }
 
