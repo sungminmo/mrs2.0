@@ -2,6 +2,7 @@ import type { PrismaClient } from './generated/prisma/client.js'
 import type { Context } from 'hono'
 import { z } from 'zod'
 import { AppError, ErrorCode, success } from './http.js'
+import { imageSource } from './image-source.js'
 
 const unit = { EA: 'EA', SET: 'Set', ROLL: '롤', BAR: '봉', SURFACE: '면', BOX: 'Box', KG: 'kg', TON: 'ton', M: 'M', M3: 'm³', PIECE: '본', PAIR: '켤레', GROUP: '조', SHEET: '장', SETUP: '식', CASE: '건', CONTAINER: '통', BUNDLE: '묶음', UNIT: '대', BAG: '포', PACK: '곽', CARTON: '갑', OTHER: '기타' } as const
 type ItemUnit = keyof typeof unit
@@ -83,7 +84,7 @@ export function loadAdminData(repository: AdminDataRepository) {
   return async (context: Context) => success(context, await repository.load())
 }
 
-const imageInput = z.object({ id: z.uuid(), name: z.string().trim().min(1).max(255), url: z.string().min(1).max(7_000_000) })
+const imageInput = z.object({ id: z.uuid(), name: z.string().trim().min(1).max(255), url: z.string().min(1).max(4_200_000).refine((value) => imageSource(value) !== null, '허용되지 않은 이미지 주소입니다.') })
 const itemUnit = z.enum(Object.values(unit) as [(typeof unit)[ItemUnit], ...(typeof unit)[ItemUnit][]])
 const itemInput = z.object({
   id: z.string().regex(/^\d{6}$/),

@@ -7,6 +7,7 @@ import { createDatabase } from './database.js'
 import { createAdminDataRepository } from './admin-data.js'
 import { createAuthRepository, createCustomerRepository } from './customer.js'
 import { createAdminAccountRepository } from './admin-accounts.js'
+import { createAdminImageRepository } from './admin-images.js'
 
 const config = readConfig()
 const database = createDatabase(config.database)
@@ -21,7 +22,7 @@ const bannerRepository = {
     return { ...placement, items: await transaction.bannerItem.findMany({ where: { placementId: id }, orderBy: { sortOrder: 'asc' } }) }
   }),
 }
-const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt }, assets: createAssetRepository(database.client), banners: bannerRepository, adminData: createAdminDataRepository(database.client), customers: createCustomerRepository(database.client), adminAccounts: createAdminAccountRepository(database.client) })
+const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt }, assets: createAssetRepository(database.client), banners: bannerRepository, adminData: createAdminDataRepository(database.client), customers: createCustomerRepository(database.client), adminAccounts: createAdminAccountRepository(database.client), adminImages: createAdminImageRepository(database.client) })
 const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: config.port }, (info) => {
   console.info(`Backend listening on port ${info.port}`)
 })

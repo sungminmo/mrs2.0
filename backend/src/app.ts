@@ -8,6 +8,7 @@ import { listAdminBanners, listPublicBanners, saveBanner, type BannerRepository 
 import { ErrorCode, failure, handleError, success } from './http.js'
 import { createAdminItems, loadAdminData, saveAdminCategory, type AdminDataRepository } from './admin-data.js'
 import { adminAccountCreate, adminAccountUpdate, adminAccountHandlers, requireSystemAdmin, type AdminAccountRepository } from './admin-accounts.js'
+import { imageUpdateSchema, saveAdminImages, type AdminImageRepository } from './admin-images.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -18,9 +19,10 @@ type Dependencies = {
   adminData?: AdminDataRepository
   customers?: CustomerRepository
   adminAccounts?: AdminAccountRepository
+  adminImages?: AdminImageRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, adminImages }: Dependencies) {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (result.success) return
@@ -39,6 +41,10 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
   if (auth) {
     const customerAuth = requireAuth(auth.repository, auth.secret, 'CUSTOMER')
     const adminAuth = requireAuth(auth.repository, auth.secret, 'ADMIN')
+    if (adminImages) for (const kind of ['items', 'assets'] as const) {
+      app.put(`/api/admin/${kind}/:id/images`, adminAuth, requireAdmin, saveAdminImages(adminImages, kind))
+      app.openAPIRegistry.registerPath({ method: 'put', path: `/api/admin/${kind}/{id}/images`, tags: ['Images'], summary: '공개 S3 이미지 주소 저장 (기존 목록 비교 및 감사 이력)', security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string() }), body: { required: true, content: { 'application/json': { schema: imageUpdateSchema } } } }, responses: { 200: { description: '이미지 주소 저장' }, 400: { description: '주소·입력 오류' }, 401: { description: '관리자 인증 필요' }, 404: { description: '품목·자산 없음' }, 409: { description: '이미지 변경 충돌' } } })
+    }
     if (adminAccounts) {
       const accounts = adminAccountHandlers(adminAccounts)
       app.get('/api/admin/accounts', adminAuth, requireSystemAdmin, accounts.list)

@@ -4,6 +4,15 @@ import { createApp } from '../src/app.js'
 import { createAssetRepository, type AssetListQuery, type AssetRepository } from '../src/asset.js'
 import { hashPassword, type AuthRepository, type AuthUser } from '../src/auth.js'
 import type { Prisma, PrismaClient } from '../src/generated/prisma/client.js'
+import { imageSource, storageImage } from '../src/image-source.js'
+
+test('image sources allow only approved public bucket images and legacy raster data', () => {
+  const url = 'https://bucket-mrs.s3.ap-northeast-2.amazonaws.com/items/bulb10W(LED).jpeg'
+  assert.equal(imageSource(url), url)
+  assert.equal(storageImage('https://bucket-mrs.s3.ap-northeast-2.amazonaws.com/assets/photo.webp')?.endsWith('/assets/photo.webp'), true)
+  assert.equal(imageSource('data:image/png;base64,aGVsbG8='), 'data:image/png;base64,aGVsbG8=')
+  for (const invalid of [url.replace('https:', 'http:'), url.replace('bucket-mrs.s3.ap-northeast-2.amazonaws.com', 'evil.test'), url + '?signature=secret', url + '#fragment', url.replace('.jpeg', '.svg'), url.replace('/items/', '/private/'), 'javascript:alert(1)', 'data:image/svg+xml;base64,aGVsbG8=', 'https://bucket-mrs.s3.ap-northeast-2.amazonaws.com.evil.test/items/a.png']) assert.equal(imageSource(invalid), null)
+})
 
 const secret = 'test-only-secret-at-least-32-characters'
 
