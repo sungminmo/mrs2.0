@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowRight, Eye, EyeOff, Leaf, LogIn, MessageSquare, Phone, ReceiptText, ShoppingBag, Warehouse, X } from 'lucide-react'
+import { ArrowDown, ArrowRight, Eye, EyeOff, LogIn, MessageSquare, Phone, ReceiptText, ShoppingBag, Warehouse, X } from 'lucide-react'
+import entryLogo from './assets/logo.png'
 import { useBannerPlacement } from './banners'
 import { useReceivingRequest } from './ReceivingRequest'
 import './LoginPage.css'
@@ -162,7 +163,7 @@ export default function LoginPage({ onLogin, onBrowse, onCustomerAccess }: { onL
       <button type="button" className="login-receiving-float-action" onClick={receivingRequest.open} aria-haspopup="dialog"><strong>MRS<br />입고 신청</strong></button>
       <button type="button" className="login-receiving-float-close" onClick={() => setReceivingFloatVisible(false)} aria-label="입고 신청 버튼 닫기"><X size={15} /></button>
     </div>}
-    <header className="login-header"><a href="#" aria-label="MRS 홈"><Leaf size={24} />MRS <span>Material Recycling Service</span></a><nav aria-label="홈페이지 메뉴"><a className="login-header-phone" href="tel:0312981191"><Phone size={15} />031-298-1191</a><a className="login-header-contact" href="#/contact"><MessageSquare size={15} />서비스 사용 문의</a><button onClick={openLogin} aria-haspopup="dialog">로그인<ArrowRight size={15} /></button></nav></header>
+    <header className="login-header"><a href="#" aria-label="MRS 홈"><img className="login-entry-logo" src={entryLogo} alt="NEWONE MRS" /><span>Material Recycling Service</span></a><nav aria-label="홈페이지 메뉴"><a className="login-header-phone" href="tel:0312981191"><Phone size={15} />031-298-1191</a><a className="login-header-contact" href="#/contact"><MessageSquare size={15} />서비스 사용 문의</a><button onClick={openLogin} aria-haspopup="dialog">로그인<ArrowRight size={15} /></button></nav></header>
     <main className="login-main">
       <HeroCarousel onBrowse={onBrowse} onLogin={openLogin} />
       <section id="material-challenges" className="login-problem-section" aria-labelledby="problem-title"><div className="login-problem-inner">
