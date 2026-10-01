@@ -3,6 +3,7 @@ import type { Context } from 'hono'
 import type { AuthUser } from './auth.js'
 import type { Prisma, PrismaClient } from './generated/prisma/client.js'
 import { AppError, ErrorCode } from './http.js'
+import { imageSource } from './image-source.js'
 
 const dayMs = 24 * 60 * 60 * 1000
 
@@ -120,7 +121,7 @@ export function assetSummary(repository: AssetRepository) {
 }
 
 export function privateImage(url: string) {
-  return url.length <= 4_200_000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(url) ? url : null
+  return imageSource(url)
 }
 
 async function assertOwnerConsistency(client: PrismaClient, customerId: string) {

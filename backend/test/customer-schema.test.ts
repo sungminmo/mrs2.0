@@ -8,6 +8,7 @@ import { createAuthRepository, createCustomerRepository } from '../src/customer.
 import { createAssetRepository } from '../src/asset.js'
 import { createAdminAccountRepository } from '../src/admin-accounts.js'
 import { hashPassword } from '../src/auth.js'
+import { createAdminImageRepository } from '../src/admin-images.js'
 
 test('customer migration and repositories on isolated MySQL', { skip: process.env.RUN_CUSTOMER_SCHEMA_TEST !== '1' }, async (context) => {
   const container = `mrs-customer-test-${randomUUID()}`
@@ -138,6 +139,19 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     assert.deepEqual(detail?.images.map((image) => image.id), ['image-safe'])
     assert.equal(detail?.appraisalValue, null)
     assert.equal((await assets.detail!(company.id, '260930-0002'))?.appraisalValue, '0')
+    const images = createAdminImageRepository(client)
+    const photo = { id: randomUUID(), name: 'S3 photo', url: 'https://bucket-mrs.s3.ap-northeast-2.amazonaws.com/assets/photo.jpg' }
+    await images.replace('items', '990001', { images: [photo], expected: [], reason: 'Verified image' }, admin.id)
+    assert.equal((await client.masterItemImage.findFirstOrThrow({ where: { masterItemId: '990001' } })).url, photo.url)
+    await assert.rejects(images.replace('items', '990001', { images: [], expected: [], reason: 'Stale request' }, admin.id), /이미지가 변경/)
+    const assetPhoto = { ...photo, id: randomUUID() }
+    const existing = await client.assetImage.findMany({ where: { assetId: '260930-0001' }, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], select: { id: true, name: true, url: true } })
+    await images.replace('assets', '260930-0001', { images: [assetPhoto], expected: existing, reason: 'S3 asset photo' }, admin.id)
+    assert.equal((await assets.detail!(company.id, '260930-0001'))?.images[0]?.url, photo.url)
+    assert.equal((await assets.list(company.id, { page: 1, size: 20, q: 'Asset', sort: 'nameAsc' }, new Date())).records.find((entry) => entry.id === '260930-0001')?.thumbnailUrl, photo.url)
+    assert.equal(await client.assetChange.count({ where: { assetId: '260930-0001', reason: 'S3 asset photo' } }), 1)
+    assert.equal(await client.customerChange.count({ where: { action: 'image.replace' } }), 2)
+    await assert.rejects(images.replace('assets', '261001-9999', { images: [], expected: [], reason: 'Missing' }, admin.id), /찾을 수/)
     await client.receiving.create({ data: { id: 'MISMATCH', customerId: other.id, siteName: 'Other site', managerName: 'Manager', managerPhone: '010', channel: 'ADMIN', volume: 'OTHER', termsAgreedAt: new Date(), termsVersion: 'v1', termsText: 'Test' } })
     await client.asset.update({ where: { id: '260930-0001' }, data: { receivingId: 'MISMATCH' } })
     await assert.rejects(assets.summary!(company.id), /귀속 확인/)

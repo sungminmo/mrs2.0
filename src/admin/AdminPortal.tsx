@@ -18,6 +18,7 @@ import AdminAccountManager from './AdminAccountManager'
 import type { AdminRole } from '../adminAuthSession'
 import type { CustomerAccount } from '../customerAccounts'
 import ItemFileActions from './ItemFileActions'
+import StorageImageManager from './StorageImageManager'
 import { changeMarketStatus, marketStatusOptions, type MarketData, type MarketStatusTab } from './adminMarket'
 import './AdminPortal.css'
 
@@ -152,6 +153,7 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
       <div className="adm-heading"><div><div className="adm-breadcrumb">스테이징 관리 / {menu.label}{row ? ` / ${row.id}` : ''}</div><h1 ref={heading} tabIndex={-1}>{discountEditing ? `${row?.title} 할인율 설정` : occupancyEditing ? `${row?.title} 점유 재고 편집` : editing ? `${recordKind} ${mode === 'new' ? '등록' : '수정'}` : row ? row.title : menu.label}</h1></div><span className="adm-mode">STAGING</span></div>
       {loadingData && <p className="adm-note" role="status">개발 DB 데이터를 불러오는 중입니다.</p>}
       {notice.scope === 'database' && <p className="adm-form-error" role="alert">{notice.text}</p>}
+      {row && !editing && (itemManagement || menu.id === 'inventory' && tab?.id === 'stock') && <StorageImageManager key={`${menu.id}/${row.id}`} kind={itemManagement ? 'items' : 'assets'} id={row.id} images={(itemManagement ? items.find((item) => item.id === row.id)?.images : assets.find((asset) => asset.id === row.id)?.images) ?? []} onSaved={(images) => { if (itemManagement) setItems((current) => current.map((item) => item.id === row.id ? { ...item, images } : item)); else setAssets((current) => current.map((asset) => asset.id === row.id ? { ...asset, images } : asset)) }} />}
       {menu.id === 'accounts' ? adminRole === 'SYSTEM_ADMIN' ? <AdminAccountManager params={url.searchParams} /> : <p role="alert">시스템 관리자만 관리자 계정을 관리할 수 있습니다.</p> : menu.id === 'dashboard' ? <Dashboard views={views} /> : <>
         <nav className="adm-tabs" aria-label={`${menu.label} 보기`}>{menu.tabs.map((item) => <a key={item.id} href={adminHref({ label: item.label, menu: menu.id, tab: item.id })} aria-current={item.id === tab?.id ? 'page' : undefined}>{item.label}</a>)}</nav>
         {menu.id === 'members' || menu.id === 'customers' && ['companies', 'applications'].includes(tab?.id ?? '') ? <CustomerManager params={url.searchParams} membersOnly={menu.id === 'members'} onChanged={() => setAccountRevision((value) => value + 1)} /> : menu.id === 'content' && tab?.id === 'banners' ? <BannerManager params={url.searchParams} /> : categoryManagement ? <CategoryManager categories={categories} items={items} assets={assets} params={url.searchParams} onSave={async (category) => { const savedCategory = await saveAdminCategory(category); setCategories((current) => current.some((entry) => entry.id === savedCategory.id) ? current.map((entry) => entry.id === savedCategory.id ? savedCategory : entry) : [...current, savedCategory]); window.location.hash = `/admin/basic?tab=categories&id=${savedCategory.id}` }} /> : <>

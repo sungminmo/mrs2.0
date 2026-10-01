@@ -16,6 +16,7 @@ async function fixture(role: AuthUser['role']) {
   const data = { categories: [], items: [{ id: '000001' }], assets: [], receivings: [], inspections: [], products: [], campaigns: [] }
   const created: unknown[][] = []
   const savedCategories: unknown[] = []
+  const savedImages: unknown[] = []
   const adminData = {
     load: async () => data,
     createItems: async (items: unknown[]) => {
@@ -27,11 +28,28 @@ async function fixture(role: AuthUser['role']) {
       return category
     },
   }
-  const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret, expiresIn: '1h' }, adminData: adminData as never })
+  const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret, expiresIn: '1h' }, adminData: adminData as never, adminImages: { replace: async (kind, id, input, actor) => { savedImages.push({ kind, id, input, actor }); return input.images } } })
   const login = await app.request(role === 'ADMIN' ? '/api/admin/auth/login' : '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(role === 'ADMIN' ? { id: user.email, password: 'test-password' } : { email: user.email, password: 'test-password' }) })
   const token = (await login.json() as { data: { accessToken: string } }).data.accessToken
-  return { app, token, data, created, savedCategories }
+  return { app, token, data, created, savedCategories, savedImages }
 }
+
+test('image address updates require administrator authentication and approved public S3 URLs', async () => {
+  const admin = await fixture('ADMIN')
+  const image = { id: '22222222-2222-4222-8222-222222222222', name: 'Bulb', url: 'https://bucket-mrs.s3.ap-northeast-2.amazonaws.com/items/bulb.jpeg' }
+  const input = { images: [image], expected: [], reason: 'Verified photo' }
+  const headers = { Authorization: `Bearer ${admin.token}`, 'Content-Type': 'application/json' }
+  for (const endpoint of ['/api/admin/items/000003/images', '/api/admin/assets/261001-0001/images']) {
+    assert.equal((await admin.app.request(endpoint, { method: 'PUT', headers, body: JSON.stringify(input) })).status, 200)
+    assert.equal((await admin.app.request(endpoint, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) })).status, 401)
+    assert.equal((await admin.app.request(endpoint, { method: 'PUT', headers, body: JSON.stringify({ ...input, images: [{ ...image, url: 'https://evil.test/a.jpg' }] }) })).status, 400)
+  }
+  assert.equal(admin.savedImages.length, 2)
+  assert.equal((await admin.app.request('/api/admin/items/000003/images', { method: 'PUT', headers, body: JSON.stringify({ ...input, images: [image, { ...image, id: '33333333-3333-4333-8333-333333333333', url: image.url.replace('bulb', 'second') }] }) })).status, 400)
+  const customer = await fixture('CUSTOMER')
+  assert.equal((await customer.app.request('/api/admin/items/000003/images', { method: 'PUT', headers: { ...headers, Authorization: `Bearer ${customer.token}` }, body: JSON.stringify(input) })).status, 401)
+  assert.equal(customer.savedImages.length, 0)
+})
 
 test('admin data endpoint requires an authenticated administrator', async () => {
   const admin = await fixture('ADMIN')

@@ -26,6 +26,15 @@
 
 ## 1. 공통 규칙
 
+### 품목·자산 이미지 저장 (구현)
+
+- 기존 `master_item_images.url` 및 `asset_images.url`에 고정 S3 객체 주소를 저장한다. 스키마 마이그레이션은 필요하지 않다.
+- 관리자 품목·자산 상세의 `스토리지 이미지`에서 이미 업로드한 S3 주소를 추가·삭제한 뒤 사유와 함께 `이미지 DB 저장`을 실행한다. 품목 대표 이미지는 1장, 자산 이미지는 최대 8장이다. 변경 사항은 실제 DB에 저장된다. 기타 임시 편집과 독립적이다.
+- `PUT /api/admin/items/{id}/images`, `PUT /api/admin/assets/{id}/images`: `{ images: [{ id, name, url }], expected: [{ id, name, url }], reason }`. `expected`에는 마지막 조회 이미지 목록을 순서대로 전달한다. 변경 충돌은 409, 미존재 대상은 404, 관리자 인증이 없으면 401이다. 빈 `images`는 DB 연결 삭제이며 S3 객체 자체는 삭제하지 않는다.
+- 신규 저장 URL은 `https://bucket-mrs.s3.ap-northeast-2.amazonaws.com/items/...` 또는 `/assets/...`의 JPG/JPEG/PNG/WebP만 허용한다. 서명 쿼리·인증정보·프래그먼트·다른 호스트는 차단한다. 기존 raster data URL 읽기 및 품목 생성 호환은 유지한다.
+- DB 주소 변경과 감사 이력은 Serializable 트랜잭션으로 함께 저장한다. 자산은 `asset_changes`에도 이력을 남긴다. 목록 썸네일·상세 조회는 고객사 소유권 확인 후 허용 이미지 주소만 반환한다.
+- 공개 읽기 방식은 누구나 객체 URL을 조회할 수 있다. 고객·현장 개인정보가 포함된 사진은 올리지 않는다. 버킷 정책 변경, 파일 업로드, 삭제, 프록시, IAM 비밀 키 전달은 이번 기능에 포함하지 않는다. 실제 파일은 S3에 먼저 업로드하고 `Content-Type` 및 공개 읽기 가능 여부를 확인한다.
+
 로그인·가입·고객사 정확 검색·공개 배너·상태 확인·API 문서를 제외한 API는 인증이 필요합니다. 고객 API는 DB에서 확인한 활성 회원과 활성 고객사 소유 데이터만 조회할 수 있습니다. URL이나 요청 본문의 고객 ID를 자산 접근권한으로 신뢰하지 않습니다. 고객사 관리의 현재 계약과 이관 절차는 [CUSTOMER_MANAGEMENT.md](CUSTOMER_MANAGEMENT.md)를 참조합니다. 아래 미구현 업무 API는 향후 설계이며 실행 가능 여부는 OpenAPI 문서로 확인합니다.
 
 성공 응답:
