@@ -1,10 +1,10 @@
-import { authenticatedFetch } from '../authSession'
+import { adminAuthenticatedFetch } from '../adminAuthSession'
 import type { MasterItem } from './adminData'
 
 type ItemResponse = { success: true; data: { items: MasterItem[] } } | { success: false; error: { message?: string } }
 
 export async function registerAdminItems(items: MasterItem[]) {
-  const response = await authenticatedFetch('/api/admin/items', {
+  const response = await adminAuthenticatedFetch('/api/admin/items', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ items }),

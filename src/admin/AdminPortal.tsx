@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronLeft, ChevronRight, ClipboardCheck, Images, ImageOff, LayoutDashboard, ListChecks, LoaderCircle, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
-import { authenticatedFetch, signOut } from '../authSession'
+import { adminAuthenticatedFetch, adminSignOut } from '../adminAuthSession'
 import { dateText, invoiceAmount, invoices, locations, money, receivingStatuses, referenceDate, type Campaign, type Inspection, type Inventory, type MasterItem, type MemberAccount, type Product, type Receiving, type ReceivingStatus } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
 import { materialPhotos } from '../assetPhotos'
@@ -20,6 +20,7 @@ import { changeMarketStatus, marketStatusOptions, type MarketData, type MarketSt
 import './AdminPortal.css'
 
 const icons = { dashboard: LayoutDashboard, basic: ListChecks, receiving: ClipboardCheck, inventory: Archive, market: ShoppingCart, content: Images, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2 }
+const authenticatedFetch = adminAuthenticatedFetch
 const rowOptions = [10, 25, 50, 100] as const
 type AdminDatabaseData = { categories: MaterialCategory[]; items: MasterItem[]; assets: Inventory[]; receivings: Receiving[]; inspections: Inspection[]; products: Product[]; campaigns: Campaign[] }
 
@@ -39,7 +40,7 @@ export default function AdminPortal({ hash }: { hash: string }) {
   const setNotice = (next: { scope: string; text: string }) => setNoticeState({ ...next, text: next.text.replace('파일에서 임시 등록', '파일에서 DB에 등록') })
   useEffect(() => {
     let active = true
-    Promise.all([authenticatedFetch('/api/admin/data'), authenticatedFetch('/api/admin/members'), authenticatedFetch('/api/admin/customers')]).then(async ([dataResponse, memberResponse, customerResponse]) => {
+    Promise.all([adminAuthenticatedFetch('/api/admin/data'), adminAuthenticatedFetch('/api/admin/members'), adminAuthenticatedFetch('/api/admin/customers')]).then(async ([dataResponse, memberResponse, customerResponse]) => {
       if (!customerResponse.ok) throw new Error('고객사 정보를 불러오지 못했습니다.')
       const customerBody = await customerResponse.json() as { data: { customers: CustomerAccount[] } }
       if (!dataResponse.ok) throw new Error('개발 DB의 관리자 데이터를 불러오지 못했습니다.')
@@ -138,8 +139,7 @@ export default function AdminPortal({ hash }: { hash: string }) {
       <button className="adm-icon adm-menu-toggle" aria-label={menuOpen ? '관리 메뉴 닫기' : '관리 메뉴 열기'} aria-expanded={menuOpen} aria-controls="admin-navigation" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
       <a className="adm-brand" href="#/admin/dashboard">MRS <span>ADMIN</span></a>
       <span className="adm-prototype">스테이징 · 개발 데이터</span>
-      <a className="adm-customer-link" href="/mrs2.0/">고객 포털<ArrowUpRight size={16} /></a>
-      <button type="button" className="adm-icon" title="로그아웃" aria-label="로그아웃" onClick={() => signOut()}><LogOut size={17} /></button>
+      <button type="button" className="adm-icon" title="로그아웃" aria-label="로그아웃" onClick={adminSignOut}><LogOut size={17} /></button>
     </header>
     <aside className={`adm-sidebar ${menuOpen ? 'is-open' : ''}`}>
       <nav id="admin-navigation" aria-label="관리자 메뉴">{menus.map((item) => { const Icon = icons[item.id]; return <a key={item.id} href={adminHref({ label: item.label, menu: item.id, tab: item.tabs[0]?.id ?? '' })} aria-current={menu.id === item.id ? 'page' : undefined} onClick={() => setMenuOpen(false)}><Icon size={17} />{item.label}</a> })}</nav>

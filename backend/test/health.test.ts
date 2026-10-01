@@ -134,6 +134,7 @@ test('registration requires administrator approval before login', async () => {
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository, secret: environment.JWT_SECRET, expiresIn: '1h' } })
   const jsonHeaders = { 'Content-Type': 'application/json' }
   const login = (email: string, password: string) => app.request('/api/auth/login', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email, password }) })
+  const adminLogin = (id: string, password: string) => app.request('/api/admin/auth/login', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ id, password }) })
 
   const registrationResponse = await app.request('/api/auth/register', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: ' New@Example.com ', password: 'new-password', customerType: 'existing', customerId: customer.id, managerName: '신청자', managerPhone: '010-1234-5678' }) })
   assert.equal(registrationResponse.status, 201)
@@ -142,11 +143,15 @@ test('registration requires administrator approval before login', async () => {
 
   const customerLogin = await login('customer@example.com', 'customer-password')
   const customerToken = (await customerLogin.json() as { data: { accessToken: string } }).data.accessToken
-  assert.equal((await app.request('/api/admin/members', { headers: { Authorization: `Bearer ${customerToken}` } })).status, 403)
+  assert.equal((await app.request('/api/admin/members', { headers: { Authorization: `Bearer ${customerToken}` } })).status, 401)
 
-  const adminLogin = await login('admin@example.com', 'admin-password')
-  const adminToken = (await adminLogin.json() as { data: { accessToken: string } }).data.accessToken
+  assert.equal((await login('admin@example.com', 'admin-password')).status, 401)
+  assert.equal((await adminLogin('customer@example.com', 'customer-password')).status, 401)
+  const adminLoginResponse = await adminLogin('admin@example.com', 'admin-password')
+  const adminToken = (await adminLoginResponse.json() as { data: { accessToken: string } }).data.accessToken
   const authorization = { Authorization: `Bearer ${adminToken}` }
+  assert.equal((await app.request('/api/auth/me', { headers: authorization })).status, 401)
+  assert.equal((await app.request('/api/admin/members', { headers: { Authorization: `Bearer ${customerToken}` } })).status, 401)
   const membersResponse = await app.request('/api/admin/members', { headers: authorization })
   assert.equal(membersResponse.status, 200)
   assert.match(JSON.stringify(await membersResponse.json()), /new@example.com/)

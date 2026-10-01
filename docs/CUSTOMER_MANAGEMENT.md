@@ -12,6 +12,15 @@
 
 ## API
 
+### 로그인 경계
+
+- 고객: `/mrs2.0/`, `POST /api/auth/login`의 `{email,password}`, `GET /api/auth/me`, 세션 키 `mrs.auth.session`.
+- 관리자: `/admin/`, `POST /api/admin/auth/login`의 `{id,password}`, `GET /api/admin/auth/me`, 세션 키 `mrs.admin.auth.session`.
+- 고객 계정으로 관리자 로그인 또는 관리자 계정으로 고객 로그인을 할 수 없다. `aud`가 각각 `customer`/`admin`인 토큰을 발급하고 매 요청 현재 DB 역할·상태도 확인한다. 반대 영역 토큰과 `aud` 없는 구형 토큰은 401이다. 기존 사용자는 재로그인해야 한다.
+- 고객 메뉴의 관리자 링크와 `#/admin` 자동 이동은 제거했다. 관리자 메뉴도 고객 포털 이동 링크를 제공하지 않는다. 관리자 HTML은 로그인 진입점이며, 실제 메뉴 모듈은 서버의 관리자 세션 확인 후 로드한다. 브라우저 저장소의 role을 바꾸는 것으로 권한을 얻을 수 없다.
+- 공개 가입과 회원 소속 승인은 CUSTOMER만 처리한다. 관리자 계정은 서버 운영자가 직접 생성한다. 테스트 전용 `db:seed:admin`은 기존 고객 계정을 ADMIN으로 승격하지 않으며 재실행 시 기존 관리자 세션을 폐기한다. 운영용 관리자 생성·비밀번호 수명 정책은 별도 운영 절차로 관리한다.
+- `admin/admin`은 격리된 로컬 테스트에만 사용한다. 운영 모드에서는 시드가 거부되며 공개 스테이징에서도 이 약한 계정을 사용하지 않는다. 이번 작업은 외부 DB와 배포에 적용하지 않았다.
+
 | Method | Path | 계약 |
 | --- | --- | --- |
 | POST | /api/customers/lookup | 사업자번호 정확 일치, ACTIVE의 id/name만 반환 |
@@ -52,6 +61,7 @@
 - 입고 회귀: `RUN_RECEIVING_SCHEMA_TEST=1 npx tsx --test test/receiving-schema.test.ts`.
 - frontend: `npm run build`, `npm run lint`.
 - 개발 프록시: `MRS_API_PROXY=http://127.0.0.1:3011 npm run dev -- --port 5185`.
+- 비운영 테스트 관리자: backend에서 `npm run db:seed:admin`. 관리자 전용 `/admin/`에서 `admin` / `admin`으로 로그인한다. 이 명령은 `NODE_ENV=production`에서 실행을 거부하며 일반 고객 가입으로 ADMIN을 만들 수 없다.
 
 ## 후속 범위
 

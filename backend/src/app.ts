@@ -1,7 +1,7 @@
 import { OpenAPIHono, z } from '@hono/zod-openapi'
 import { Scalar } from '@scalar/hono-api-reference'
 import { assetDetail, assetDetailRoute, assetSummary, assetSummaryRoute, assetListRoute, listAssets, type AssetRepository } from './asset.js'
-import { approveMember, authRoutes, currentUser, listMembers, register, registrationSchema, requireAdmin, requireAuth, updateMember, type AuthRepository } from './auth.js'
+import { adminLogin, adminLoginSchema, approveMember, currentUser, customerLogin, listMembers, register, registrationSchema, requireAdmin, requireAuth, updateMember, type AuthRepository } from './auth.js'
 import { businessNumberSchema, customerFieldsSchema, customerHandlers, decisionSchema, memberDecisionSchema, type CustomerRepository } from './customer.js'
 import { getConnInfo } from '@hono/node-server/conninfo'
 import { listAdminBanners, listPublicBanners, saveBanner, type BannerRepository } from './banner.js'
@@ -35,6 +35,8 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
   app.openAPIRegistry.registerComponent('securitySchemes', 'BearerAuth', { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
 
   if (auth) {
+    const customerAuth = requireAuth(auth.repository, auth.secret, 'CUSTOMER')
+    const adminAuth = requireAuth(auth.repository, auth.secret, 'ADMIN')
     if (customers) {
       const customer = customerHandlers(customers)
       const throttle = async (context: Parameters<typeof customer.lookup>[0], next: () => Promise<void>) => {
@@ -47,15 +49,15 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
       app.use('/api/customers/lookup', throttle)
       app.use('/api/auth/register', throttle)
       app.post('/api/customers/lookup', customer.lookup)
-      app.use('/api/admin/customers/*', requireAuth(auth.repository, auth.secret), requireAdmin)
-      app.use('/api/admin/customer-applications/*', requireAuth(auth.repository, auth.secret), requireAdmin)
-      app.get('/api/admin/customers', requireAuth(auth.repository, auth.secret), requireAdmin, customer.list)
-      app.post('/api/admin/customers', requireAuth(auth.repository, auth.secret), requireAdmin, customer.create)
+      app.use('/api/admin/customers/*', adminAuth, requireAdmin)
+      app.use('/api/admin/customer-applications/*', adminAuth, requireAdmin)
+      app.get('/api/admin/customers', adminAuth, requireAdmin, customer.list)
+      app.post('/api/admin/customers', adminAuth, requireAdmin, customer.create)
       app.get('/api/admin/customers/:id', customer.detail)
       app.patch('/api/admin/customers/:id', customer.update)
       app.post('/api/admin/customers/:id/suspend', customer.status('SUSPENDED'))
       app.post('/api/admin/customers/:id/reactivate', customer.status('ACTIVE'))
-      app.get('/api/admin/customer-applications', requireAuth(auth.repository, auth.secret), requireAdmin, customer.applications)
+      app.get('/api/admin/customer-applications', adminAuth, requireAdmin, customer.applications)
       app.post('/api/admin/customer-applications/:id/review', customer.review)
       const body = (schema: z.ZodType) => ({ required: true, content: { 'application/json': { schema } } })
       const responses = { 200: { description: '처리 성공' }, 400: { description: '입력 검증 오류' }, 401: { description: '인증 필요 또는 세션 폐기' }, 403: { description: 'MRS 관리자 권한 필요' }, 409: { description: '중복 또는 상태/버전 충돌' }, 429: { description: '요청 제한' } }
@@ -73,27 +75,31 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
         ['post', '/api/admin/members/{id}/actions', '회원 승인·정지·권한·소속 재심사', memberDecisionSchema],
       ] as const) app.openAPIRegistry.registerPath({ method, path, summary, tags: ['Customers'], security: [{ BearerAuth: [] }], request: { ...(path.includes('{id}') ? { params: z.object({ id: z.string().min(1).max(36) }) } : {}), ...(schema ? { body: body(schema) } : {}) }, responses: { ...responses, ...(method === 'post' && path === '/api/admin/customers' ? { 201: { description: '고객사 생성' } } : {}) } })
     }
-    app.post('/api/auth/login', authRoutes(auth.repository, auth.secret, auth.expiresIn))
+    app.post('/api/auth/login', customerLogin(auth.repository, auth.secret, auth.expiresIn))
+    app.post('/api/admin/auth/login', adminLogin(auth.repository, auth.secret, auth.expiresIn))
+    app.get('/api/admin/auth/me', adminAuth, requireAdmin, currentUser)
+    app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/auth/login', tags: ['Admin Auth'], summary: '직접 생성된 MRS 관리자 계정 로그인', request: { body: { required: true, content: { 'application/json': { schema: adminLoginSchema } } } }, responses: { 200: { description: '관리자 전용 audience 토큰 발급' }, 400: { description: '잘못된 요청' }, 401: { description: '계정 또는 비밀번호 불일치 (고객 계정 포함)' }, 403: { description: '비활성 계정' } } })
+    app.openAPIRegistry.registerPath({ method: 'get', path: '/api/admin/auth/me', tags: ['Admin Auth'], summary: '관리자 전용 세션과 현재 DB 역할 확인', security: [{ BearerAuth: [] }], responses: { 200: { description: '확인된 관리자 프로필' }, 401: { description: '관리자 인증 필요' } } })
     app.post('/api/auth/register', register(auth.repository))
-    app.get('/api/auth/me', requireAuth(auth.repository, auth.secret), currentUser)
-    app.get('/api/admin/members', requireAuth(auth.repository, auth.secret), requireAdmin, listMembers(auth.repository))
-    app.post('/api/admin/members/:id/approve', requireAuth(auth.repository, auth.secret), requireAdmin, approveMember(auth.repository))
-    app.post('/api/admin/members/:id/actions', requireAuth(auth.repository, auth.secret), requireAdmin, updateMember(auth.repository))
+    app.get('/api/auth/me', customerAuth, currentUser)
+    app.get('/api/admin/members', adminAuth, requireAdmin, listMembers(auth.repository))
+    app.post('/api/admin/members/:id/approve', adminAuth, requireAdmin, approveMember(auth.repository))
+    app.post('/api/admin/members/:id/actions', adminAuth, requireAdmin, updateMember(auth.repository))
     if (adminData) {
-      app.get('/api/admin/data', requireAuth(auth.repository, auth.secret), requireAdmin, loadAdminData(adminData))
-      app.post('/api/admin/items', requireAuth(auth.repository, auth.secret), requireAdmin, createAdminItems(adminData))
-      app.put('/api/admin/categories/:id', requireAuth(auth.repository, auth.secret), requireAdmin, saveAdminCategory(adminData))
+      app.get('/api/admin/data', adminAuth, requireAdmin, loadAdminData(adminData))
+      app.post('/api/admin/items', adminAuth, requireAdmin, createAdminItems(adminData))
+      app.put('/api/admin/categories/:id', adminAuth, requireAdmin, saveAdminCategory(adminData))
     }
     if (assets) {
-      app.use('/api/assets', requireAuth(auth.repository, auth.secret))
-      app.use('/api/assets/*', requireAuth(auth.repository, auth.secret))
+      app.use('/api/assets', customerAuth)
+      app.use('/api/assets/*', customerAuth)
       app.openapi(assetSummaryRoute, assetSummary(assets))
       app.openapi(assetDetailRoute, assetDetail(assets))
       app.openapi(assetListRoute, listAssets(assets))
     }
     if (banners) {
-      app.get('/api/admin/banners', requireAuth(auth.repository, auth.secret), requireAdmin, listAdminBanners(banners))
-      app.put('/api/admin/banners/:id', requireAuth(auth.repository, auth.secret), requireAdmin, saveBanner(banners))
+      app.get('/api/admin/banners', adminAuth, requireAdmin, listAdminBanners(banners))
+      app.put('/api/admin/banners/:id', adminAuth, requireAdmin, saveBanner(banners))
     }
   }
 

@@ -58,11 +58,7 @@ export default function App() {
   const openInspection = (id: string) => { setInspectionId(id); setInspectionActive(true); setTab('assets') }
   const changeDisposal = (id: string, action: DisposalAction) => setDisposals((current) => current.map((record) => record.id === id ? updateDisposal(record, action) : record))
   if (access === 'login') return <ReceivingRequestProvider contact={contact}><LoginPage onLogin={async (email, password) => {
-    const session = await signIn(email, password)
-    if (session.user.role === 'ADMIN') {
-      window.location.href = '/admin/#/admin/dashboard'
-      return
-    }
+    await signIn(email, password)
     setAccess('member')
     setTab('assets')
   }} onBrowse={() => { setAccess('guest'); setTab('market') }} onCustomerAccess={() => { setAccess('member'); setTab('assets') }} /></ReceivingRequestProvider>

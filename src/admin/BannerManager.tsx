@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowLeft, ArrowUp, ImagePlus, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react'
-import { authenticatedFetch } from '../authSession'
+import { adminAuthenticatedFetch } from '../adminAuthSession'
 import type { CustomerBannerItem, CustomerBannerPlacement } from '../banners'
 
 type AdminBannerItem = CustomerBannerItem & { createdAt?: string; updatedAt?: string }
@@ -53,7 +53,7 @@ export default function BannerManager({ params }: { params: URLSearchParams }) {
 
   useEffect(() => {
     let active = true
-    authenticatedFetch('/api/admin/banners').then(async (response) => {
+    adminAuthenticatedFetch('/api/admin/banners').then(async (response) => {
       if (!response.ok) throw new Error('배너 노출 위치를 불러오지 못했습니다.')
       const body = await response.json() as { data?: { placements?: AdminPlacement[] } }
       if (active) setPlacements(body.data?.placements ?? [])
@@ -100,7 +100,7 @@ function PlacementEditor({ placement, cancelHref, onSaved }: { placement?: Admin
     setBusy(true); setError('')
     try {
       const payload = { name: String(data.get('name') ?? '').trim(), enabled: data.has('enabled'), items: items.map((item, index) => ({ id: item.id, desktopImageUrl: item.desktopImageUrl, mobileImageUrl: item.mobileImageUrl, linkUrl: item.linkUrl ?? '', enabled: item.enabled, sortOrder: index + 1, startsAt: item.startsAt, endsAt: item.endsAt })) }
-      const response = await authenticatedFetch(`/api/admin/banners/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const response = await adminAuthenticatedFetch(`/api/admin/banners/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const body = await response.json() as { data?: { placement: AdminPlacement }; error?: { message?: string } }
       if (!response.ok || !body.data) throw new Error(body.error?.message ?? '배너 편성을 저장하지 못했습니다.')
       onSaved(body.data.placement)

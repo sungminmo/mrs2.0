@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowLeft, Check, Plus, RefreshCw, Save, Search } from 'lucide-react'
-import { accountRequest, accountStatus, jsonRequest, type CustomerAccount, type CustomerApplication, type CustomerFields, type CustomerMember } from '../customerAccounts'
+import { accountStatus, jsonRequest, type CustomerAccount, type CustomerApplication, type CustomerFields, type CustomerMember } from '../customerAccounts'
+import { adminAccountRequest } from '../adminAuthSession'
 
 const fieldDefinitions = [['name', '고객사명', 160], ['businessNumber', '사업자등록번호', 12], ['representativeName', '대표자명', 80], ['phone', '대표 연락처', 30], ['address', '사업장 주소', 500]] as const
 const labels = { approve: '소속 승인', reject: '반려', suspend: '이용 정지', reactivate: '이용 복구', role: '권한 변경', reassign: '소속 재심사', reopen: '재검토' }
@@ -27,10 +28,10 @@ export default function CustomerManager({ params, membersOnly = false, onChanged
   useEffect(() => {
     const controller = new AbortController()
     Promise.all([
-      accountRequest<{ customers: CustomerAccount[] }>('/api/admin/customers', { signal: controller.signal }),
-      accountRequest<{ members: CustomerMember[] }>('/api/admin/members', { signal: controller.signal }),
-      accountRequest<{ applications: CustomerApplication[] }>('/api/admin/customer-applications', { signal: controller.signal }),
-      id && !membersOnly && !applicationMode ? accountRequest<{ customer: CustomerAccount }>(`/api/admin/customers/${encodeURIComponent(id)}`, { signal: controller.signal }) : Promise.resolve(null),
+      adminAccountRequest<{ customers: CustomerAccount[] }>('/api/admin/customers', { signal: controller.signal }),
+      adminAccountRequest<{ members: CustomerMember[] }>('/api/admin/members', { signal: controller.signal }),
+      adminAccountRequest<{ applications: CustomerApplication[] }>('/api/admin/customer-applications', { signal: controller.signal }),
+      id && !membersOnly && !applicationMode ? adminAccountRequest<{ customer: CustomerAccount }>(`/api/admin/customers/${encodeURIComponent(id)}`, { signal: controller.signal }) : Promise.resolve(null),
     ]).then(([companyData, memberData, applicationData, detailData]) => {
       if (controller.signal.aborted) return
       setError('')
@@ -47,7 +48,7 @@ export default function CustomerManager({ params, membersOnly = false, onChanged
     setError('')
     setMessage('')
     try {
-      await accountRequest(path, jsonRequest(method, data))
+      await adminAccountRequest(path, jsonRequest(method, data))
       setMessage('저장되었습니다.')
       setRevision((value) => value + 1)
       onChanged()

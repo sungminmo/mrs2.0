@@ -23,7 +23,7 @@ function isSession(value: unknown): value is AuthSession {
   return typeof candidate.accessToken === 'string'
     && !!candidate.user
     && typeof candidate.user.email === 'string'
-    && (candidate.user.role === 'ADMIN' || candidate.user.role === 'CUSTOMER')
+    && candidate.user.role === 'CUSTOMER'
 }
 
 export function readAuthSession() {
