@@ -51,7 +51,7 @@ export default function LocationOccupancyEditor({ location, locations, assets, i
       <section className="adm-occupancy-add"><div><h2>재고 추가 배정</h2><p className="adm-note">다른 로케이션에 있는 보관중 재고만 선택할 수 있습니다.</p></div><div><label><span className="adm-sr-only">추가할 재고</span><select value={candidateId} onChange={(event) => setCandidateId(event.target.value)}><option value="">재고 선택</option>{candidates.map((asset) => <option key={asset.id} value={asset.id}>{asset.id} · {asset.name} · {asset.quantity.toLocaleString('ko-KR')} {asset.unit}</option>)}</select></label><button className="adm-button" type="button" disabled={!candidateId} onClick={() => { if (!candidateId) return; setAssignments((current) => [...current, { assetId: candidateId, locationId: location.id, added: true }]); setCandidateId('') }}><Plus size={16} />현재 위치에 추가</button></div></section>
       <label className="adm-edit-memo">재고 이동 사유<textarea name="reason" rows={3} required maxLength={500} placeholder="예: B구역 적재 공간 재배치" /></label>
       <p className="adm-note">저장한 이동 내역은 각 자산의 변경 이력에 기록됩니다. 수량과 보관 상태는 변경하지 않습니다.</p>
-      <div className="adm-edit-footer">{error && <p className="adm-form-error" role="alert" ref={errorRef} tabIndex={-1}>{error}</p>}<button className="adm-button adm-primary" type="submit"><Save size={16} />점유 재고 임시 저장</button></div>
+      <div className="adm-edit-footer">{error && <p className="adm-form-error" role="alert" ref={errorRef} tabIndex={-1}>{error}</p>}<button className="adm-button adm-primary" type="submit"><Save size={16} />점유 재고 저장</button></div>
     </form>
   </section>
 }

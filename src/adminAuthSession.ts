@@ -35,7 +35,7 @@ export async function adminSignIn(id: string, password: string) {
   return body.data
 }
 
-export async function adminAuthenticatedFetch(path: string, init: RequestInit = {}) {
+export async function adminAuthenticatedFetch(path: string, init: RequestInit = {}, completionMessage?: string) {
   const session = readAdminSession()
   if (!session) throw new Error('관리자 로그인이 필요합니다.')
   const headers = new Headers(init.headers)
@@ -45,7 +45,15 @@ export async function adminAuthenticatedFetch(path: string, init: RequestInit = 
     window.sessionStorage.removeItem(sessionKey)
     window.dispatchEvent(new Event('mrs-admin-auth-expired'))
   }
+  const method = (init.method ?? 'GET').toUpperCase()
+  if (response.ok && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !path.startsWith('/api/admin/images/')) {
+    showAdminToast(completionMessage ?? (response.status === 201 ? '등록이 완료되었습니다.' : method === 'DELETE' ? '삭제가 완료되었습니다.' : '수정이 완료되었습니다.'))
+  }
   return response
+}
+
+export function showAdminToast(message: string) {
+  window.dispatchEvent(new CustomEvent('mrs-admin-toast', { detail: message }))
 }
 
 export function adminSignOut() {

@@ -23,7 +23,7 @@ export function ProductDiscountEditor({ product, cancelHref, onSave }: { product
       <label>할인 적용 단가<input value={preview.toLocaleString('ko-KR')} readOnly /></label>
     </div>
     <p className="adm-note">판매대기 상태에서만 할인율을 설정할 수 있습니다. 0%는 할인 없음으로 처리합니다.</p>
-    <div className="adm-edit-footer">{error && <p role="alert" className="adm-form-error">{error}</p>}<div className="adm-management-actions"><a className="adm-button" href={cancelHref}>취소</a><button className="adm-button adm-primary"><Save size={16} />할인율 임시 저장</button></div></div>
+    <div className="adm-edit-footer">{error && <p role="alert" className="adm-form-error">{error}</p>}<div className="adm-management-actions"><a className="adm-button" href={cancelHref}>취소</a><button className="adm-button adm-primary"><Save size={16} />할인율 저장</button></div></div>
   </form></div>
 }
 
@@ -75,6 +75,6 @@ export default function CampaignEditor({ campaign, campaigns, categories, cancel
     <div className="adm-campaign-category"><CategorySelect categories={categories} value={category} onChange={setCategory} /></div>
     <label className="adm-edit-memo">기획전 설명<textarea name="description" rows={4} defaultValue={campaign?.description} required maxLength={1000} /></label>
     <label className="adm-check"><input type="checkbox" name="enabled" defaultChecked={campaign?.enabled ?? false} />기획전 노출 사용</label>
-    <div className="adm-edit-footer">{error && <p role="alert" className="adm-form-error">{error}</p>}<div className="adm-management-actions"><a className="adm-button" href={cancelHref}>취소</a><button className="adm-button adm-primary"><Save size={16} />기획전 임시 저장</button></div></div>
+    <div className="adm-edit-footer">{error && <p role="alert" className="adm-form-error">{error}</p>}<div className="adm-management-actions"><a className="adm-button" href={cancelHref}>취소</a><button className="adm-button adm-primary"><Save size={16} />기획전 저장</button></div></div>
   </form></div>
 }

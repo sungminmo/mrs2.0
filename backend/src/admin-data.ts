@@ -1,3 +1,4 @@
+import { customerTransaction } from './customer.js'
 import { publicImageUrl } from './admin-images.js'
 import type { PrismaClient, Prisma } from './generated/prisma/client.js'
 import type { Context } from 'hono'
@@ -114,6 +115,19 @@ export function createAdminDataRepository(client: PrismaClient) {
       const byId = new Map(created.map((item) => [item.id, item]))
       return items.map((item) => itemPayload(byId.get(item.id)!))
     }, { maxWait: 10_000, timeout: 120_000 }),
+    updateItem: (previousId: string, item: AdminItemUpdate, actor: string) => customerTransaction(client, async (transaction) => {
+      const previous = await transaction.masterItem.findUnique({ where: { id: previousId }, include: { images: { orderBy: { sortOrder: 'asc' } } } })
+      if (!previous) throw new AppError(404, ErrorCode.NOT_FOUND, '품목을 찾을 수 없습니다.')
+      if (previous.unit !== item.unit && await transaction.asset.count({ where: { itemId: previousId } })) throw new AppError(409, ErrorCode.CONFLICT, '연결 자산이 있어 기준 단위를 변경할 수 없습니다.')
+      for (const image of item.images) if (!publicImageUrl(image.url) && !previous.images.some((entry) => entry.id === image.id && entry.name === image.name && entry.url === image.url)) throw new AppError(400, ErrorCode.VALIDATION_ERROR, '새 이미지는 S3 업로드 주소를 사용해 주세요.')
+      const { images, category, ...fields } = item
+      await transaction.masterItem.update({ where: { id: previousId }, data: { ...fields, categoryId: category } })
+      await transaction.masterItemImage.deleteMany({ where: { masterItemId: item.id } })
+      if (images.length) await transaction.masterItemImage.createMany({ data: images.map((image, sortOrder) => ({ ...image, masterItemId: item.id, sortOrder })) })
+      const saved = await transaction.masterItem.findUniqueOrThrow({ where: { id: item.id }, include: { images: { orderBy: { sortOrder: 'asc' } } } })
+      await transaction.customerChange.create({ data: { actorUserId: actor, action: 'item.update', reason: '품목 정보 수정', changes: { before: itemPayload(previous), after: itemPayload(saved) } } })
+      return itemPayload(saved)
+    }),
     saveCategory: (category: AdminCategoryInput) => client.$transaction(async (transaction) => {
       const categories = await transaction.materialCategory.findMany({ select: { id: true, parentId: true, name: true, enabled: true, sortOrder: true } })
       validateCategory(category, categories)
@@ -158,6 +172,8 @@ const categoryInput = z.object({
 })
 
 type AdminItemInput = z.output<typeof itemInput>
+export const itemUpdateInput = itemInput.extend({ images: z.array(z.object({ id: z.string().min(1).max(36), name: z.string().min(1).max(255), url: z.string().min(1).max(7_000_000) })).max(1) })
+type AdminItemUpdate = z.output<typeof itemUpdateInput>
 type AdminCategoryInput = z.output<typeof categoryInput> & { id: string }
 
 function itemPayload(item: { id: string; name: string; categoryId: string | null; specification: string; brand: string; unit: ItemUnit | null; inboundPrice: { toString(): string } | number | null; outboundPrice: { toString(): string } | number | null; standardPrice: { toString(): string } | number | null; enabled: boolean; note: string; images: { id: string; name: string; url: string }[] }) {
@@ -191,6 +207,19 @@ export function createAdminItems(repository: AdminDataRepository) {
       return success(context, { items: await repository.createItems(input.items) }, 201)
     } catch {
       throw new AppError(409, ErrorCode.CONFLICT, '품목을 등록하지 못했습니다. 품목코드, 카테고리 및 중복 데이터를 확인해 주세요.')
+    }
+  }
+}
+
+export function updateAdminItem(repository: AdminDataRepository) {
+  return async (context: Context) => {
+    const id = z.string().regex(/^\d{6}$/).parse(context.req.param('id'))
+    const item = itemUpdateInput.parse(await context.req.json())
+    try {
+      return success(context, { item: await repository.updateItem(id, item, (context.get('authUser') as { id: string }).id) })
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2003') throw new AppError(400, ErrorCode.VALIDATION_ERROR, '카테고리 또는 이미지 연결 정보를 확인해 주세요.')
+      throw error
     }
   }
 }

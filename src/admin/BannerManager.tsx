@@ -106,7 +106,7 @@ function PlacementEditor({ placement, cancelHref, onSaved }: { placement?: Admin
     setBusy(true); setError('')
     try {
       const payload = { name: String(data.get('name') ?? '').trim(), enabled: data.has('enabled'), items: items.map((item, index) => ({ id: item.id, desktopImageUrl: item.desktopImageUrl, mobileImageUrl: item.mobileImageUrl, linkUrl: item.linkUrl ?? '', enabled: item.enabled, sortOrder: index + 1, startsAt: item.startsAt, endsAt: item.endsAt })) }
-      const response = await adminAuthenticatedFetch(`/api/admin/banners/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const response = await adminAuthenticatedFetch(`/api/admin/banners/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, placement ? '수정이 완료되었습니다.' : '등록이 완료되었습니다.')
       const body = await response.json() as { data?: { placement: AdminPlacement }; error?: { message?: string } }
       if (!response.ok || !body.data) throw new Error(body.error?.message ?? '배너 편성을 저장하지 못했습니다.')
       onSaved(body.data.placement)

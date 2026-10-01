@@ -4,7 +4,7 @@ import { customerForSite, customers, itemUnits, receivings, sites, type AdminIma
 import { categoryEnabled, type MaterialCategory } from '../categories'
 import CategorySelect from '../CategorySelect'
 import { nextAssetCode, prepareInventory, validateMasterItem } from './adminInventory'
-import { registerAdminItems } from './adminItems'
+import { registerAdminItems, updateAdminItem } from './adminItems'
 import { uploadImage, saveImages } from './adminImages'
 
 type Props = { kind: 'items' | 'inventory'; items: MasterItem[]; assets: Inventory[]; inspections?: Inspection[]; categories: MaterialCategory[]; locations: Location[]; id: string | null; cancelHref: string; onSaveItem: (item: MasterItem, previousId: string | null) => void; onSaveAsset: (asset: Inventory) => void }
@@ -12,7 +12,6 @@ type Props = { kind: 'items' | 'inventory'; items: MasterItem[]; assets: Invento
 export default function InventoryEditor(props: Props) {
   return <section className="adm-editor">
     <a className="adm-button adm-back" href={props.cancelHref}><ArrowLeft size={15} />취소하고 돌아가기</a>
-    <p className="adm-note">{props.kind === 'items' && !props.id ? '신규 품목은 개발 DB에 저장됩니다.' : '임시 저장 · 새로고침하거나 고객 포털로 이동하면 초기화됩니다.'}</p>
     {props.kind === 'items' ? <ItemForm {...props} /> : <AssetForm {...props} />}
   </section>
 }
@@ -34,7 +33,7 @@ function ItemForm({ items, assets, categories, id, onSaveItem }: Props) {
     try {
       validateMasterItem(next, items, assets, categories, item?.id)
       setBusy(true)
-      const savedItem = item ? next : (await registerAdminItems([next]))[0]
+      const savedItem = item ? await updateAdminItem(item.id, next) : (await registerAdminItems([next]))[0]
       onSaveItem(savedItem, item?.id ?? null)
     } catch (error) { setError((error as Error).message) } finally { setBusy(false) }
   }
@@ -53,7 +52,7 @@ function ItemForm({ items, assets, categories, id, onSaveItem }: Props) {
     <ImagePicker kind="items" recordId={item?.id} images={images} onChange={setImages} limit={1} onBusy={setBusy} label="대표 이미지" />
     <label className="adm-check"><input name="enabled" type="checkbox" defaultChecked={item?.enabled ?? true} />사용 품목</label>
     <label className="adm-edit-memo">적요 (선택)<textarea name="note" defaultValue={item?.note} rows={4} maxLength={2000} /></label>
-    <SaveFooter busy={busy} error={error} label={item ? '임시 저장' : '품목 등록'} />
+    <SaveFooter busy={busy} error={error} label={item ? '저장' : '품목 등록'} />
   </form>
 }
 
@@ -114,7 +113,7 @@ function AssetForm({ items, assets, inspections = [], categories, locations, id,
   </form>
 }
 
-function SaveFooter({ busy, error, label = '임시 저장' }: { busy: boolean; error: string; label?: string }) {
+function SaveFooter({ busy, error, label = '저장' }: { busy: boolean; error: string; label?: string }) {
   const errorRef = useRef<HTMLParagraphElement>(null)
   useEffect(() => { if (error) errorRef.current?.focus() }, [error])
   return <div className="adm-edit-footer">{error && <p className="adm-form-error" role="alert" ref={errorRef} tabIndex={-1}>{error}</p>}<button className="adm-button adm-primary" type="submit" disabled={busy}><Save size={16} />{busy ? '저장 중...' : label}</button></div>

@@ -1,5 +1,9 @@
 import { adminAuthenticatedFetch } from '../adminAuthSession'
 import type { MasterItem } from './adminData'
+import { adminAccountRequest } from '../adminAuthSession'
+export async function updateAdminItem(previousId: string, item: MasterItem) {
+  return (await adminAccountRequest<{ item: MasterItem }>(`/api/admin/items/${previousId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })).item
+}
 
 type ItemResponse = { success: true; data: { items: MasterItem[] } } | { success: false; error: { message?: string } }
 

@@ -187,6 +187,32 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1)
     assert.equal(await client.customerChange.count(), before + 2)
   })
+  await context.test('existing item edits persist metadata and images and preserve linked assets on code changes', async () => {
+    const repository = createAdminDataRepository(client)
+    const before = (await repository.load(adminDataQuery.parse({ scope: 'items', id: '880001' }))).items[0]!
+    const input = { ...before, id: '880002', name: '수정된 품목', category: before.category || null, specification: '수정 규격', brand: 'MRS', unit: 'EA' as const, inboundPrice: 0, outboundPrice: 1500, standardPrice: null, enabled: false, note: '저장 검증' }
+    const auditBefore = await client.customerChange.count({ where: { action: 'item.update' } })
+    await repository.updateItem('880001', input, admin.id)
+    const saved = (await repository.load(adminDataQuery.parse({ scope: 'items', id: '880002' }))).items[0]!
+    assert.equal(saved.name, input.name)
+    assert.equal(saved.specification, input.specification)
+    assert.equal(saved.brand, input.brand)
+    assert.equal(saved.inboundPrice, 0)
+    assert.equal(saved.outboundPrice, 1500)
+    assert.equal(saved.standardPrice, null)
+    assert.equal(saved.enabled, false)
+    assert.equal(saved.note, input.note)
+    assert.deepEqual(saved.images, before.images)
+    assert.equal((await client.asset.findUniqueOrThrow({ where: { id: '260929-0001' } })).itemId, '880002')
+    assert.equal(await client.masterItem.count({ where: { id: '880001' } }), 0)
+    await assert.rejects(repository.updateItem('880002', { ...input, unit: 'M' }, admin.id), /기준 단위/)
+    await assert.rejects(repository.updateItem('880002', { ...input, id: '990001' }, admin.id), /상태/)
+    await assert.rejects(repository.updateItem('880002', { ...input, name: '롤백 검증' }, 'missing-actor'))
+    assert.equal((await client.masterItem.findUniqueOrThrow({ where: { id: '880002' } })).name, input.name)
+    assert.equal(await client.customerChange.count({ where: { action: 'item.update' } }), auditBefore + 1)
+    await assert.rejects(repository.updateItem('880002', { ...input, images: [{ id: randomUUID(), name: 'unsafe.jpg', url: 'https://example.com/unsafe.jpg' }] }, admin.id), /S3/)
+    await assert.rejects(repository.updateItem('000000', input, admin.id), /찾을 수 없습니다/)
+  })
   await context.test('concurrent edits only commit one version and one audit event', async () => {
     const current = await customers.detail(company.id)
     const before = await client.customerChange.count()
