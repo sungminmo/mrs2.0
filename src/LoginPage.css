@@ -52,8 +52,8 @@
 @media (max-width: 640px) { .login-value-inner { padding: 40px 20px; } .login-value-grid { grid-template-columns: minmax(0, 1fr); } .login-value-grid > div, .login-value-grid > div:first-child { padding: 22px 0; border-right: 0; } .login-value-grid > div:not(:last-child) { border-bottom: 1px solid #c9d3cc; } .login-value-grid dd { font-size: 32px; } }
 .login-header { position: fixed; inset: 0 0 auto; z-index: 90; height: 68px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #dedede; background: #fdfdfd; font-size: 12px; }
 .login-header > a { display: flex; align-items: center; gap: 9px; color: #246044; font-size: 23px; font-weight: 700; text-decoration: none; }
-.login-entry-logo { display: block; width: 142px; height: 36px; object-fit: contain; flex-shrink: 0; }
-@media (max-width: 640px) { .login-header { gap: 12px; } .login-header > a { flex-shrink: 0; } .login-entry-logo { width: 112px; height: 29px; } }
+.login-entry-logo { display: block; width: 213px; height: 54px; object-fit: contain; flex-shrink: 0; }
+@media (max-width: 640px) { .login-header { gap: 12px; } .login-header > a { flex-shrink: 0; } .login-entry-logo { width: 168px; height: 43.5px; } }
 .login-header > a span { color: #707070; font-size: 12px; font-weight: 400; margin-left: 6px; }
 .login-header nav { display: flex; align-items: center; gap: 28px; }
 .login-header nav a, .login-header nav button { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--home-ink); font-size: 12px; font-weight: 600; }
