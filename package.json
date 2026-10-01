@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "npm run build:customer && npm run build:admin",
     "build:customer": "tsc -b && vite build --config vite.customer.config.ts",
+    "build:demo": "tsc -b && vite build --config vite.customer.config.ts --mode demo",
     "build:admin": "tsc -b && vite build --config vite.admin.config.ts",
     "lint": "oxlint",
     "preview": "vite preview"

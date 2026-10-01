@@ -38,7 +38,7 @@ const assets = [
 export type Asset = typeof assets[number]
 
 export default function App() {
-  const [access, setAccess] = useState<'login' | 'member' | 'guest'>(() => readAuthSession() ? 'member' : 'login')
+  const [access, setAccess] = useState<'login' | 'member' | 'guest'>(() => import.meta.env.MODE !== 'demo' && readAuthSession() ? 'member' : 'login')
   const [tab, setTab] = useHistoryState<Tab>('customer-tab', 'assets')
   const [inventory, setInventory] = useState(() => prepareAssets(assets))
   const assetValueSnapshot = useRef<AssetValueSnapshot | null>(null)
@@ -58,7 +58,7 @@ export default function App() {
   const openInspection = (id: string) => { setInspectionId(id); setInspectionActive(true); setTab('assets') }
   const changeDisposal = (id: string, action: DisposalAction) => setDisposals((current) => current.map((record) => record.id === id ? updateDisposal(record, action) : record))
   if (access === 'login') return <ReceivingRequestProvider contact={contact}><LoginPage onLogin={async (email, password) => {
-    await signIn(email, password)
+    if (import.meta.env.MODE !== 'demo') await signIn(email, password)
     setAccess('member')
     setTab('assets')
   }} onBrowse={() => { setAccess('guest'); setTab('market') }} onCustomerAccess={() => { setAccess('member'); setTab('assets') }} /></ReceivingRequestProvider>

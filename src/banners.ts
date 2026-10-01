@@ -23,6 +23,7 @@ export function useBannerPlacement(id: string) {
   const [placement, setPlacement] = useState<CustomerBannerPlacement | null>(null)
 
   useEffect(() => {
+    if (import.meta.env.MODE === 'demo') return
     const controller = new AbortController()
     fetch(`/api/banners?placements=${encodeURIComponent(id)}`, { signal: controller.signal })
       .then(async (response) => {

@@ -164,7 +164,11 @@ docker compose -f compose.yaml -f compose.local.yaml run --rm --no-deps backend 
 
 `main` push 시 변경 경로에 따라 고객, 관리자, 백엔드 workflow가 각각 private GHCR 이미지를
 commit SHA 태그로 발행하고 스테이징 Lightsail에서 해당 서비스만 교체합니다. 고객 데모는 별도의 Pages
-workflow가 `dist/customer`만 배포합니다. GitHub 저장소의 `staging` Environment에 아래
+workflow가 `npm run build:demo`로 목업 고객 포털을 빌드해 `dist/customer`만 배포합니다.
+Pages는 push 자동 배포 대상에서 제외하며 `pages-demo.yml`의 수동 실행만 유지합니다.
+데모의 `고객 포털로 계속` 버튼은 API 인증 없이 예시 자산·마켓·정산 화면으로 진입하며,
+변경 사항은 브라우저 메모리에만 저장됩니다. 실제 고객·관리자 인증과 DB에는 연결하지 않습니다.
+GitHub 저장소의 `staging` Environment에 아래
 secret을 등록하세요.
 
 | Secret | 값 |
