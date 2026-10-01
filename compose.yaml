@@ -19,6 +19,9 @@ services:
       DB_TIMEOUT_MS: ${DB_TIMEOUT_MS:-5000}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       TZ: UTC
     networks:
       - app

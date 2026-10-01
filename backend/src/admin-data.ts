@@ -1,3 +1,4 @@
+import { publicImageUrl } from './admin-images.js'
 import type { PrismaClient, Prisma } from './generated/prisma/client.js'
 import type { Context } from 'hono'
 import { z } from 'zod'
@@ -132,7 +133,7 @@ export function loadAdminData(repository: AdminDataRepository) {
   return async (context: Context) => success(context, await repository.load(adminDataQuery.parse(context.req.query())))
 }
 
-const imageInput = z.object({ id: z.uuid(), name: z.string().trim().min(1).max(255), url: z.string().min(1).max(7_000_000) })
+const imageInput = z.object({ id: z.uuid(), name: z.string().trim().min(1).max(255), url: z.string().min(1).max(2048).refine((value) => publicImageUrl(value) !== null, 'S3 업로드 이미지 주소를 사용해 주세요.') })
 const itemUnit = z.enum(Object.values(unit) as [(typeof unit)[ItemUnit], ...(typeof unit)[ItemUnit][]])
 const itemInput = z.object({
   id: z.string().regex(/^\d{6}$/),

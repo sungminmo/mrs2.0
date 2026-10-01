@@ -22,6 +22,7 @@
     "db:seed:admin": "node --env-file=../.env --import tsx src/seed-admin.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1144.0",
     "@hono/node-server": "2.1.1",
     "@hono/zod-openapi": "^1.6.3",
     "@prisma/adapter-mariadb": "7.10.0",
@@ -30,6 +31,7 @@
     "hono": "4.13.7",
     "jose": "^6.2.12",
     "prisma": "7.10.0",
+    "sharp": "^0.35.5",
     "zod": "^4.6.5"
   },
   "overrides": {

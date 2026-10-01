@@ -5,6 +5,7 @@ import { categoryEnabled, type MaterialCategory } from '../categories'
 import CategorySelect from '../CategorySelect'
 import { nextAssetCode, prepareInventory, validateMasterItem } from './adminInventory'
 import { registerAdminItems } from './adminItems'
+import { uploadImage, saveImages } from './adminImages'
 
 type Props = { kind: 'items' | 'inventory'; items: MasterItem[]; assets: Inventory[]; inspections?: Inspection[]; categories: MaterialCategory[]; locations: Location[]; id: string | null; cancelHref: string; onSaveItem: (item: MasterItem, previousId: string | null) => void; onSaveAsset: (asset: Inventory) => void }
 
@@ -27,6 +28,7 @@ function ItemForm({ items, assets, categories, id, onSaveItem }: Props) {
   const [error, setError] = useState('')
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (busy) return
     const data = new FormData(event.currentTarget)
     const next: MasterItem = { id: text(data, 'id'), name: text(data, 'name'), category: text(data, 'category'), specification: text(data, 'specification'), brand: text(data, 'brand'), unit: (linked ? item!.unit : text(data, 'unit')) as MasterItem['unit'], inboundPrice: price(data, 'inboundPrice'), outboundPrice: price(data, 'outboundPrice'), standardPrice: price(data, 'standardPrice'), enabled: data.get('enabled') === 'on', note: text(data, 'note'), images }
     try {
@@ -48,7 +50,7 @@ function ItemForm({ items, assets, categories, id, onSaveItem }: Props) {
     </div>
     <h2>단가 정보 <small>원 / 기준 단위 · 부가세 포함</small></h2>
     <div className="adm-edit-fields adm-price-fields">{([['inboundPrice', '입고단가', true], ['outboundPrice', '출고단가', true], ['standardPrice', '표준단가', false]] as const).map(([name, label, required]) => <label key={name}><span className="adm-field-label">{label}{required && <span className="adm-required" aria-label="필수">*</span>}</span><input type="number" name={name} required={required} min={0} max={1e12} step="any" defaultValue={item?.[name] ?? ''} placeholder={required ? undefined : '미산정'} /></label>)}</div>
-    <ImagePicker images={images} onChange={setImages} limit={1} onBusy={setBusy} label="대표 이미지" />
+    <ImagePicker kind="items" recordId={item?.id} images={images} onChange={setImages} limit={1} onBusy={setBusy} label="대표 이미지" />
     <label className="adm-check"><input name="enabled" type="checkbox" defaultChecked={item?.enabled ?? true} />사용 품목</label>
     <label className="adm-edit-memo">적요 (선택)<textarea name="note" defaultValue={item?.note} rows={4} maxLength={2000} /></label>
     <SaveFooter busy={busy} error={error} label={item ? '임시 저장' : '품목 등록'} />
@@ -73,6 +75,7 @@ function AssetForm({ items, assets, inspections = [], categories, locations, id,
   const code = asset?.id ?? (receivedAt ? nextAssetCode(receivedAt, assets) : '')
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (busy) return
     const data = new FormData(event.currentTarget)
     if (!item || !item.unit) { setError('카테고리와 기준 단위가 등록된 품목을 선택해 주세요.'); return }
     const next: Inventory = { id: code, itemId, receivingId, customerId: customer?.id ?? '', receiptId: asset?.receiptId ?? null, name: text(data, 'name'), category: text(data, 'category'), specification: text(data, 'specification'), brand: text(data, 'brand'), quantity: Number(text(data, 'quantity')), unit: item.unit, locationId: text(data, 'locationId'), grade: text(data, 'grade') as Inventory['grade'], status: text(data, 'status') as Inventory['status'], saleStatus: text(data, 'saleStatus') as Inventory['saleStatus'], appraisal: asset?.appraisal ?? null, images, history: asset?.history ?? [] }
@@ -104,7 +107,7 @@ function AssetForm({ items, assets, inspections = [], categories, locations, id,
       <label>보관 상태<select name="status" defaultValue={asset?.status ?? '입고대기'}>{['입고대기', '보관중', '출고완료'].map((status) => <option key={status}>{status}</option>)}</select></label>
       <label>판매 상태<select name="saleStatus" defaultValue={asset?.saleStatus ?? '판매대기'}>{['판매대기', '판매중', '판매완료'].map((status) => <option key={status}>{status}</option>)}</select></label>
     </div>
-    <ImagePicker images={images} onChange={setImages} limit={8} onBusy={setBusy} label="자산 이미지" />
+    {asset ? <ImagePicker kind="assets" recordId={asset.id} images={images} onChange={setImages} limit={8} onBusy={setBusy} label="자산 이미지" /> : <p className="adm-note">자산 이미지 업로드는 DB에 등록된 자산의 상세 화면에서 가능합니다.</p>}
     {asset && <label className="adm-edit-memo">변경 사유<textarea name="reason" rows={3} required maxLength={500} /></label>}
     <p className="adm-note">현재 수량은 입고대기 시 예정 수량, 보관중 시 잔량입니다. 출고완료는 0으로 입력합니다. 판매 상태 변경은 마켓 승인·상품 노출·정산을 실행하지 않습니다.</p>
     <SaveFooter busy={busy} error={error} />
@@ -117,28 +120,16 @@ function SaveFooter({ busy, error, label = '임시 저장' }: { busy: boolean; e
   return <div className="adm-edit-footer">{error && <p className="adm-form-error" role="alert" ref={errorRef} tabIndex={-1}>{error}</p>}<button className="adm-button adm-primary" type="submit" disabled={busy}><Save size={16} />{busy ? '저장 중...' : label}</button></div>
 }
 
-function loadImage(file: File): Promise<AdminImage> {
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return Promise.reject(new Error('JPG, PNG, WebP 이미지 파일만 첨부할 수 있습니다.'))
-  if (!file.size || file.size > 5 * 1024 * 1024) return Promise.reject(new Error('이미지는 파일당 5MB 이하로 첨부해 주세요.'))
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(new Error('이미지 파일을 읽지 못했습니다.'))
-    reader.onload = () => {
-      const url = String(reader.result)
-      const image = new Image()
-      image.onload = () => resolve({ id: crypto.randomUUID(), name: file.name, url })
-      image.onerror = () => reject(new Error('이미지 내용이 손상되었거나 지원하지 않는 형식입니다.'))
-      image.src = url
-    }
-    reader.readAsDataURL(file)
-  })
-}
-
-function ImagePicker({ images, onChange, limit, onBusy, label }: { images: AdminImage[]; onChange: (images: AdminImage[]) => void; limit: number; onBusy: (busy: boolean) => void; label: string }) {
+export function ImagePicker({ kind, recordId, images, onChange, limit, onBusy, label }: { kind: 'items' | 'assets'; recordId?: string; images: AdminImage[]; onChange: (images: AdminImage[]) => void; limit: number; onBusy?: (busy: boolean) => void; label: string }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [expected, setExpected] = useState(images)
+  const [reason, setReason] = useState('')
+  const [message, setMessage] = useState('')
+  const [dirty, setDirty] = useState(false)
   const generation = useRef(0)
-  useEffect(() => () => { generation.current += 1 }, [])
+  const controller = useRef<AbortController | null>(null)
+  useEffect(() => () => { generation.current += 1; controller.current?.abort() }, [])
   return <section className="adm-image-picker"><h2>{label} <small>{images.length} / {limit}</small></h2><p className="adm-note">JPG·PNG·WebP · 파일당 최대 5MB</p><label className="adm-button adm-upload"><Upload size={16} />{limit === 1 && images.length ? '이미지 교체' : '이미지 첨부'}<input className="adm-sr-only" type="file" aria-label={`${label} 첨부`} accept="image/jpeg,image/png,image/webp" multiple={limit > 1} disabled={busy} onChange={async (event) => {
     const files = Array.from(event.target.files ?? [])
     event.target.value = ''
@@ -146,7 +137,8 @@ function ImagePicker({ images, onChange, limit, onBusy, label }: { images: Admin
     setError('')
     if (files.length + (limit === 1 ? 0 : images.length) > limit) { setError(`이미지는 최대 ${limit}개까지 첨부할 수 있습니다.`); return }
     const current = ++generation.current
-    setBusy(true); onBusy(true)
-    try { const added = await Promise.all(files.map(loadImage)); if (generation.current === current) onChange(limit === 1 ? added : [...images, ...added]) } catch (error) { if (generation.current === current) setError((error as Error).message) } finally { if (generation.current === current) { setBusy(false); onBusy(false) } }
-  }} /></label>{error && <p className="adm-form-error" role="alert">{error}</p>}<div className="adm-image-grid">{images.map((image) => <figure key={image.id}><img src={image.url} alt={image.name} /><figcaption>{image.name}</figcaption><button className="adm-icon" type="button" title={`${image.name} 삭제`} aria-label={`${image.name} 삭제`} disabled={busy} onClick={() => onChange(images.filter((candidate) => candidate.id !== image.id))}><X size={16} /></button></figure>)}</div></section>
+    controller.current = new AbortController()
+    setBusy(true); onBusy?.(true); setMessage('')
+    try { const added: AdminImage[] = []; for (const file of files) added.push(await uploadImage(file, kind, controller.current.signal)); if (generation.current === current) { onChange(limit === 1 ? added : [...images, ...added]); setDirty(true) } } catch (error) { if (generation.current === current) setError((error as Error).message) } finally { if (generation.current === current) { setBusy(false); onBusy?.(false) } }
+  }} /></label>{busy && <p role="status"><LoaderCircle className="adm-spinner" size={16} /> 이미지 처리 중...</p>}{error && <p className="adm-form-error" role="alert">{error}</p>}{message && <p role="status">{message}</p>}<div className="adm-image-grid">{images.map((image) => <figure key={image.id}><img src={image.url} alt={image.name} /><figcaption>{image.name}</figcaption><button className="adm-icon" type="button" title={`${image.name} 삭제`} aria-label={`${image.name} 삭제`} disabled={busy} onClick={() => { onChange(images.filter((candidate) => candidate.id !== image.id)); setDirty(true); setMessage('') }}><X size={16} /></button></figure>)}</div>{recordId && <><label className="customer-reason">이미지 변경 사유<input value={reason} maxLength={500} disabled={busy} onChange={(event) => setReason(event.target.value)} /></label><button type="button" className="adm-button adm-primary" disabled={busy || !dirty || !reason.trim()} onClick={async () => { setBusy(true); onBusy?.(true); setError(''); setMessage(''); try { const saved = await saveImages(kind, recordId, images, expected, reason); setExpected(saved); onChange(saved); setDirty(false); setMessage('이미지가 DB에 저장되었습니다.') } catch (error) { setError((error as Error).message) } finally { setBusy(false); onBusy?.(false) } }}><Save size={16} />이미지 DB 저장</button></>}</section>
 }

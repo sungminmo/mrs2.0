@@ -1,3 +1,36 @@
+# 관리자 이미지 S3 업로드
+
+- `POST /api/admin/images/{kind}`: 관리자 Bearer 토큰, `kind=items|assets|banners`, multipart `file` 한 장. 응답 `201 data.image={id,name,url}`.
+- 파일당 5MB 이하 정지 JPG/PNG/WebP만 지원한다. 서버에서 실제 형식과 최대 2천만 픽셀을 검사하고 방향 보정, 최대 2400px 리사이즈, 메타데이터 제거 후 WebP로 저장한다. UUID 키를 사용하며 원본 파일명은 객체 키에 사용하지 않는다.
+- 버킷 `bucket-mrs`, 리전 `ap-northeast-2`, 키 `{kind}/{관리자ID}/{UUID}.webp`. DB에는 공개 HTTPS URL과 원래 파일명을 저장한다. ACL을 지정하지 않으며 버킷의 공개 읽기 정책을 사용한다.
+- 관리자별 10분당 100회, 프로세스별 동시 처리 2회 제한. 실패는 검증 `400`, 요청 크기 `413`, 제한 `429`, S3 장애 `503`으로 반환한다. 브라우저에 AWS 자격 증명을 전달하지 않는다.
+- `PUT /api/admin/items/{id}/images` 및 `PUT /api/admin/assets/{id}/images`: `{images,expected,reason}`. 이미지 목록은 `{id,name,url}` 배열, 품목 최대 1장/자산 최대 8장. 현재 DB 목록과 `expected`가 다르면 `409`이며 변경 사유와 감사 이력을 트랜잭션으로 저장한다. 기존 비-S3 이미지는 변경 없이 유지할 수 있고, 새 주소는 지정 버킷의 정지 이미지 경로만 허용한다.
+- 기존 품목·자산은 상세/편집 화면의 **이미지 DB 저장** 버튼으로 저장한다. 기본정보 임시 저장과 분리된다. 신규 품목은 업로드 후 품목 등록으로 URL을 함께 저장한다. 신규 자산의 DB 생성 API와 고객 입고 신청 저장 API는 아직 구현되지 않았으므로 해당 화면에 영구 업로드를 제공하지 않는다. 배너 이미지는 업로드 후 **편성 저장**으로 기존 배너 API에 저장한다.
+- 이미지 삭제는 DB 연결만 제거한다. 원본 S3 객체는 삭제하지 않는다. 업로드 후 저장 취소·실패한 객체는 남을 수 있으므로 미참조 객체 정리를 별도 운영해야 한다. 전체 prefix에 일괄 만료 정책을 적용하면 참조 중 이미지도 삭제될 수 있다.
+
+## AWS 인증과 배포
+
+백엔드 AWS SDK 기본 credential provider chain을 사용한다. IAM 역할을 우선 사용하고 Docker 컨테이너에서 자격 증명 엔드포인트에 접근할 수 있는지 확인한다. Lightsail에서 역할을 사용할 수 없는 경우 서버 전용 `.env`에 `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, 임시 자격 증명이면 `AWS_SESSION_TOKEN`을 설정한다. Compose는 이 값들을 백엔드에만 전달한다. 공유 프로파일 파일은 컨테이너에 자동 전달되지 않는다. 키를 Git, 프론트엔드 환경변수, 채팅에 넣지 않는다.
+
+필요한 최소 쓰기 권한 예시:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["s3:PutObject"],
+    "Resource": [
+      "arn:aws:s3:::bucket-mrs/items/*",
+      "arn:aws:s3:::bucket-mrs/assets/*",
+      "arn:aws:s3:::bucket-mrs/banners/*"
+    ]
+  }]
+}
+```
+
+별도 버킷 정책에서 위 prefix의 익명 `s3:GetObject` 읽기를 허용해야 이미지가 보인다. SSE-KMS 버킷이면 키 정책과 `kms:GenerateDataKey` 권한도 필요하다. 서버가 S3로 업로드하므로 브라우저 업로드용 CORS 설정은 필요 없다. 공개 URL은 고객 소유권 API를 우회해 접근할 수 있으므로 개인정보·민감한 현장 사진을 업로드하지 않는다. URL 저장에는 스키마 변경이 없고 프론트엔드/백엔드를 함께 배포해야 한다.
+
 # MRS 고객 포털 API 명세서
 
 - 버전: 1.0.0-draft

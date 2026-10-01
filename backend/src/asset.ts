@@ -1,3 +1,4 @@
+import { publicImageUrl } from './admin-images.js'
 import { createRoute, z } from '@hono/zod-openapi'
 import type { Context } from 'hono'
 import type { AuthUser } from './auth.js'
@@ -120,7 +121,7 @@ export function assetSummary(repository: AssetRepository) {
 }
 
 export function privateImage(url: string) {
-  return url.length <= 4_200_000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(url) ? url : null
+  return publicImageUrl(url) ?? (url.length <= 4_200_000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(url) ? url : null)
 }
 
 async function assertOwnerConsistency(client: PrismaClient, customerId: string) {

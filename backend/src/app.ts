@@ -8,6 +8,9 @@ import { listAdminBanners, listPublicBanners, saveBanner, type BannerRepository 
 import { ErrorCode, failure, handleError, success } from './http.js'
 import { createAdminItems, loadAdminData, saveAdminCategory, type AdminDataRepository } from './admin-data.js'
 import { adminAccountCreate, adminAccountUpdate, adminAccountHandlers, requireSystemAdmin, type AdminAccountRepository } from './admin-accounts.js'
+import { bodyLimit } from 'hono/body-limit'
+import type { Context } from 'hono'
+import { uploadAdminImage, saveAdminImages, replaceImagesSchema, type ImageStorage, type AdminImageRepository } from './admin-images.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -18,9 +21,11 @@ type Dependencies = {
   adminData?: AdminDataRepository
   customers?: CustomerRepository
   adminAccounts?: AdminAccountRepository
+  imageStorage?: ImageStorage
+  adminImages?: AdminImageRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages }: Dependencies) {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (result.success) return
@@ -39,6 +44,14 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
   if (auth) {
     const customerAuth = requireAuth(auth.repository, auth.secret, 'CUSTOMER')
     const adminAuth = requireAuth(auth.repository, auth.secret, 'ADMIN')
+    if (imageStorage) {
+      app.post('/api/admin/images/:kind', adminAuth, requireAdmin, bodyLimit({ maxSize: 6 * 1024 * 1024, onError: (context) => failure(context, 413, ErrorCode.VALIDATION_ERROR, '이미지 파일은 5MB 이하로 업로드해 주세요.') }), async (context: Context, next) => { if (customers) await customers.throttle('image-upload', (context.get('authUser') as { id: string }).id, 100); await next() }, uploadAdminImage(imageStorage))
+      app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/images/{kind}', summary: '관리자 이미지 파일 S3 업로드', tags: ['Images'], security: [{ BearerAuth: [] }], request: { params: z.object({ kind: z.enum(['items', 'assets', 'banners']) }), body: { required: true, content: { 'multipart/form-data': { schema: z.object({ file: z.string().openapi({ type: 'string', format: 'binary' }) }) } } } }, responses: { 201: { description: 'S3 이미지 id/name/url' }, 400: { description: '잘못된 이미지' }, 401: { description: '관리자 인증 필요' }, 413: { description: '크기 초과' }, 429: { description: '업로드 요청 제한' }, 503: { description: 'S3 저장 실패' } } })
+    }
+    if (adminImages) for (const kind of ['items', 'assets'] as const) {
+      app.put(`/api/admin/${kind}/:id/images`, adminAuth, requireAdmin, saveAdminImages(adminImages, kind))
+      app.openAPIRegistry.registerPath({ method: 'put', path: `/api/admin/${kind}/{id}/images`, summary: '이미지 URL DB 저장 (변경 사유·현재 이미지 비교)', tags: ['Images'], security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string() }), body: { required: true, content: { 'application/json': { schema: replaceImagesSchema } } } }, responses: { 200: { description: '저장된 이미지 목록' }, 400: { description: '이미지 개수·주소·사유 오류' }, 401: { description: '관리자 인증 필요' }, 404: { description: '대상 없음' }, 409: { description: '동시 변경 충돌' } } })
+    }
     if (adminAccounts) {
       const accounts = adminAccountHandlers(adminAccounts)
       app.get('/api/admin/accounts', adminAuth, requireSystemAdmin, accounts.list)

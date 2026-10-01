@@ -4,7 +4,7 @@ import { adminAuthenticatedFetch, adminSignOut } from '../adminAuthSession'
 import { dateText, invoiceAmount, invoices, locations, money, receivingStatuses, referenceDate, type Campaign, type Inspection, type Inventory, type MasterItem, type MemberAccount, type Product, type Receiving, type ReceivingStatus } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
 import { materialPhotos } from '../assetPhotos'
-import InventoryEditor from './InventoryEditor'
+import InventoryEditor, { ImagePicker } from './InventoryEditor'
 import LocationEditor from './LocationEditor'
 import LocationOccupancyEditor from './LocationOccupancyEditor'
 import { categoryMatches, type MaterialCategory } from '../categories'
@@ -168,6 +168,7 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
         </>}
         </>}
       </>}
+      {!pending && row && !editing && (itemManagement || menu.id === 'inventory' && tab?.id === 'stock') && <ImagePicker key={`${menu.id}/${row.id}`} kind={itemManagement ? 'items' : 'assets'} recordId={row.id} images={(itemManagement ? items.find((entry) => entry.id === row.id) : assets.find((entry) => entry.id === row.id))?.images ?? []} limit={itemManagement ? 1 : 8} label={itemManagement ? '대표 이미지' : '자산 이미지'} onChange={(images) => { if (itemManagement) setItems((current) => current.map((entry) => entry.id === row.id ? { ...entry, images } : entry)); else setAssets((current) => current.map((entry) => entry.id === row.id ? { ...entry, images } : entry)) }} />}
       <footer className="adm-footer">MRS 스테이징 환경 · 실제 서비스 운영 환경 아님</footer>
     </main>
   </div>
@@ -266,7 +267,6 @@ function RecordDetail({ row }: { row: AdminRow }) {
   return <article className="adm-record">
     <div className="adm-list-heading"><h2>{row.id}</h2><Status value={row.status} /></div>
     <dl className="adm-fields">{row.fields.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-    {row.images && <section className="adm-detail-section"><h2>{row.id.startsWith('ITM-') ? '대표 이미지' : '자산 이미지'}</h2>{row.images.length ? <div className="adm-image-grid">{row.images.map((image) => <figure key={image.id}><a href={image.url} download={image.name} title={`${image.name} 다운로드`}><img src={image.url} alt={image.name} /></a><figcaption>{image.name}</figcaption></figure>)}</div> : <p className="adm-note">등록된 이미지가 없습니다.</p>}</section>}
     {row.id.startsWith('PRD-') && <ProductPhoto key={row.id} id={row.id} />}
     {row.sections?.map((section) => <section className="adm-detail-section" key={section.title}><h2>{section.title}</h2>{section.rows.length ? <div className="adm-table-scroll" tabIndex={0} role="region" aria-label={section.title}><table><thead><tr>{section.headers.map((header) => <th scope="col" key={header}>{header}</th>)}</tr></thead><tbody>{section.rows.map((cells, index) => <tr key={index}>{cells.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table></div> : <p className="adm-note">등록된 내역이 없습니다.</p>}</section>)}
     {row.note && <p className="adm-note adm-record-note">{row.note}</p>}

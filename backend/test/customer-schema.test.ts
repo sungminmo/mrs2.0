@@ -10,6 +10,7 @@ import { createAdminAccountRepository } from '../src/admin-accounts.js'
 import { hashPassword } from '../src/auth.js'
 import { adminDataQuery, createAdminDataRepository } from '../src/admin-data.js'
 import { adminListQuery } from '../src/admin-pagination.js'
+import { createAdminImageRepository, imageOrigin } from '../src/admin-images.js'
 
 test('customer migration and repositories on isolated MySQL', { skip: process.env.RUN_CUSTOMER_SCHEMA_TEST !== '1' }, async (context) => {
   const container = `mrs-customer-test-${randomUUID()}`
@@ -158,6 +159,33 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     await client.asset.update({ where: { id: '260930-0001' }, data: { receivingId: 'MISMATCH' } })
     await assert.rejects(assets.summary!(company.id), /귀속 확인/)
     await assert.rejects(assets.detail!(other.id, '260930-9998'), /귀속 확인/)
+  })
+  await context.test('S3 image references persist for items and assets, audit atomically and reject stale replacement', async () => {
+    const repository = createAdminImageRepository(client)
+    const itemImage = { id: randomUUID(), name: 'item.webp', url: `${imageOrigin}/items/test/${randomUUID()}.webp` }
+    await repository.replace('items', '880001', { images: [itemImage], expected: [], reason: '검증 이미지 등록' }, admin.id)
+    assert.equal((await client.masterItemImage.findFirstOrThrow({ where: { masterItemId: '880001' } })).url, itemImage.url)
+    const assetImages = Array.from({ length: 8 }, (_, index) => ({ id: randomUUID(), name: `asset-${index}.webp`, url: `${imageOrigin}/assets/test/${randomUUID()}.webp` }))
+    const before = await client.customerChange.count()
+    await repository.replace('assets', '260929-0001', { images: assetImages, expected: [], reason: '검증 자산 사진 등록' }, admin.id)
+    const saved = await client.assetImage.findMany({ where: { assetId: '260929-0001' }, orderBy: { sortOrder: 'asc' } })
+    assert.deepEqual(saved.map(({ id, name, url }) => ({ id, name, url })), assetImages)
+    assert.equal(await client.customerChange.count(), before + 1)
+    const data = await createAdminDataRepository(client).load(adminDataQuery.parse({ scope: 'assets', id: '260929-0001' }))
+    assert.equal(data.assets[0]?.images.length, 8)
+    assert.ok(Array.isArray(data.assets[0]?.history.at(-1)?.changes))
+    const detail = await createAssetRepository(client).detail!('LEGACY-ASSET-OWNER', '260929-0001')
+    assert.equal(detail?.images.length, 8)
+    await assert.rejects(repository.replace('assets', '260929-0001', { images: [], expected: [], reason: '충돌 검증' }, admin.id), /변경되었습니다/)
+    assert.equal(await client.customerChange.count(), before + 1)
+    await assert.rejects(repository.replace('assets', '260929-0001', { images: [], expected: assetImages, reason: '원자성 검증' }, 'missing-actor'))
+    assert.equal(await client.assetImage.count({ where: { assetId: '260929-0001' } }), 8)
+    const results = await Promise.allSettled([
+      repository.replace('assets', '260929-0001', { images: assetImages.slice(0, 1), expected: assetImages, reason: '동시 저장 A' }, admin.id),
+      repository.replace('assets', '260929-0001', { images: assetImages.slice(0, 2), expected: assetImages, reason: '동시 저장 B' }, admin.id),
+    ])
+    assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1)
+    assert.equal(await client.customerChange.count(), before + 2)
   })
   await context.test('concurrent edits only commit one version and one audit event', async () => {
     const current = await customers.detail(company.id)
