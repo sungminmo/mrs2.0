@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, useSyncExternalStore, type FormEvent } from 'react'
-import { adminAuthenticatedFetch, adminSignIn, readAdminSession } from './adminAuthSession'
+import { adminAuthenticatedFetch, adminSignIn, readAdminSession, type AdminRole } from './adminAuthSession'
 import './AdminEntry.css'
 
 const AdminPortal = lazy(() => import('./admin/AdminPortal'))
@@ -14,6 +14,7 @@ export default function AdminEntry() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [verifiedToken, setVerifiedToken] = useState<string | null>(null)
+  const [adminRole, setAdminRole] = useState<AdminRole | null>(null)
 
   useEffect(() => {
     const expired = () => { setSession(null); setVerifiedToken(null) }
@@ -27,7 +28,7 @@ export default function AdminEntry() {
     adminAuthenticatedFetch('/api/admin/auth/me', { signal: controller.signal }).then(async (response) => {
       const body = await response.json()
       if (!response.ok || body.data?.user?.role !== 'ADMIN') throw new Error('관리자 인증을 확인할 수 없습니다. 다시 로그인해 주세요.')
-      if (!controller.signal.aborted) setVerifiedToken(session.accessToken)
+      if (!controller.signal.aborted) { setAdminRole(body.data.user.adminRole ?? null); setVerifiedToken(session.accessToken) }
     }).catch((reason) => {
       if (!controller.signal.aborted) { setSession(null); setVerifiedToken(null); setError(reason instanceof Error ? reason.message : '관리자 인증에 실패했습니다.') }
     })
@@ -46,5 +47,5 @@ export default function AdminEntry() {
 
   if (!session) return <main className="admin-login"><form onSubmit={submit}><span>MRS OPERATIONS</span><h1>관리자 로그인</h1><p>MRS에서 생성한 관리자 계정만 사용할 수 있습니다.</p><label>관리자 아이디<input name="id" autoComplete="username" required disabled={submitting} /></label><label>비밀번호<input name="password" type="password" autoComplete="current-password" required disabled={submitting} /></label><button disabled={submitting}>{submitting ? '확인 중...' : '로그인'}</button>{error && <p role="alert">{error}</p>}</form></main>
   if (verifiedToken !== session.accessToken) return <main className="admin-login" role="status">관리자 권한 확인 중...</main>
-  return <Suspense fallback={<main className="admin-login" role="status">관리 메뉴 불러오는 중...</main>}><AdminPortal hash={hash || '#/admin/dashboard'} /></Suspense>
+  return <Suspense fallback={<main className="admin-login" role="status">관리 메뉴 불러오는 중...</main>}><AdminPortal hash={hash || '#/admin/dashboard'} adminRole={adminRole} /></Suspense>
 }

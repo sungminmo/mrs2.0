@@ -21,6 +21,7 @@ export type AuthUser = {
   companyName: string
   managerName: string
   role: 'CUSTOMER' | 'ADMIN'
+  adminRole?: 'SYSTEM_ADMIN' | 'ADMIN' | 'SALES' | 'LOGISTICS' | null
   status: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
   companyPhone?: string | null
   managerPhone?: string
@@ -185,6 +186,7 @@ export function memberProfile(user: AuthUser) {
     managerPhone: user.managerPhone ?? '',
     address: user.address ?? null,
     role: user.role,
+    adminRole: user.role === 'ADMIN' ? user.adminRole ?? null : null,
     status: user.status,
     approvedAt: user.approvedAt ?? null,
     createdAt: user.createdAt,
@@ -192,7 +194,7 @@ export function memberProfile(user: AuthUser) {
 }
 
 export function listMembers(repository: AuthRepository) {
-  return async (context: Context) => success(context, { members: (await repository.listMembers()).map(memberProfile) })
+  return async (context: Context) => success(context, { members: (await repository.listMembers()).filter((user) => user.role === 'CUSTOMER').map(memberProfile) })
 }
 
 export function approveMember(repository: AuthRepository) {

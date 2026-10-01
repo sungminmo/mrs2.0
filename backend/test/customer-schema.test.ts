@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, scryptSync } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { createDatabase } from '../src/database.js'
 import { createAuthRepository, createCustomerRepository } from '../src/customer.js'
 import { createAssetRepository } from '../src/asset.js'
+import { createAdminAccountRepository } from '../src/admin-accounts.js'
+import { hashPassword } from '../src/auth.js'
 
 test('customer migration and repositories on isolated MySQL', { skip: process.env.RUN_CUSTOMER_SCHEMA_TEST !== '1' }, async (context) => {
   const container = `mrs-customer-test-${randomUUID()}`
@@ -37,7 +39,43 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
   const client = database.client
   const customers = createCustomerRepository(client)
   const auth = createAuthRepository(client)
-  const admin = await client.user.create({ data: { email: 'admin@example.test', passwordHash: 'unused', companyName: 'MRS', managerName: 'Admin', managerPhone: '010', role: 'ADMIN', status: 'ACTIVE' } })
+  const admin = await client.user.create({ data: { email: 'admin@example.test', passwordHash: 'unused', companyName: 'MRS', managerName: 'Admin', managerPhone: '010', role: 'ADMIN', adminRole: 'SYSTEM_ADMIN', status: 'ACTIVE' } })
+  await context.test('administrator accounts hash passwords, isolate customers, audit and preserve the last system administrator', async () => {
+    const verifyPassword = (password: string, encoded: string) => {
+      const [algorithm, salt, stored] = encoded.split('$')
+      return algorithm === 'scrypt' && !!salt && !!stored && scryptSync(password, Buffer.from(salt, 'base64url'), 64).equals(Buffer.from(stored, 'base64url'))
+    }
+    const accounts = createAdminAccountRepository(client)
+    const fields = { loginId: 'sales.test', password: 'password123', name: 'Sales staff', phone: '010', adminRole: 'SALES' as const, status: 'ACTIVE' as const, reason: 'MRS verified staff' }
+    const account = await accounts.create(fields, admin.id)
+    assert.equal('passwordHash' in account, false)
+    assert.equal((await accounts.list()).some((entry) => 'passwordHash' in entry), false)
+    assert.equal((await client.user.findUniqueOrThrow({ where: { id: account.id } })).role, 'ADMIN')
+    assert.equal(await verifyPassword('password123', (await client.user.findUniqueOrThrow({ where: { id: account.id } })).passwordHash), true)
+    const beforeAudit = await client.customerChange.count()
+    await assert.rejects(accounts.create(fields, admin.id), /상태/)
+    assert.equal(await client.customerChange.count(), beforeAudit)
+    await assert.rejects(accounts.create({ ...fields, loginId: 'denied.test' }, account.id), /시스템 관리자/)
+    await assert.rejects(accounts.update('legacy-user', { ...fields, version: 0 }, admin.id), /관리자 계정/)
+    await assert.rejects(accounts.update(admin.id, { ...fields, version: 0 }, admin.id), /마지막 활성/)
+    const changed = await accounts.update(account.id, { ...fields, adminRole: 'LOGISTICS', version: 0, password: 'changed123' }, admin.id)
+    assert.equal(changed.adminRole, 'LOGISTICS')
+    assert.equal(changed.sessionVersion, 1)
+    assert.equal(await verifyPassword('changed123', (await client.user.findUniqueOrThrow({ where: { id: account.id } })).passwordHash), true)
+    await assert.rejects(accounts.update(account.id, { ...fields, version: 0 }, admin.id), /계정 상태/)
+    const suspended = await accounts.update(account.id, { ...fields, status: 'SUSPENDED', version: 1 }, admin.id)
+    assert.equal(suspended.status, 'SUSPENDED')
+    const audit = await client.customerChange.findMany({ where: { targetUserId: account.id }, orderBy: { createdAt: 'asc' } })
+    assert.equal(audit.length, 3)
+    assert.equal(JSON.stringify(audit).includes('changed123'), false)
+    assert.equal(JSON.stringify(audit).includes('passwordHash'), false)
+    await client.user.create({ data: { email: 'concurrent-system.test', passwordHash: await hashPassword('password123'), companyName: 'MRS', managerName: 'System 2', managerPhone: '', role: 'ADMIN', adminRole: 'SYSTEM_ADMIN', status: 'ACTIVE' } })
+    const systems = (await accounts.list()).filter((entry) => entry.adminRole === 'SYSTEM_ADMIN' && entry.status === 'ACTIVE')
+    const results = await Promise.allSettled(systems.map((entry) => accounts.update(entry.id, { ...fields, status: 'SUSPENDED', version: entry.sessionVersion }, entry.id)))
+    assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1)
+    assert.equal(await client.user.count({ where: { role: 'ADMIN', adminRole: 'SYSTEM_ADMIN', status: 'ACTIVE' } }), 1)
+    await client.user.update({ where: { id: admin.id }, data: { status: 'ACTIVE', adminRole: 'SYSTEM_ADMIN' } })
+  })
   const fields = { name: 'Company A', businessNumber: '2208162517', representativeName: 'Owner', phone: '0212345678', address: 'Seoul' }
   const company = await customers.create(fields, 'Verified company', admin.id)
   await context.test('duplicate companies cannot be created and failed changes leave no audit', async () => {

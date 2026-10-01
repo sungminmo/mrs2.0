@@ -1,6 +1,8 @@
+export type AdminRole = 'SYSTEM_ADMIN' | 'ADMIN' | 'SALES' | 'LOGISTICS'
+export const adminRoleLabels: Record<AdminRole, string> = { SYSTEM_ADMIN: '시스템 관리자', ADMIN: '관리자', SALES: '영업', LOGISTICS: '물류' }
 export type AdminSession = {
   accessToken: string
-  user: { id: string; email: string; managerName: string; role: 'ADMIN'; status: string }
+  user: { id: string; email: string; managerName: string; role: 'ADMIN'; status: string; adminRole?: AdminRole | null }
 }
 
 const sessionKey = 'mrs.admin.auth.session'

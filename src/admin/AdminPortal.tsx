@@ -14,17 +14,20 @@ import { saveAdminCategory } from './adminCategories'
 import CampaignEditor, { MarketStatusEditor, ProductDiscountEditor } from './MarketEditor'
 import BannerManager from './BannerManager'
 import CustomerManager from './CustomerManager'
+import AdminAccountManager from './AdminAccountManager'
+import type { AdminRole } from '../adminAuthSession'
 import type { CustomerAccount } from '../customerAccounts'
 import ItemFileActions from './ItemFileActions'
 import { changeMarketStatus, marketStatusOptions, type MarketData, type MarketStatusTab } from './adminMarket'
 import './AdminPortal.css'
 
-const icons = { dashboard: LayoutDashboard, basic: ListChecks, receiving: ClipboardCheck, inventory: Archive, market: ShoppingCart, content: Images, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2 }
+const icons = { dashboard: LayoutDashboard, basic: ListChecks, receiving: ClipboardCheck, inventory: Archive, market: ShoppingCart, content: Images, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2, accounts: UsersRound }
 const authenticatedFetch = adminAuthenticatedFetch
 const rowOptions = [10, 25, 50, 100] as const
 type AdminDatabaseData = { categories: MaterialCategory[]; items: MasterItem[]; assets: Inventory[]; receivings: Receiving[]; inspections: Inspection[]; products: Product[]; campaigns: Campaign[] }
 
-export default function AdminPortal({ hash }: { hash: string }) {
+export default function AdminPortal({ hash, adminRole }: { hash: string; adminRole: AdminRole | null }) {
+  const availableMenus = menus.filter((menu) => menu.id !== 'accounts' || adminRole === 'SYSTEM_ADMIN')
   const [assets, setAssets] = useState<Inventory[]>([])
   const [items, setItems] = useState<MasterItem[]>([])
   const [categories, setCategories] = useState<MaterialCategory[]>([])
@@ -142,14 +145,14 @@ export default function AdminPortal({ hash }: { hash: string }) {
       <button type="button" className="adm-icon" title="로그아웃" aria-label="로그아웃" onClick={adminSignOut}><LogOut size={17} /></button>
     </header>
     <aside className={`adm-sidebar ${menuOpen ? 'is-open' : ''}`}>
-      <nav id="admin-navigation" aria-label="관리자 메뉴">{menus.map((item) => { const Icon = icons[item.id]; return <a key={item.id} href={adminHref({ label: item.label, menu: item.id, tab: item.tabs[0]?.id ?? '' })} aria-current={menu.id === item.id ? 'page' : undefined} onClick={() => setMenuOpen(false)}><Icon size={17} />{item.label}</a> })}</nav>
+      <nav id="admin-navigation" aria-label="관리자 메뉴">{availableMenus.map((item) => { const Icon = icons[item.id]; return <a key={item.id} href={adminHref({ label: item.label, menu: item.id, tab: item.tabs[0]?.id ?? '' })} aria-current={menu.id === item.id ? 'page' : undefined} onClick={() => setMenuOpen(false)}><Icon size={17} />{item.label}</a> })}</nav>
       <div className="adm-sidebar-note">예시 기준일<strong>{dateText(referenceDate)}</strong><span>한국 표준시 · KST</span></div>
     </aside>
     <main className="adm-main">
       <div className="adm-heading"><div><div className="adm-breadcrumb">스테이징 관리 / {menu.label}{row ? ` / ${row.id}` : ''}</div><h1 ref={heading} tabIndex={-1}>{discountEditing ? `${row?.title} 할인율 설정` : occupancyEditing ? `${row?.title} 점유 재고 편집` : editing ? `${recordKind} ${mode === 'new' ? '등록' : '수정'}` : row ? row.title : menu.label}</h1></div><span className="adm-mode">STAGING</span></div>
       {loadingData && <p className="adm-note" role="status">개발 DB 데이터를 불러오는 중입니다.</p>}
       {notice.scope === 'database' && <p className="adm-form-error" role="alert">{notice.text}</p>}
-      {menu.id === 'dashboard' ? <Dashboard views={views} /> : <>
+      {menu.id === 'accounts' ? adminRole === 'SYSTEM_ADMIN' ? <AdminAccountManager params={url.searchParams} /> : <p role="alert">시스템 관리자만 관리자 계정을 관리할 수 있습니다.</p> : menu.id === 'dashboard' ? <Dashboard views={views} /> : <>
         <nav className="adm-tabs" aria-label={`${menu.label} 보기`}>{menu.tabs.map((item) => <a key={item.id} href={adminHref({ label: item.label, menu: menu.id, tab: item.id })} aria-current={item.id === tab?.id ? 'page' : undefined}>{item.label}</a>)}</nav>
         {menu.id === 'members' || menu.id === 'customers' && ['companies', 'applications'].includes(tab?.id ?? '') ? <CustomerManager params={url.searchParams} membersOnly={menu.id === 'members'} onChanged={() => setAccountRevision((value) => value + 1)} /> : menu.id === 'content' && tab?.id === 'banners' ? <BannerManager params={url.searchParams} /> : categoryManagement ? <CategoryManager categories={categories} items={items} assets={assets} params={url.searchParams} onSave={async (category) => { const savedCategory = await saveAdminCategory(category); setCategories((current) => current.some((entry) => entry.id === savedCategory.id) ? current.map((entry) => entry.id === savedCategory.id ? savedCategory : entry) : [...current, savedCategory]); window.location.hash = `/admin/basic?tab=categories&id=${savedCategory.id}` }} /> : <>
         {notice.scope === noticeScope && !editing && !discountEditing && <p className="adm-note" role="status">{notice.text}</p>}

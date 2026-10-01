@@ -7,6 +7,7 @@ import { getConnInfo } from '@hono/node-server/conninfo'
 import { listAdminBanners, listPublicBanners, saveBanner, type BannerRepository } from './banner.js'
 import { ErrorCode, failure, handleError, success } from './http.js'
 import { createAdminItems, loadAdminData, saveAdminCategory, type AdminDataRepository } from './admin-data.js'
+import { adminAccountCreate, adminAccountUpdate, adminAccountHandlers, requireSystemAdmin, type AdminAccountRepository } from './admin-accounts.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -16,9 +17,10 @@ type Dependencies = {
   banners?: BannerRepository
   adminData?: AdminDataRepository
   customers?: CustomerRepository
+  adminAccounts?: AdminAccountRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts }: Dependencies) {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (result.success) return
@@ -37,6 +39,18 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
   if (auth) {
     const customerAuth = requireAuth(auth.repository, auth.secret, 'CUSTOMER')
     const adminAuth = requireAuth(auth.repository, auth.secret, 'ADMIN')
+    if (adminAccounts) {
+      const accounts = adminAccountHandlers(adminAccounts)
+      app.get('/api/admin/accounts', adminAuth, requireSystemAdmin, accounts.list)
+      app.post('/api/admin/accounts', adminAuth, requireSystemAdmin, accounts.create)
+      app.patch('/api/admin/accounts/:id', adminAuth, requireSystemAdmin, accounts.update)
+      const responses = { 200: { description: '처리 성공 (비밀번호·해시 미포함)' }, 400: { description: '입력 검증 오류' }, 401: { description: '인증 필요 또는 세션 폐기' }, 403: { description: '시스템 관리자 권한 필요' }, 404: { description: '관리자 계정 없음' }, 409: { description: '아이디 중복, 버전 충돌 또는 마지막 시스템 관리자 보호' } }
+      for (const [method, path, summary, schema] of [
+        ['get', '/api/admin/accounts', '관리자 계정 목록', null],
+        ['post', '/api/admin/accounts', '관리자 직접 생성 (고객 계정 전환 불가)', adminAccountCreate],
+        ['patch', '/api/admin/accounts/{id}', '관리자 정보·권한·상태·비밀번호 변경 및 세션 폐기', adminAccountUpdate],
+      ] as const) app.openAPIRegistry.registerPath({ method, path, summary, tags: ['Administrator accounts'], security: [{ BearerAuth: [] }], request: { ...(method === 'patch' ? { params: z.object({ id: z.string().uuid() }) } : {}), ...(schema ? { body: { required: true, content: { 'application/json': { schema } } } } : {}) }, responses: method === 'post' ? { ...responses, 201: { description: '관리자 계정 생성' } } : responses })
+    }
     if (customers) {
       const customer = customerHandlers(customers)
       const throttle = async (context: Parameters<typeof customer.lookup>[0], next: () => Promise<void>) => {

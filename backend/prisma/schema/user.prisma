@@ -4,6 +4,13 @@ enum UserRole {
   ADMIN
 }
 
+enum AdminRole {
+  SYSTEM_ADMIN
+  ADMIN
+  SALES
+  LOGISTICS
+}
+
 /// 가입 승인 흐름: 대기 -> 승인/반려, 승인 후 정지 가능
 enum UserStatus {
   PENDING
@@ -26,6 +33,7 @@ model User {
   managerPhone String     @db.VarChar(30) // 담당자 연락처
   address      String?    @db.VarChar(500)
   role         UserRole   @default(CUSTOMER)
+  adminRole    AdminRole?
   status       UserStatus @default(PENDING) // 가입 직후 관리자 승인 대기 상태
   approvedAt   DateTime?
   createdAt    DateTime   @default(now())

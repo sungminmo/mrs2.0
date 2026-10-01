@@ -11,6 +11,17 @@
 - OpenAPI 3.1: `/api/openapi.json`
 - Scalar API Reference: `/api/docs`
 
+## 관리자 계정 관리 (구현)
+
+- 시스템 관리자만 `/api/admin/accounts`를 조회·생성하고 `/api/admin/accounts/{id}`를 수정할 수 있습니다. 관리자·영업·물류는 이 API에 403을 받습니다. 기존 업무 메뉴별 영업·물류 권한 제한은 이번 변경 범위에 포함하지 않습니다.
+- 권한은 `SYSTEM_ADMIN`(시스템 관리자), `ADMIN`(관리자), `SALES`(영업), `LOGISTICS`(물류)입니다. 고객 회원의 `customerRole`과 독립적이며 공개 가입으로 관리자 계정을 만들 수 없습니다.
+- `GET /api/admin/accounts`: `{ accounts: [...] }`. 각 항목은 `id`, `email`(로그인 아이디), `managerName`, `managerPhone`, `adminRole`, `status`, `sessionVersion`, `createdAt`, `updatedAt`입니다. 비밀번호·해시는 반환하지 않습니다.
+- `POST /api/admin/accounts`: `loginId`, `password`, `name`, `phone`, `adminRole`, `status`, `reason`을 전달합니다. 아이디는 3~254자 영문·숫자·`@._-`로 제한하고 소문자 정규화합니다. 비밀번호는 8~128자, 상태는 `ACTIVE` 또는 `SUSPENDED`입니다. 고객과도 아이디 중복을 허용하지 않습니다.
+- `PATCH /api/admin/accounts/{id}`: `name`, `phone`, `adminRole`, `status`, `reason`, `version`(조회한 `sessionVersion`) 및 선택적 `password`를 전달합니다. 아이디 변경·고객 계정 전환·삭제는 지원하지 않습니다.
+- 모든 수정은 기존 로그인 세션을 폐기합니다. 마지막 활성 시스템 관리자 정지·권한 해제 및 동시 수정 충돌은 409입니다. 변경과 감사 이력은 Serializable 트랜잭션으로 함께 저장하며 비밀번호는 이력에도 포함하지 않습니다.
+- 배포 전에 `20261001000000_add_admin_roles` 마이그레이션이 필요합니다. 기존 `ADMIN` 계정은 호환성을 위해 시스템 관리자로 이관하고 기존 관리자 세션을 폐기합니다. 이관할 기존 계정을 사전 검토하고 불필요한 권한은 회수해야 합니다. 고객 계정의 `adminRole`은 null입니다.
+- 로컬 전용 `db:seed:admin`은 `admin/admin`을 시스템 관리자로 생성·초기화합니다. 운영 환경에서는 금지되며 일반 관리자 생성 폼은 8자 이상 비밀번호만 허용합니다.
+
 실행 계약의 기준은 코드에서 생성되는 OpenAPI 3.1 문서입니다. 이 문서는 업무 규칙과 예시를 설명하는 보조 명세입니다.
 
 ## 1. 공통 규칙

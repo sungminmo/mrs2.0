@@ -1,0 +1,2 @@
+ALTER TABLE `users` ADD COLUMN `adminRole` ENUM('SYSTEM_ADMIN', 'ADMIN', 'SALES', 'LOGISTICS') NULL;
+UPDATE `users` SET `adminRole` = 'SYSTEM_ADMIN', `sessionVersion` = `sessionVersion` + 1 WHERE `role` = 'ADMIN';

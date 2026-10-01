@@ -2,7 +2,7 @@ import { campaigns, campaignStatus, customers, dateText, inquiries, invoiceAmoun
 import { categoryEnabled, categoryMatches, categoryPath, materialCategories, type MaterialCategory } from '../categories'
 import { detailedInspectionStatus, discountedPrice, type MarketData } from './adminMarket'
 
-export type MenuId = 'dashboard' | 'basic' | 'receiving' | 'inventory' | 'market' | 'content' | 'billing' | 'customers' | 'members' | 'settings'
+export type MenuId = 'dashboard' | 'basic' | 'receiving' | 'inventory' | 'market' | 'content' | 'billing' | 'customers' | 'members' | 'settings' | 'accounts'
 export type AdminLink = { label: string; menu: MenuId; tab: string; id?: string; status?: string; customer?: string }
 export type DetailSection = { title: string; headers: string[]; rows: string[][] }
 export type AdminRow = { id: string; title: string; status: string; customerId?: string; date?: string; cells: string[]; fields: [string, string][]; sections?: DetailSection[]; links: AdminLink[]; note?: string; images?: AdminImage[]; grade?: string; saleStatus?: string; inspectionStatus?: string; itemId?: string; locationId?: string; categoryId?: string }
@@ -17,6 +17,7 @@ export const menus: { id: MenuId; label: string; tabs: { id: string; label: stri
   { id: 'billing', label: '보관료·정산', tabs: [{ id: 'storage', label: '보관료' }, { id: 'payouts', label: '판매 정산' }, { id: 'disposal', label: '폐기 청구' }] },
   { id: 'customers', label: '고객사 관리', tabs: [{ id: 'companies', label: '고객사' }, { id: 'applications', label: '고객사 등록 신청' }, { id: 'sites', label: '현장' }, { id: 'inquiries', label: '문의' }] },
   { id: 'members', label: '회원 관리', tabs: [{ id: 'list', label: '회원 목록' }, { id: 'applications', label: '가입 신청' }] },
+  { id: 'accounts', label: '관리자 계정', tabs: [{ id: 'list', label: '관리자 목록' }] },
   { id: 'settings', label: '기준정보', tabs: [{ id: 'grades', label: '등급·단위' }, { id: 'rates', label: '요금 기준' }, { id: 'policies', label: '안내 정책' }] },
 ]
 export const adminHref = (link: AdminLink) => {
