@@ -72,14 +72,13 @@ async function validateRows(tx: Tx, input: Row[], current: Report, amend: boolea
       if (!received.gt(0) || !received.eq(usable.plus(disposal)) || entry.grade === 'F' && !usable.isZero() || disposal.gt(0) && !entry.reason) throw invalid(`${index + 1}행: 수량 합계·F등급·폐기 사유를 확인해 주세요.`)
       if (['EA', 'BOX', 'PIECE'].includes(entry.unit) && [received, usable, disposal].some((value) => !value.isInteger())) throw invalid(`${index + 1}행: EA·Box·본 단위는 정수 수량입니다.`)
       const previous = current.items.find((value) => value.id === entry.id)
-      if (amend && (!previous || (previous.itemId ?? '') !== entry.itemId || previous.unit !== entry.unit || Boolean(previous.assetId) !== usable.gt(0))) throw invalid('확정 후 품목·단위·재사용 여부를 변경할 수 없습니다.')
       const category = categories.find((value) => value.id === entry.categoryId)
       const parent = categories.find((value) => value.id === category?.parentId), root = categories.find((value) => value.id === parent?.parentId)
       if (entry.categoryId && (!category || !parent || !root || root.parentId || categories.some((value) => value.parentId === category.id) || !(category.enabled && parent.enabled && root.enabled) && !(amend && previous?.categoryId === entry.categoryId))) throw invalid(`${index + 1}행: 활성 3차 카테고리가 필요합니다.`)
       if (entry.itemId) {
         const item = await tx.masterItem.findUnique({ where: { id: entry.itemId } })
         if (!item) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}는 등록되지 않았습니다. 등록된 품목을 선택하거나 품목코드를 비워 미연결 자산으로 저장해 주세요.`)
-        if (!item.enabled && !amend) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}는 미사용 상태입니다. 사용 중인 품목을 선택해 주세요.`)
+        if (!item.enabled && !(amend && previous?.itemId === entry.itemId)) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}는 미사용 상태입니다. 사용 중인 품목을 선택해 주세요.`)
         if (item.unit !== entry.unit) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}의 기준 단위는 ${item.unit ?? '미지정'}이며 입력 단위 ${entry.unit}와 일치하지 않습니다.`)
       }
       if (usable.gt(0) || entry.locationId) {
@@ -93,7 +92,7 @@ async function validateRows(tx: Tx, input: Row[], current: Report, amend: boolea
       skippedRows.push({ id: entry.id, row: index + 1, message: error.message })
     }
   }
-  if (!accepted.some((entry) => entry.usable && new Prisma.Decimal(entry.usable).gt(0))) throw invalid('등록 가능한 재사용 자산이 없습니다. 제외 대상의 입력값을 확인해 주세요.')
+  if (!accepted.length || !amend && !accepted.some((entry) => entry.usable && new Prisma.Decimal(entry.usable).gt(0))) throw invalid('등록 가능한 재사용 자산이 없습니다. 제외 대상의 입력값을 확인해 주세요.')
   return { accepted, skippedRows }
 }
 
@@ -133,8 +132,8 @@ export function createInspectionRepository(client: PrismaClient) {
       input = { ...input, rows: accepted }
       let nextCode = 0
       const dateCode = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: '2-digit', month: '2-digit', day: '2-digit' }).format(current.receiving.receivedAt!).replaceAll('-', '')
-      if (!amend) {
-        const count = input.rows.filter((entry) => new Prisma.Decimal(entry.usable).gt(0)).length
+      const count = input.rows.filter((entry) => new Prisma.Decimal(entry.usable).gt(0) && !current.items.find((previous) => previous.id === entry.id)?.assetId).length
+      if (count) {
         const existing = await tx.asset.findFirst({ where: { id: { startsWith: `${dateCode}-` } }, orderBy: { id: 'desc' } })
         const highest = Number(existing?.id.slice(-4) ?? 0)
         const sequence = await tx.assetSequence.upsert({ where: { dateCode }, create: { dateCode, last: highest }, update: {} })
@@ -152,7 +151,7 @@ export function createInspectionRepository(client: PrismaClient) {
         const assetId = usable.gt(0) ? previous?.assetId ?? `${dateCode}-${String(nextCode++).padStart(4, '0')}` : null
         if (assetId) {
           const fields = { itemId: entry.itemId || null, categoryId: entry.categoryId || null, name: entry.name, specification: entry.specification, brand: entry.brand, grade: entry.grade as 'S' | 'A' | 'B', unit: entry.unit as ItemUnit, quantity: usable, locationId: entry.locationId }
-          if (amend) {
+          if (previous?.assetId) {
             await tx.asset.update({ where: { id: assetId }, data: fields })
             await tx.assetImage.deleteMany({ where: { assetId } })
             await tx.assetChange.create({ data: { id: randomUUID(), assetId, reason: input.reason, changes: [['검수 결과', JSON.stringify(rows(current).find((value) => value.id === entry.id)), JSON.stringify(entry)]] } })
@@ -162,6 +161,10 @@ export function createInspectionRepository(client: PrismaClient) {
         const data = { itemId: entry.itemId || null, categoryId: entry.categoryId || null, brand: entry.brand, locationId: entry.locationId || null, name: entry.name, specification: entry.specification, unit: entry.unit as ItemUnit, grade: entry.grade as 'S' | 'A' | 'B' | 'F', receivedQuantity: entry.received, usableQuantity: entry.usable, disposalQuantity: entry.disposal, reason: entry.reason, sortOrder, assetId }
         if (amend) { await tx.inspectionItem.update({ where: { id: entry.id }, data }); await tx.inspectionItemImage.deleteMany({ where: { inspectionItemId: entry.id } }) }
         else await tx.inspectionItem.create({ data: { ...data, id: entry.id, inspectionId: id } })
+        if (previous?.assetId && !assetId) {
+          await tx.inspectionItem.update({ where: { id: entry.id }, data: { assetBaseline: Prisma.DbNull } })
+          await tx.asset.delete({ where: { id: previous.assetId } })
+        }
         if (entry.photos.length) await tx.inspectionItemImage.createMany({ data: entry.photos.map((image, index) => ({ id: randomUUID(), inspectionItemId: entry.id, url: image.url, caption: image.name, sortOrder: index })) })
         if (assetId) {
           const asset = await tx.asset.findUniqueOrThrow({ where: { id: assetId }, include: { images: { orderBy: { sortOrder: 'asc' } }, history: { orderBy: { id: 'asc' } }, product: true } })
@@ -171,7 +174,7 @@ export function createInspectionRepository(client: PrismaClient) {
       const targets = input.rows.filter((entry) => new Prisma.Decimal(entry.disposal).gt(0))
       if (targets.length) await tx.disposal.create({ data: { inspectionId: id, items: { create: targets.map((entry) => ({ inspectionItemId: entry.id })) } } })
       await tx.inspection.update({ where: { id }, data: { status: 'AWAITING_ACKNOWLEDGEMENT', inspectorUserId: user.id, inspectedAt: new Date(), draftData: Prisma.DbNull, version: { increment: 1 } } })
-      await audit(tx, current, user.id, input.reason, amend ? 'inspection.amend' : 'inspection.confirm', { before: rows(current), after: input.rows, skippedRows })
+      await audit(tx, current, user.id, input.reason, amend ? 'inspection.amend' : 'inspection.confirm', { before: rows(current), after: input.rows, skippedRows, removedAssets: current.items.flatMap((entry) => entry.asset && !input.rows.some((value) => value.id === entry.id && new Prisma.Decimal(value.usable).gt(0)) ? [baseline(entry.asset)] : []) })
       return { ...payload(await tx.inspection.findUniqueOrThrow({ where: { id }, include }), true), skippedRows }
     }, { timeout: 120_000 }),
     customerAction: (id: string, version: number, user: AuthUser, consent: boolean) => customerTransaction(client, async (tx) => {
