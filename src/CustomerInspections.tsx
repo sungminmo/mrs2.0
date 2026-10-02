@@ -1,0 +1,44 @@
+import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, RefreshCw, Search } from 'lucide-react'
+import { authenticatedFetch } from './authSession'
+import { accountRequest } from './customerAccounts'
+import { inspectionLabels, inspectionUnits, type InspectionReport } from './inspections'
+import { useHistoryState } from './useHistoryState'
+
+type Entry = Pick<InspectionReport, 'id' | 'receivingId' | 'siteName' | 'receivedAt' | 'status' | 'consentedAt'>
+type Page = { data: Entry[]; meta: { page: number; size: number; totalElements: number; totalPages: number } }
+export default function CustomerInspections({ manager, historyKey, revision, onAsset }: { manager: boolean; historyKey: string; revision: number; onAsset: (id: string) => void }) {
+  const [id, select] = useHistoryState<string | null>(`inspection-id:${historyKey}`, null)
+  const [parameters, setParameters] = useHistoryState<Record<string, string>>(`inspection-query:${historyKey}`, { page: '1', size: '20' })
+  const [page, setPage] = useState<Page | null>(null), [loadedReport, setReport] = useState<InspectionReport | null>(null), [error, setError] = useState(''), [loadedKey, setLoadedKey] = useState(''), [localRevision, setRevision] = useState(0)
+  const [busy, setBusy] = useState(false), [confirming, setConfirming] = useState(false), [agreed, setAgreed] = useState(false)
+  const working = useRef(false), query = new URLSearchParams(parameters).toString()
+  const loadKey = `${id}/${query}/${revision}/${localRevision}`
+  const loading = loadedKey !== loadKey, report = loading ? null : loadedReport
+  useEffect(() => {
+    const controller = new AbortController()
+    const load = id ? accountRequest<{ inspection: InspectionReport }>(`/api/customer/inspections/${encodeURIComponent(id)}`, { signal: controller.signal }).then(({ inspection }) => { if (!controller.signal.aborted) setReport(inspection) }) : authenticatedFetch(`/api/customer/inspections?${query}`, { signal: controller.signal }).then(async (response) => { const body = await response.json(); if (!response.ok) throw new Error(body.error?.message ?? '조회 실패'); if (!controller.signal.aborted) { setPage(body as Page); setReport(null) } })
+    load.then(() => { if (!controller.signal.aborted) { setError(''); setConfirming(false); setAgreed(false) } }).catch((failure) => { if (!controller.signal.aborted) { setReport(null); setPage(null); setError(failure instanceof Error ? failure.message : '조회 실패') } }).finally(() => { if (!controller.signal.aborted) setLoadedKey(loadKey) })
+    return () => controller.abort()
+  }, [id, query, revision, localRevision, loadKey])
+  async function act(consent: boolean) {
+    if (!report || working.current) return
+    working.current = true; setBusy(true); setError('')
+    try {
+      const { inspection } = await accountRequest<{ inspection: InspectionReport }>(`/api/customer/inspections/${report.id}/${consent ? 'disposal-consent' : 'acknowledge'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: report.version, ...(consent ? { agreed: true } : {}) }) })
+      setReport(inspection); setConfirming(false); setAgreed(false)
+    } catch (failure) { setError(failure instanceof Error ? failure.message : '처리 실패') }
+    finally { working.current = false; setBusy(false) }
+  }
+  return <section className="customer-section customer-inspections">
+    {id && <button className="sa-button" disabled={busy} onClick={() => select(null)}><ArrowLeft size={16} />목록으로</button>}
+    {error && <p className="customer-error" role="alert">{error}<button className="sa-button" disabled={busy} onClick={() => setRevision((value) => value + 1)}><RefreshCw size={16} />최신 조회</button></p>}
+    {loading ? <p role="status">불러오는 중...</p> : report ? <>
+      <h2>{report.siteName}</h2><dl className="customer-data">{[['검수번호', report.id], ['입고 신청번호', report.receivingId], ['상태', inspectionLabels[report.status]], ['실제 입고일', new Date(report.receivedAt).toLocaleString('ko-KR')], ['검수 결과 확인', report.acknowledgedAt ? new Date(report.acknowledgedAt).toLocaleString('ko-KR') : '미확인'], ['폐기 대상 동의', report.consentedAt ? new Date(report.consentedAt).toLocaleString('ko-KR') : report.disposalStatus ? '미동의' : '대상 없음'], ['폐기 비용', '미산정']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      <div className="sa-table-scroll"><table className="sa-table"><thead><tr>{['자재', '규격', '등급', '입고', '재사용', '폐기 대상', '폐기사유', '자산'].map((label) => <th key={label}>{label}</th>)}</tr></thead><tbody>{report.rows.map((row) => { const asset = report.assets.find((entry) => entry.rowId === row.id); return <tr key={row.id}><td>{row.name}</td><td>{row.specification}</td><td>{row.grade}</td><td>{row.received} {row.unit && inspectionUnits[row.unit]}</td><td>{row.usable}</td><td>{row.disposal}</td><td>{row.reason || '없음'}</td><td>{asset ? <button className="sa-asset-link" onClick={() => onAsset(asset.id)}>{asset.id}</button> : '자산 없음'}</td></tr> })}</tbody></table></div>
+      {report.rows.some((row) => row.photos.length) && <div className="customer-photos">{report.rows.flatMap((row) => row.photos.map((image) => <figure key={image.id}><a href={image.url} target="_blank" rel="noreferrer"><img src={image.url} alt={`${row.name} · ${image.name}`} loading="lazy" /></a><figcaption>{row.name} · {image.name}</figcaption></figure>))}</div>}
+      {manager && !report.acknowledgedAt && <div className="customer-inspection-actions">{confirming ? <><p>검수 결과를 확인하면 관리자 정정이 종료됩니다. 결과 확인은 폐기 동의와 별개입니다.</p><button className="sa-button sa-primary" disabled={busy} onClick={() => void act(false)}><Check size={16} />{busy ? '처리 중' : '결과 확인 확정'}</button><button className="sa-button" disabled={busy} onClick={() => setConfirming(false)}>취소</button></> : <button className="sa-button sa-primary" onClick={() => setConfirming(true)}><Check size={16} />검수 결과 확인</button>}</div>}
+      {report.disposalStatus && <section className="customer-disposal-consent"><h3>폐기 대상 동의</h3><p>{report.consentText}</p><p>처리 상태: 미처리 · 비용: 미산정</p>{manager && report.acknowledgedAt && !report.consentedAt && <><label><input type="checkbox" checked={agreed} disabled={busy} onChange={(event) => setAgreed(event.target.checked)} />표시된 자재와 수량의 폐기에 동의합니다.</label><button className="sa-button sa-primary" disabled={busy || !agreed} onClick={() => void act(true)}><Check size={16} />{busy ? '처리 중' : '폐기 대상 동의 확정'}</button></>}{report.consentedAt && <p role="status">고객사 폐기 대상 동의가 기록되었습니다.</p>}</section>}
+    </> : !id && <><form className="customer-filters" key={query} onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); setParameters({ ...parameters, page: '1', q: String(data.get('q') ?? '') }) }}><label className="customer-search">검수 검색<input name="q" maxLength={160} defaultValue={parameters.q ?? ''} placeholder="현장명 · 검수번호" /></label><button className="sa-button sa-primary"><Search size={16} />검색</button></form>{page && <><div className="customer-result-heading"><span>{page.meta.totalElements}건</span><label>페이지당 <select aria-label="페이지당 검수 수" value={parameters.size ?? '20'} onChange={(event) => setParameters({ ...parameters, page: '1', size: event.target.value })}>{[20, 50, 100].map((size) => <option key={size}>{size}</option>)}</select></label></div><div className="sa-table-scroll"><table className="sa-table"><thead><tr><th>검수</th><th>현장</th><th>입고일</th><th>결과 확인</th><th>폐기 동의</th></tr></thead><tbody>{page.data.map((entry) => <tr key={entry.id}><td><button className="sa-asset-link" onClick={() => select(entry.id)}>{entry.id}</button></td><td>{entry.siteName}</td><td>{new Date(entry.receivedAt).toLocaleDateString('ko-KR')}</td><td>{inspectionLabels[entry.status]}</td><td>{entry.consentedAt ? '동의 완료' : '미동의 / 대상 없음'}</td></tr>)}</tbody></table></div>{!page.data.length && <p className="customer-empty">공개된 검수 결과가 없습니다.</p>}<div className="customer-pagination"><button className="sa-icon" title="이전 페이지" aria-label="이전 페이지" disabled={page.meta.page <= 1} onClick={() => setParameters({ ...parameters, page: String(page.meta.page - 1) })}><ChevronLeft size={20} /></button><span>{page.meta.page} / {Math.max(1, page.meta.totalPages)}</span><button className="sa-icon" title="다음 페이지" aria-label="다음 페이지" disabled={page.meta.page >= page.meta.totalPages} onClick={() => setParameters({ ...parameters, page: String(page.meta.page + 1) })}><ChevronRight size={20} /></button></div></>}</>}
+  </section>
+}

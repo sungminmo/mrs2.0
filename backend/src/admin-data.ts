@@ -54,7 +54,8 @@ export function createAdminDataRepository(client: PrismaClient) {
       const campaignWhere: Prisma.CampaignWhereInput = id ? { id } : { ...search, ...categoryWhere, ...(dates ? { startsAt: dates } : {}), ...(status ? status === '중지' ? { enabled: false } : { enabled: true, ...(status === '예약' ? { startsAt: { gt: new Date('2026-09-14T00:00:00+09:00') } } : status === '종료' ? { endsAt: { lte: new Date('2026-09-14T00:00:00+09:00') } } : { startsAt: { lte: new Date('2026-09-14T00:00:00+09:00') }, endsAt: { gt: new Date('2026-09-14T00:00:00+09:00') } }) } : {}) }
       const paging = { skip: id ? 0 : (page - 1) * rows, take: id ? 1 : rows }
       const locationAssets = scope === 'locations' && id ? await client.asset.findMany({ where: { locationId: id, storageStatus: 'STORED', quantity: { gt: 0 } }, skip: (page - 1) * rows, take: rows, include: { images: { take: 0 }, history: { take: 0 } }, orderBy: { id: 'asc' } }) : []
-      const locationCounts = scope === 'locations' ? await client.asset.groupBy({ by: ['locationId'], where: { storageStatus: 'STORED', quantity: { gt: 0 } }, _count: true }) : undefined
+      const locationWhere = id ? { id } : { ...search, ...(status ? { enabled: status === '사용' } : {}) }
+      const locations = scope === 'locations' ? await client.location.findMany({ where: locationWhere, ...paging, include: { _count: { select: { assets: { where: { storageStatus: 'STORED', quantity: { gt: 0 } } } } } }, orderBy: { id: 'asc' } }) : []
       const [items, pageAssets, pageReceivings, inspections, products, campaigns] = await Promise.all([
         scope === 'items' ? client.masterItem.findMany({ where: itemWhere, ...paging, include: { images: { orderBy: { sortOrder: 'asc' }, take: 1 } }, orderBy: query.sort === 'name' ? [{ name: 'asc' }, { id: 'asc' }] : { id: 'asc' } }) : [],
         scope === 'assets' ? client.asset.findMany({ where: assetWhere, ...paging, include: { images: { orderBy: { sortOrder: 'asc' }, take: id ? 8 : 1 }, history: { orderBy: { createdAt: 'asc' }, take: id ? 100 : 0 } }, orderBy: query.sort === 'name' ? [{ name: 'asc' }, { id: 'asc' }] : { id: 'asc' } }) : [],
@@ -71,7 +72,7 @@ export function createAdminDataRepository(client: PrismaClient) {
         'receiving/requests': await client.receiving.count({ where: { status: 'REQUESTED' } }),
         'receiving/primary': await client.inspection.count({ where: { status: 'PENDING' } }),
       } : undefined
-      const total = await (scope === 'items' ? client.masterItem.count({ where: itemWhere }) : scope === 'assets' ? client.asset.count({ where: assetWhere }) : scope === 'receivings' ? client.receiving.count({ where: receivingWhere }) : scope === 'inspections' || scope === 'disposals' ? client.inspection.count({ where: inspectionWhere }) : scope === 'products' ? client.product.count({ where: productWhere }) : scope === 'campaigns' ? client.campaign.count({ where: campaignWhere }) : Promise.resolve(categories.length))
+      const total = await (scope === 'locations' ? client.location.count({ where: locationWhere }) : scope === 'items' ? client.masterItem.count({ where: itemWhere }) : scope === 'assets' ? client.asset.count({ where: assetWhere }) : scope === 'receivings' ? client.receiving.count({ where: receivingWhere }) : scope === 'inspections' || scope === 'disposals' ? client.inspection.count({ where: inspectionWhere }) : scope === 'products' ? client.product.count({ where: productWhere }) : scope === 'campaigns' ? client.campaign.count({ where: campaignWhere }) : Promise.resolve(categories.length))
       const categoryIds = scope === 'categories' && id ? [id] : []
       for (let index = 0; index < categoryIds.length; index++) for (const entry of categories) if (entry.parentId === categoryIds[index] && !categoryIds.includes(entry.id)) categoryIds.push(entry.id)
       const categoryCounts = categoryIds.length ? { items: await client.masterItem.count({ where: { categoryId: { in: categoryIds } } }), assets: await client.asset.count({ where: { categoryId: { in: categoryIds } } }) } : undefined
@@ -81,9 +82,11 @@ export function createAdminDataRepository(client: PrismaClient) {
         return [campaign.id, await client.product.count({ where: { status: 'AVAILABLE', asset: { categoryId: { in: ids.filter((code) => { let current = categories.find((entry) => entry.id === code); while (current) { if (!current.enabled) return false; current = categories.find((entry) => entry.id === current?.parentId) } return true }) } } } })] as const
       })))
       const inspectionCounts = new Map(await Promise.all(inspections.map(async (inspection) => [inspection.id, await client.asset.count({ where: { receiptId: inspection.id } })] as const)))
+      const receivingInspections = receivings.length ? await client.inspection.findMany({ where: { receivingId: { in: receivings.map((entry) => entry.id) } }, select: { id: true, receivingId: true } }) : []
       const payload = {
         pagination: { page, rows, total },
-        customers, metrics, categoryCounts, locationCounts,
+        customers, metrics, categoryCounts,
+        locations: locations.map(({ _count, ...entry }) => ({ ...entry, assetCount: _count.assets, status: _count.assets ? '사용 중' : '비어 있음', rate: null })),
         categories: categories.map((category) => ({ id: category.id, parentId: category.parentId, name: category.name, enabled: category.enabled, order: category.sortOrder })),
         items: items.map(itemPayload),
         assets: assets.map((asset) => ({ id: asset.id, itemId: asset.itemId, receivingId: asset.receivingId, customerId: asset.customerId, receiptId: asset.receiptId, locationId: asset.locationId ?? '', name: asset.name, category: asset.categoryId, brand: asset.brand, grade: asset.grade, quantity: Number(asset.quantity), unit: unit[asset.unit], appraisal: asset.appraisal === null ? null : Number(asset.appraisal), status: storageStatus[asset.storageStatus], saleStatus: saleStatus[asset.saleStatus], specification: asset.specification, images: asset.images.map((image) => ({ id: image.id, name: image.name, url: image.url })), history: asset.history.map((entry) => ({ at: entry.createdAt.toISOString(), reason: entry.reason, changes: entry.changes })) })),
@@ -92,7 +95,7 @@ export function createAdminDataRepository(client: PrismaClient) {
         products: products.map((product) => ({ id: product.id, assetId: product.assetId, name: product.name, price: Number(product.originalUnitPrice), discountRate: product.discountRate, unit: unit[product.asset.unit], status: productStatus[product.status] })),
         campaigns: campaigns.map((campaign) => ({ id: campaign.id, name: campaign.name, category: campaign.categoryId, description: campaign.description, enabled: campaign.enabled, order: campaign.sortOrder, startsAt: campaign.startsAt.toISOString(), endsAt: campaign.endsAt.toISOString() })),
       }
-      return { ...payload, campaigns: payload.campaigns.map((campaign) => ({ ...campaign, productCount: campaignCounts.get(campaign.id) ?? 0 })), inspections: payload.inspections.map((inspection) => ({ ...inspection, assetCount: inspectionCounts.get(inspection.id) ?? 0 })) }
+      return { ...payload, receivings: payload.receivings.map((entry) => ({ ...entry, inspectionId: receivingInspections.find((inspection) => inspection.receivingId === entry.id)?.id ?? null })), campaigns: payload.campaigns.map((campaign) => ({ ...campaign, productCount: campaignCounts.get(campaign.id) ?? 0 })), inspections: payload.inspections.map((inspection) => ({ ...inspection, assetCount: inspectionCounts.get(inspection.id) ?? 0 })) }
     },
     createItems: (items: AdminItemInput[]) => client.$transaction(async (transaction) => {
       const records = items.map((item) => ({

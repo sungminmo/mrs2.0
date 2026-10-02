@@ -1,7 +1,7 @@
 import { adminAccountRequest } from '../adminAuthSession'
 import type { AdminImage } from './adminData'
 
-export async function uploadImage(file: File, kind: 'items' | 'assets' | 'banners', signal?: AbortSignal): Promise<AdminImage> {
+export async function uploadImage(file: File, kind: 'items' | 'assets' | 'banners' | 'inspections', signal?: AbortSignal): Promise<AdminImage> {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || !file.size || file.size > 5 * 1024 * 1024) throw new Error('JPG·PNG·WebP 이미지를 파일당 5MB 이하로 선택해 주세요.')
   const body = new FormData()
   body.append('file', file)

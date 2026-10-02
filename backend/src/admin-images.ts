@@ -11,8 +11,7 @@ import { AppError, ErrorCode, success } from './http.js'
 export const imageBucket = 'bucket-mrs'
 export const imageOrigin = 'https://bucket-mrs.s3.ap-northeast-2.amazonaws.com'
 export const imageMaximum = 5 * 1024 * 1024
-const kindSchema = z.enum(['items', 'assets', 'banners'])
-type ImageKind = z.infer<typeof kindSchema>
+const kindSchema = z.enum(['items', 'assets', 'banners', 'inspections'])
 export type ImageStorage = { put: (key: string, body: Buffer) => Promise<void>; remove?: (key: string) => Promise<void> }
 export function createImageStorage(): ImageStorage {
   const client = new S3Client({ region: 'ap-northeast-2', maxAttempts: 2 })
@@ -33,7 +32,7 @@ export async function prepareImage(file: File): Promise<Buffer> {
 export function publicImageUrl(value: string) {
   try {
     const url = new URL(value)
-    return value.length <= 2048 && url.origin === imageOrigin && !url.username && !url.password && !url.search && !url.hash && /^\/(items|assets|banners)\/.+\.(jpg|jpeg|png|webp)$/i.test(url.pathname) ? url.href : null
+    return value.length <= 2048 && url.origin === imageOrigin && !url.username && !url.password && !url.search && !url.hash && /^\/(items|assets|banners|inspections)\/.+\.(jpg|jpeg|png|webp)$/i.test(url.pathname) ? url.href : null
   } catch { return null }
 }
 export function uploadAdminImage(storage: ImageStorage) {
@@ -59,7 +58,7 @@ export function uploadAdminImage(storage: ImageStorage) {
 const image = z.object({ id: z.string().min(1).max(36), name: z.string().min(1).max(255), url: z.string().max(7_000_000) }).strict()
 export const replaceImagesSchema = z.object({ images: z.array(image).max(8), expected: z.array(image).max(8), reason: z.string().trim().min(1).max(500) }).strict()
 export function createAdminImageRepository(client: PrismaClient) {
-  return { replace: (kind: Exclude<ImageKind, 'banners'>, id: string, input: z.infer<typeof replaceImagesSchema>, actor: string) => customerTransaction(client, async (tx) => {
+  return { replace: (kind: 'items' | 'assets', id: string, input: z.infer<typeof replaceImagesSchema>, actor: string) => customerTransaction(client, async (tx) => {
     const select = { id: true, name: true, url: true } as const
     const record = kind === 'items' ? await tx.masterItem.findUnique({ where: { id }, include: { images: { select, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] } } }) : await tx.asset.findUnique({ where: { id }, include: { images: { select, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] } } })
     if (!record) throw new AppError(404, ErrorCode.NOT_FOUND, '품목 또는 자산을 찾을 수 없습니다.')

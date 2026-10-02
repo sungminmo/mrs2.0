@@ -23,7 +23,7 @@ enum AssetSaleStatus {
 /// 입고 lot 단위 개별 자산. 검수로 확정된 품목/수량/등급/가치를 관리
 model Asset {
   id            String             @id @db.VarChar(11) // 입고년월일 6자리-일련번호 4자리
-  itemId        String             @db.VarChar(6) // MasterItem(품목 마스터) 참조
+  itemId        String?            @db.VarChar(6) // MasterItem(품목 마스터) 참조
   receivingId   String             @db.VarChar(20) // 원본 입고 신청 ID(외부 참조, 관계 미정의)
   customerId    String             @db.VarChar(20) // 자산 소유 고객(User) ID(외부 참조, 관계 미정의)
   receiptId     String?            @db.VarChar(20) // 검수증 ID(선택, 외부 참조)
@@ -41,7 +41,8 @@ model Asset {
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  item           MasterItem       @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  item           MasterItem?      @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  location       Location?        @relation(fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   customer       Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
   category       MaterialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   images         AssetImage[]

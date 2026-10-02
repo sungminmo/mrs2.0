@@ -1,3 +1,10 @@
+.customer-inspection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 24px 0; }
+.customer-inspection-actions p { width: 100%; line-height: 1.7; }
+.customer-disposal-consent { border-top: 1px solid #d4ded8; margin-top: 24px; padding: 20px 0; }
+.customer-disposal-consent h3 { font-size: 17px; }
+.customer-disposal-consent p { line-height: 1.7; }
+.customer-disposal-consent label { display: flex; gap: 8px; align-items: start; margin: 16px 0; }
+.customer-inspections .customer-data dd { overflow-wrap: anywhere; }
 .customer-workspace .sa-account { min-width: 0; white-space: normal; }
 .customer-workspace .sa-account b { max-width: 240px; overflow-wrap: anywhere; }
 .customer-workspace .sa-workspace b { overflow-wrap: anywhere; }
