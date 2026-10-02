@@ -11,6 +11,7 @@ import { adminAccountCreate, adminAccountUpdate, adminAccountHandlers, requireSy
 import { bodyLimit } from 'hono/body-limit'
 import type { Context } from 'hono'
 import { uploadAdminImage, saveAdminImages, replaceImagesSchema, type ImageStorage, type AdminImageRepository } from './admin-images.js'
+import { receivingHandlers, receivingInput, receivingQuery, type ReceivingRepository } from './receiving.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -23,9 +24,10 @@ type Dependencies = {
   adminAccounts?: AdminAccountRepository
   imageStorage?: ImageStorage
   adminImages?: AdminImageRepository
+  receivings?: ReceivingRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings }: Dependencies) {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (result.success) return
@@ -44,6 +46,18 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
   if (auth) {
     const customerAuth = requireAuth(auth.repository, auth.secret, 'CUSTOMER')
     const adminAuth = requireAuth(auth.repository, auth.secret, 'ADMIN')
+    if (receivings) {
+      const receiving = receivingHandlers(receivings, imageStorage)
+      app.get('/api/customer/receivings/terms', customerAuth, receiving.terms)
+      app.get('/api/customer/receivings', customerAuth, receiving.list)
+      app.get('/api/customer/receivings/:id', customerAuth, receiving.detail)
+      app.post('/api/customer/receivings', customerAuth, bodyLimit({ maxSize: 26 * 1024 * 1024, onError: (context) => failure(context, 413, ErrorCode.VALIDATION_ERROR, '사진은 각 5MB, 최대 5장까지 등록할 수 있습니다.') }), async (context: Context, next) => { if (customers) { const user = context.get('authUser') as { id: string; customerId: string }; await customers.throttle('receiving-user', user.id, 30); await customers.throttle('receiving-company', user.customerId, 100) } await next() }, receiving.create)
+      const responses = { 200: { description: '고객사 소유 신청 조회' }, 400: { description: '입력 검증 오류' }, 401: { description: '승인된 고객 인증 필요' }, 403: { description: '고객사 접근 불가' }, 404: { description: '신청 없음 또는 타 고객사 신청' }, 413: { description: '요청 크기 초과' }, 429: { description: '신청 요청 제한' }, 503: { description: '사진 저장 실패' } }
+      app.openAPIRegistry.registerPath({ method: 'post', path: '/api/customer/receivings', tags: ['Receivings'], summary: '고객 입고 신청 (VIEWER 포함, 선택 사진 0~5장)', security: [{ BearerAuth: [] }], request: { body: { required: true, content: { 'multipart/form-data': { schema: receivingInput.extend({ photos: z.array(z.string().openapi({ type: 'string', format: 'binary' })).max(5).optional() }) } } } }, responses: { ...responses, 201: { description: 'DB 저장 완료, data.receiving 반환' } } })
+      app.openAPIRegistry.registerPath({ method: 'get', path: '/api/customer/receivings', tags: ['Receivings'], summary: '소속 고객사 입고 신청 목록', security: [{ BearerAuth: [] }], request: { query: receivingQuery }, responses })
+      app.openAPIRegistry.registerPath({ method: 'get', path: '/api/customer/receivings/terms', tags: ['Receivings'], summary: '현재 입고 폐기 규정 버전과 원문', security: [{ BearerAuth: [] }], responses })
+      app.openAPIRegistry.registerPath({ method: 'get', path: '/api/customer/receivings/{id}', tags: ['Receivings'], summary: '소속 고객사 입고 신청 상세 및 사진', security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string().max(20) }) }, responses })
+    }
     if (imageStorage) {
       app.post('/api/admin/images/:kind', adminAuth, requireAdmin, bodyLimit({ maxSize: 6 * 1024 * 1024, onError: (context) => failure(context, 413, ErrorCode.VALIDATION_ERROR, '이미지 파일은 5MB 이하로 업로드해 주세요.') }), async (context: Context, next) => { if (customers) await customers.throttle('image-upload', (context.get('authUser') as { id: string }).id, 100); await next() }, uploadAdminImage(imageStorage))
       app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/images/{kind}', summary: '관리자 이미지 파일 S3 업로드', tags: ['Images'], security: [{ BearerAuth: [] }], request: { params: z.object({ kind: z.enum(['items', 'assets', 'banners']) }), body: { required: true, content: { 'multipart/form-data': { schema: z.object({ file: z.string().openapi({ type: 'string', format: 'binary' }) }) } } } }, responses: { 201: { description: 'S3 이미지 id/name/url' }, 400: { description: '잘못된 이미지' }, 401: { description: '관리자 인증 필요' }, 413: { description: '크기 초과' }, 429: { description: '업로드 요청 제한' }, 503: { description: 'S3 저장 실패' } } })

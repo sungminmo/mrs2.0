@@ -8,7 +8,7 @@
 - 업무 정책: [SERVICE_POLICY.md](../SERVICE_POLICY.md)의 5절, 6절
 - 기존 자산 · 계정 모델: [asset.prisma](../backend/prisma/schema/asset.prisma), [user.prisma](../backend/prisma/schema/user.prisma)
 
-이번 변경은 DB 스키마와 마이그레이션이다. 입고 접수, 검수 확정, 폐기 처리 API나 프런트엔드 저장 연동은 구현하지 않는다. 판매 요청에 따른 상세 검수는 입고 1차 검수와 별개이며 이번 범위에서 제외한다.
+입고 접수와 고객사 신청내역 조회 API 및 고객·관리자 화면 연동을 구현했다. 신청·사진·약관 스냅샷·신청자 감사 이력을 함께 저장하며 사진은 선택 0~5장이다. 승인된 고객사 소속 VIEWER/MANAGER 모두 신청할 수 있고 고객사 귀속은 인증 사용자로 결정한다. 상세 계약은 [API_SPEC.md](API_SPEC.md)의 고객 입고 신청 절을 참조한다. 관리자 상태 변경 저장, 검수 확정, 폐기 처리, 배차·안내 발송과 판매 요청에 따른 상세 검수는 범위에서 제외한다.
 
 ## 테이블 분리 결정
 
@@ -55,8 +55,8 @@ erDiagram
 | 기존 필드 | 저장 위치와 해석 |
 | --- | --- |
 | 신청 `siteName`, `manager`, `phone` | `Receiving.siteName`, `managerName`, `managerPhone` |
-| 관리자 `siteId`, 고객 코드 | `Receiving.siteId`, `customerId`; 현장 · 고객사 마스터는 아직 없으므로 외부 코드 |
-| 신청 `volume` | `under-1t` → `UNDER_ONE_TON`, `2.5t` → `TWO_POINT_FIVE_TONS`, `over-5t` → `FIVE_TONS_OR_MORE` |
+| 관리자 `siteId`, 고객 코드 | 고객 신청은 `siteId=null`, `customerId`는 인증 사용자의 Customer FK. 현장 마스터 연결은 미구현 |
+| 신청 `volume` | `UNDER_ONE_TON`, `TWO_POINT_FIVE_TONS`, `FIVE_TONS_OR_MORE` |
 | 관리자 자유 형식 예상 물량 | 표준 분류가 없으면 `OTHER`, 원문은 `volumeDescription` |
 | 신청 `date`, `scheduledAt`, `estimate`, `note` | `requestedAt`, `scheduledAt`, `transportEstimate`, `note` |
 | 관리자 `termsAt`, 신청 `disposalTerms` | `termsAgreedAt` + `termsVersion` + 동의한 원문 `termsText` |

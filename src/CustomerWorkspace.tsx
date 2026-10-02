@@ -1,11 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Archive, ArrowLeft, Box, ChevronLeft, ChevronRight, LayoutDashboard, RefreshCw, Search, ShoppingCart, UserRound } from 'lucide-react'
+import { Archive, ArrowLeft, Box, ChevronLeft, ChevronRight, ClipboardCheck, LayoutDashboard, RefreshCw, Search, ShoppingCart, UserRound } from 'lucide-react'
 import AdminShell from './AdminShell'
 import LoginPage from './LoginPage'
 import ShopifyMarket from './ShopifyMarket'
 import { authenticatedFetch, readAuthSession, signIn, type AuthSession } from './authSession'
 import { accountRequest } from './customerAccounts'
 import { useHistoryState } from './useHistoryState'
+import { ReceivingRequestButton, ReceivingRequestProvider } from './ReceivingRequest'
+import { submitReceiving } from './receivings'
+import CustomerReceivings from './CustomerReceivings'
 import './App.css'
 import './CustomerWorkspace.css'
 
@@ -48,8 +51,10 @@ export default function CustomerWorkspace() {
 }
 
 function MemberWorkspace({ session }: { session: AuthSession }) {
-  const [view, setView] = useHistoryState<'overview' | 'assets' | 'profile' | 'market'>(`company-view:${session.user.id}:${session.user.customerId}`, 'overview')
+  const [view, setView] = useHistoryState<'overview' | 'assets' | 'profile' | 'market' | 'receivings'>(`company-view:${session.user.id}:${session.user.customerId}`, 'overview')
   const [selectedId, selectId, back] = useHistoryState<string | null>(`company-asset:${session.user.id}:${session.user.customerId}`, null)
+  const [receivingId, selectReceiving, backReceiving] = useHistoryState<string | null>(`receiving-detail:${session.user.id}:${session.user.customerId}`, null)
+  const [receivingParameters, setReceivingParameters] = useHistoryState<Record<string, string>>(`receiving-query:${session.user.id}:${session.user.customerId}`, { page: '1', size: '20' })
   const [parameters, setParameters] = useHistoryState<Record<string, string>>(`company-query:${session.user.id}:${session.user.customerId}`, { page: '1', size: '20', sort: 'updatedDesc' })
   const [loadedPage, setPage] = useState<Page | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
@@ -79,7 +84,7 @@ function MemberWorkspace({ session }: { session: AuthSession }) {
     return () => { window.removeEventListener('focus', revalidate); window.removeEventListener('pageshow', revalidate); window.clearInterval(timer) }
   }, [])
   const navigate = (next: typeof view) => { if (selectedId) selectId(null); setView(next) }
-  const navigation = <>{([{ id: 'overview', label: '자산 현황', Icon: LayoutDashboard }, { id: 'assets', label: '자산 목록', Icon: Archive }, { id: 'market', label: '마켓', Icon: ShoppingCart }, { id: 'profile', label: '계정 정보', Icon: UserRound }] as const).map(({ id, label, Icon }) => <button key={id} className={`nav-button ${view === id ? 'active' : ''}`} onClick={() => navigate(id)} aria-current={view === id ? 'page' : undefined}><Icon size={18} />{label}</button>)}</>
+  const navigation = <>{([{ id: 'overview', label: '자산 현황', Icon: LayoutDashboard }, { id: 'assets', label: '자산 목록', Icon: Archive }, { id: 'receivings', label: '입고 신청 내역', Icon: ClipboardCheck }, { id: 'market', label: '마켓', Icon: ShoppingCart }, { id: 'profile', label: '계정 정보', Icon: UserRound }] as const).map(({ id, label, Icon }) => <button key={id} className={`nav-button ${view === id ? 'active' : ''}`} onClick={() => navigate(id)} aria-current={view === id ? 'page' : undefined}><Icon size={18} />{label}</button>)}</>
   const applySearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
@@ -87,11 +92,11 @@ function MemberWorkspace({ session }: { session: AuthSession }) {
     for (const [key, value] of data) if (String(value).trim()) next[key] = String(value).trim()
     setParameters(next)
   }
-  return <AdminShell navigation={navigation} customerName={company?.name ?? session.user.companyName} readOnly className="customer-workspace"><main className="sa-main">
-    <div className="sa-heading"><div><div className="sa-breadcrumb">{company?.name ?? session.user.companyName}</div><h1>{selectedId ? '자산 상세' : view === 'overview' ? '자산 현황' : view === 'assets' ? '자산 목록' : view === 'market' ? '마켓' : '계정 정보'}</h1></div><button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div>
-    {error && <p className="customer-error" role="alert">{error}</p>}
-    {loading && <p role="status">불러오는 중...</p>}
-    {selectedId ? <><button className="sa-button" onClick={back}><ArrowLeft size={16} />목록으로</button>{!loading && detail && <AssetDetails asset={detail} />}</>
+  return <ReceivingRequestProvider contact={{ name: session.user.managerName, phone: session.user.managerPhone ?? '' }} onSubmit={async (form) => { const receiving = await submitReceiving(form); setRevision((value) => value + 1); return receiving }} onViewHistory={() => { selectReceiving(null); setReceivingParameters({ page: '1', size: '20' }); navigate('receivings') }}><AdminShell navigation={navigation} customerName={company?.name ?? session.user.companyName} readOnly className="customer-workspace"><main className="sa-main">
+    <div className="sa-heading"><div><div className="sa-breadcrumb">{company?.name ?? session.user.companyName}</div><h1>{selectedId ? '자산 상세' : view === 'overview' ? '자산 현황' : view === 'assets' ? '자산 목록' : view === 'receivings' ? '입고 신청 내역' : view === 'market' ? '마켓' : '계정 정보'}</h1></div><div className="customer-heading-actions"><ReceivingRequestButton /><button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div></div>
+    {view !== 'receivings' && error && <p className="customer-error" role="alert">{error}</p>}
+    {view !== 'receivings' && loading && <p role="status">불러오는 중...</p>}
+    {view === 'receivings' ? <CustomerReceivings revision={revision} parameters={receivingParameters} setParameters={setReceivingParameters} selected={receivingId} select={selectReceiving} back={backReceiving} /> : selectedId ? <><button className="sa-button" onClick={back}><ArrowLeft size={16} />목록으로</button>{!loading && detail && <AssetDetails asset={detail} />}</>
       : view === 'profile' ? <section className="customer-section"><dl className="customer-data">{[['고객사', company?.name ?? session.user.companyName], ['사업자등록번호', company?.businessNumber ?? '미확인'], ['대표자', company?.representativeName ?? ''], ['사업장 주소', company?.address ?? ''], ['대표 연락처', company?.phone ?? ''], ['담당자', session.user.managerName], ['이메일', session.user.email], ['담당자 연락처', session.user.managerPhone ?? ''], ['권한', session.user.customerRole === 'MANAGER' ? '고객사 관리자' : '조회자']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '미등록'}</dd></div>)}</dl></section>
         : view === 'market' ? <section className="customer-section"><p>현재 조회 가능한 상품이 없습니다.</p></section>
           : view === 'overview' ? !loading && summary && <>
@@ -109,7 +114,7 @@ function MemberWorkspace({ session }: { session: AuthSession }) {
             </form>
             {page && <><div className="customer-result-heading"><span>{page.meta.totalElements.toLocaleString()}건</span><label>페이지당 <select aria-label="페이지당 자산 수" value={parameters.size ?? '20'} onChange={(event) => setParameters({ ...parameters, page: '1', size: event.target.value })}>{[20, 50, 100].map((size) => <option key={size}>{size}</option>)}</select></label></div><div className="sa-table-scroll"><table className="sa-table"><thead><tr>{['자산', '분류', '등급', '수량', '평가금액', '보관 상태', '판매 상태', '등록일'].map((label) => <th key={label}>{label}</th>)}</tr></thead><tbody>{page.data.map((asset) => <tr key={asset.id}><td><button className="sa-asset-link" onClick={() => selectId(asset.id)}>{asset.name}</button><small className="customer-asset-code">{asset.id}</small></td><td>{asset.category.path}</td><td>{asset.grade}</td><td>{asset.quantity} {asset.unit}</td><td>{money(asset.appraisalValue)}</td><td>{storageLabels[asset.storageStatus]}</td><td>{saleLabels[asset.saleStatus]}</td><td>{date(asset.createdAt)}</td></tr>)}</tbody></table></div>{!page.data.length && <p className="customer-empty">조건에 맞는 자산이 없습니다.</p>}<div className="customer-pagination"><button className="sa-icon" title="이전 페이지" aria-label="이전 페이지" disabled={page.meta.page <= 1} onClick={() => setParameters({ ...parameters, page: String(page.meta.page - 1) })}><ChevronLeft size={20} /></button><span>{page.meta.page} / {Math.max(1, page.meta.totalPages)}</span><button className="sa-icon" title="다음 페이지" aria-label="다음 페이지" disabled={page.meta.page >= page.meta.totalPages} onClick={() => setParameters({ ...parameters, page: String(page.meta.page + 1) })}><ChevronRight size={20} /></button></div></>}
           </>}
-  </main></AdminShell>
+  </main></AdminShell></ReceivingRequestProvider>
 }
 
 function AssetDetails({ asset }: { asset: AssetRecord }) {

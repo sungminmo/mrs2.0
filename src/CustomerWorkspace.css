@@ -7,6 +7,8 @@
 .customer-workspace .sa-icon { width: 40px; height: 40px; flex-shrink: 0; }
 .customer-session { padding: 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
 .customer-error { color: #963c32; padding: 14px 0; }
+.customer-heading-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.customer-workspace .sa-heading { flex-wrap: wrap; gap: 12px; }
 .customer-summary { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; border-block: 1px solid #cbd7cf; padding: 24px 0; }
 .customer-summary > div { display: grid; gap: 8px; min-width: 0; }
 .customer-summary strong { font-size: 28px; color: #245b40; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

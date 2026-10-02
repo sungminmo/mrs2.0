@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
 import { z } from 'zod'
 import type { Context } from 'hono'
@@ -13,10 +13,22 @@ export const imageOrigin = 'https://bucket-mrs.s3.ap-northeast-2.amazonaws.com'
 export const imageMaximum = 5 * 1024 * 1024
 const kindSchema = z.enum(['items', 'assets', 'banners'])
 type ImageKind = z.infer<typeof kindSchema>
-export type ImageStorage = { put: (key: string, body: Buffer) => Promise<void> }
+export type ImageStorage = { put: (key: string, body: Buffer) => Promise<void>; remove?: (key: string) => Promise<void> }
 export function createImageStorage(): ImageStorage {
   const client = new S3Client({ region: 'ap-northeast-2', maxAttempts: 2 })
-  return { put: async (key, body) => { await client.send(new PutObjectCommand({ Bucket: imageBucket, Key: key, Body: body, ContentType: 'image/webp', CacheControl: 'public, max-age=31536000, immutable' }), { abortSignal: AbortSignal.timeout(30000) }) } }
+  return { put: async (key, body) => { await client.send(new PutObjectCommand({ Bucket: imageBucket, Key: key, Body: body, ContentType: 'image/webp', CacheControl: 'public, max-age=31536000, immutable' }), { abortSignal: AbortSignal.timeout(30000) }) }, remove: async (key) => { await client.send(new DeleteObjectCommand({ Bucket: imageBucket, Key: key }), { abortSignal: AbortSignal.timeout(10000) }) } }
+}
+export async function prepareImage(file: File): Promise<Buffer> {
+  if (!file.size || file.size > imageMaximum || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.name.length > 255) throw new AppError(400, ErrorCode.VALIDATION_ERROR, 'JPG·PNG·WebP 이미지를 5MB 이하로 업로드해 주세요.')
+  try {
+    const bytes = Buffer.from(await file.arrayBuffer())
+    const metadata = await sharp(bytes, { limitInputPixels: 20_000_000 }).metadata()
+    const expected = { 'image/jpeg': 'jpeg', 'image/png': 'png', 'image/webp': 'webp' }[file.type]
+    if (metadata.format !== expected || (metadata.pages ?? 1) > 1) throw new Error('Invalid image')
+    const body = await sharp(bytes, { limitInputPixels: 20_000_000 }).rotate().resize({ width: 2400, height: 2400, fit: 'inside', withoutEnlargement: true }).webp({ quality: 85 }).toBuffer()
+    if (body.length > imageMaximum) throw new Error('Image too large')
+    return body
+  } catch { throw new AppError(400, ErrorCode.VALIDATION_ERROR, '손상되었거나 지원하지 않는 이미지입니다. 정지 JPG·PNG·WebP 이미지를 선택해 주세요.') }
 }
 export function publicImageUrl(value: string) {
   try {
@@ -35,15 +47,7 @@ export function uploadAdminImage(storage: ImageStorage) {
     try { form = await context.req.formData() } catch { throw new AppError(400, ErrorCode.VALIDATION_ERROR, '이미지 파일을 multipart/form-data로 전송해 주세요.') }
     const file = form.get('file')
     if (form.getAll('file').length !== 1 || !(file instanceof File) || !file.size || file.size > imageMaximum || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.name.length > 255) throw new AppError(400, ErrorCode.VALIDATION_ERROR, 'JPG·PNG·WebP 이미지 한 장을 5MB 이하로 업로드해 주세요.')
-    let body: Buffer
-    try {
-      const bytes = Buffer.from(await file.arrayBuffer())
-      const metadata = await sharp(bytes, { limitInputPixels: 20_000_000 }).metadata()
-      const expected = { 'image/jpeg': 'jpeg', 'image/png': 'png', 'image/webp': 'webp' }[file.type]
-      if (metadata.format !== expected || (metadata.pages ?? 1) > 1) throw new Error('Invalid image')
-      body = await sharp(bytes, { limitInputPixels: 20_000_000 }).rotate().resize({ width: 2400, height: 2400, fit: 'inside', withoutEnlargement: true }).webp({ quality: 85 }).toBuffer()
-      if (body.length > imageMaximum) throw new Error('Image too large')
-    } catch { throw new AppError(400, ErrorCode.VALIDATION_ERROR, '손상되었거나 지원하지 않는 이미지입니다. 정지 JPG·PNG·WebP 이미지를 선택해 주세요.') }
+    const body = await prepareImage(file)
     const id = randomUUID()
     const actor = (context.get('authUser') as AuthUser).id
     const key = `${kind}/${actor}/${id}.webp`

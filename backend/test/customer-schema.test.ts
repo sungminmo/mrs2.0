@@ -11,6 +11,7 @@ import { hashPassword } from '../src/auth.js'
 import { adminDataQuery, createAdminDataRepository } from '../src/admin-data.js'
 import { adminListQuery } from '../src/admin-pagination.js'
 import { createAdminImageRepository, imageOrigin } from '../src/admin-images.js'
+import { createReceivingRepository, receivingInput, receivingQuery, receivingTerms } from '../src/receiving.js'
 
 test('customer migration and repositories on isolated MySQL', { skip: process.env.RUN_CUSTOMER_SCHEMA_TEST !== '1' }, async (context) => {
   const container = `mrs-customer-test-${randomUUID()}`
@@ -115,6 +116,43 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
   await context.test('shared rate limits reject excessive requests', async () => {
     await customers.throttle('test', 'identity', 1)
     await assert.rejects(customers.throttle('test', 'identity', 1), /요청이 많습니다/)
+  })
+  await context.test('receiving requests persist optional photos, consent and audit and isolate customer ownership', async () => {
+    const member = await client.user.create({ data: { email: 'receiving-member@example.test', passwordHash: 'unused', companyName: company.name, managerName: '신청 담당자', managerPhone: '01012345678', role: 'CUSTOMER', status: 'ACTIVE', customerRole: 'VIEWER', customerId: company.id } })
+    const current = (await auth.findById(member.id))!
+    const repository = createReceivingRepository(client)
+    const input = receivingInput.parse({ siteName: '입고 검증 현장', managerName: '신청 담당자', managerPhone: '01012345678', volume: 'UNDER_ONE_TON', note: '오전 수거 희망', disposalTerms: 'true' })
+    const first = await repository.create(current, input, [])
+    assert.equal(first.status, 'REQUESTED')
+    assert.equal(first.channel, 'PORTAL')
+    assert.equal(first.customerId, company.id)
+    assert.equal(first.siteId, null)
+    assert.equal(first.images.length, 0)
+    assert.equal(first.termsVersion, receivingTerms.version)
+    assert.equal(first.termsText, receivingTerms.text)
+    assert.equal((await client.receivingChange.findFirstOrThrow({ where: { receivingId: first.id } })).actorUserId, member.id)
+    const images = Array.from({ length: 5 }, (_, index) => ({ id: randomUUID(), name: `현장-${index}.webp`, url: `${imageOrigin}/receivings/${company.id}/${member.id}/${randomUUID()}.webp` }))
+    const second = await repository.create(current, input, images)
+    assert.deepEqual(second.images.map(({ id, name, url }) => ({ id, name, url })), images)
+    const page = await repository.list(company.id, receivingQuery.parse({ size: 1, page: 2, status: 'REQUESTED', q: '입고 검증' }))
+    assert.equal(page.totalElements, 2)
+    assert.equal(page.records.length, 1)
+    assert.equal(await repository.detail('OTHER-COMPANY', first.id), null)
+    assert.equal((await repository.detail(company.id, second.id))?.images.length, 5)
+    const adminData = createAdminDataRepository(client)
+    const detail = (await adminData.load(adminDataQuery.parse({ scope: 'receivings', id: second.id }))).receivings[0]!
+    assert.equal(detail.siteName, input.siteName)
+    assert.equal(detail.managerPhone, input.managerPhone)
+    assert.equal(detail.images?.length, 5)
+    assert.equal(detail.termsText, receivingTerms.text)
+    const list = await adminData.load(adminDataQuery.parse({ scope: 'receivings', customer: company.id }))
+    assert.equal(list.receivings.every((entry) => !('images' in entry)), true)
+    const before = await client.receiving.count()
+    await assert.rejects(repository.create(current, input, [images[0]!, images[0]!]))
+    assert.equal(await client.receiving.count(), before)
+    await client.user.update({ where: { id: member.id }, data: { status: 'SUSPENDED' } })
+    await assert.rejects(repository.create(current, input, []), /소속 확인/)
+    assert.equal(await client.receiving.count(), before)
   })
   await context.test('real asset queries isolate detail, images, pagination and full-company totals', async () => {
     const other = await client.customer.create({ data: { id: 'OTHER', name: 'Other' } })

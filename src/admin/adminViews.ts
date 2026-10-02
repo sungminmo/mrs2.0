@@ -5,7 +5,7 @@ import { detailedInspectionStatus, discountedPrice, type MarketData } from './ad
 export type MenuId = 'dashboard' | 'basic' | 'receiving' | 'inventory' | 'market' | 'content' | 'billing' | 'customers' | 'members' | 'settings' | 'accounts'
 export type AdminLink = { label: string; menu: MenuId; tab: string; id?: string; status?: string; customer?: string }
 export type DetailSection = { title: string; headers: string[]; rows: string[][] }
-export type AdminRow = { id: string; title: string; status: string; customerId?: string; date?: string; cells: string[]; fields: [string, string][]; sections?: DetailSection[]; links: AdminLink[]; note?: string; images?: AdminImage[]; grade?: string; saleStatus?: string; inspectionStatus?: string; itemId?: string; locationId?: string; categoryId?: string }
+export type AdminRow = { id: string; title: string; status: string; customerId?: string; date?: string; cells: string[]; fields: [string, string][]; sections?: DetailSection[]; links: AdminLink[]; note?: string; images?: AdminImage[]; receivingImages?: AdminImage[]; grade?: string; saleStatus?: string; inspectionStatus?: string; itemId?: string; locationId?: string; categoryId?: string }
 export type AdminView = { title: string; headers: string[]; rows: AdminRow[]; note?: string; pagination?: { page: number; rows: number; total: number } }
 export const menus: { id: MenuId; label: string; tabs: { id: string; label: string }[] }[] = [
   { id: 'dashboard', label: '대시보드', tabs: [] },
@@ -45,9 +45,9 @@ const receivingRows: AdminRow[] = receivingRecords.map((request) => {
   const site = sites.find((item) => item.id === request.siteId)
   const customerId = 'customerId' in request && typeof request.customerId === 'string' ? request.customerId : site?.customerId ?? request.id
   const customer = customers.find((item) => item.id === customerId)
-  return { id: request.id, title: request.summary, status: request.status, customerId, date: request.date,
-    cells: [request.id, dateText(request.date), request.channel, customer?.name ?? customerId, site?.name ?? request.siteId, request.volume, request.status],
-    fields: [['신청번호', request.id], ['고객사', customer?.name ?? customerId], ['현장명', site?.name ?? request.siteId], ['담당자', customer?.manager ?? '미등록'], ['연락처', customer?.phone ?? '미등록'], ['접수일', dateText(request.date)], ['신청 경로', request.channel], ['차량 기준 예상물량', request.volume], ['입고 예정일', dateText(request.scheduledAt)], ['폐기 규정 동의일', dateText(request.termsAt)], ['운반비 견적 (예시)', money(request.estimate)], ['자재 사진', '미등록'], ['요청 메모', request.note]],
+  return { id: request.id, title: request.summary || request.siteName || request.id, status: request.status, customerId, date: request.date, receivingImages: request.images,
+    cells: [request.id, dateText(request.date), request.channel, customer?.name ?? customerId, request.siteName ?? site?.name ?? request.siteId, request.volume, request.status],
+    fields: [['신청번호', request.id], ['고객사', customer?.name ?? customerId], ['현장명', request.siteName ?? site?.name ?? request.siteId], ['담당자', request.managerName ?? customer?.manager ?? '미등록'], ['연락처', request.managerPhone ?? customer?.phone ?? '미등록'], ['접수일', dateText(request.date)], ['신청 경로', request.channel], ['차량 기준 예상물량', request.volume], ['입고 예정일', dateText(request.scheduledAt)], ['폐기 규정 동의일', dateText(request.termsAt)], ...(request.termsVersion ? [['동의 규정 버전', request.termsVersion], ['동의 규정 원문', request.termsText ?? '미등록']] as [string, string][] : []), ['운반비 견적', money(request.estimate)], ['자재 사진', request.images?.length ? `${request.images.length}장` : '미등록'], ['요청 메모', request.note]],
     links: [customerLink(customerId), ...(site ? [siteLink(site.id)] : []), ...inspectionRecords.filter((receipt) => receipt.receivingId === request.id).map((receipt) => receiptLink(receipt.id))],
   }
 })
