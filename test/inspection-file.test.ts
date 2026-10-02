@@ -3,7 +3,24 @@ import test from 'node:test'
 import ExcelJS from 'exceljs'
 import { zipSync } from 'fflate'
 import { inspectionHeaders, inspectionTemplate, parseInspectionFile } from '../src/admin/inspectionFile.ts'
+import { emptyInspectionRow } from '../src/inspections.ts'
 
+test('XLSX import and manual rows work without randomUUID in HTTP environments', async () => {
+  const bytes = await inspectionTemplate()
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto')!
+  const getRandomValues = globalThis.crypto.getRandomValues.bind(globalThis.crypto)
+  Object.defineProperty(globalThis, 'crypto', { configurable: true, value: { getRandomValues } })
+  try {
+    const parsed = await parseInspectionFile(bytes)
+    assert.equal(parsed.rows.length, 2)
+    assert.deepEqual(parsed.errors, [])
+    const ids = [...parsed.rows.map((row) => row.id), ...Array.from({ length: 1000 }, () => emptyInspectionRow().id)]
+    assert.equal(new Set(ids).size, ids.length)
+    for (const id of ids) assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  } finally {
+    Object.defineProperty(globalThis, 'crypto', original)
+  }
+})
 test('XLSX template preserves codes, optional item and F rows', async () => {
   const parsed = await parseInspectionFile(await inspectionTemplate())
   assert.equal(parsed.rows.length, 2)
