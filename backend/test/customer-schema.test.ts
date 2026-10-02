@@ -14,6 +14,7 @@ import { createAdminImageRepository, imageOrigin } from '../src/admin-images.js'
 import { createReceivingRepository, receivingInput, receivingQuery, receivingTerms } from '../src/receiving.js'
 import { createInspectionRepository, inspectionWrite, receiveInput } from '../src/inspection.js'
 import { createLocationRepository } from '../src/location.js'
+import { ItemUnit } from '../src/generated/prisma/client.js'
 
 test('customer migration and repositories on isolated MySQL', { skip: process.env.RUN_CUSTOMER_SCHEMA_TEST !== '1' }, async (context) => {
   const container = `mrs-customer-test-${randomUUID()}`
@@ -320,6 +321,14 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     await client.disposalCostLine.create({ data: { inspectionId: disposalReport.id, label: '후속 비용 입력', amount: '100' } })
     assert.equal((await inspections.detail(disposalReport.id)).editable, false)
     await assert.rejects(inspections.save(disposalReport.id, { ...disposalInput, version: disposalConfirmed.version }, reviewer, true))
+    const unitReport = await create('2026-09-24')
+    const unitRows = Object.values(ItemUnit).map((unit) => ({ ...row, id: randomUUID(), unit, received: '1', usable: '1' }))
+    const unitResult = await inspections.save(unitReport.id, inspectionWrite.parse({ version: 0, rows: unitRows, reason: '전체 단위 확정' }), reviewer, false)
+    assert.equal(unitResult.assets.length, unitRows.length)
+    const storedUnits = await client.asset.findMany({ where: { receiptId: unitReport.id }, orderBy: { id: 'asc' }, select: { unit: true } })
+    assert.deepEqual(storedUnits.map((asset) => asset.unit), Object.values(ItemUnit))
+    const inspectedUnits = await client.inspectionItem.findMany({ where: { inspectionId: unitReport.id }, orderBy: { sortOrder: 'asc' }, select: { unit: true } })
+    assert.deepEqual(inspectedUnits.map((entry) => entry.unit), Object.values(ItemUnit))
     const third = await create('2026-09-25')
     const disabled = await locations.save(location.id, { name: location.name, zone: location.zone, enabled: false, version: location.version, reason: '미사용 검증' }, reviewer)
     assert.equal((await locations.list({ page: 1, size: 100, q: '', enabled: 'true' })).locations.some((entry) => entry.id === location.id), false)
