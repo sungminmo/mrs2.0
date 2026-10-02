@@ -28,10 +28,34 @@ export const receivingQuery = z.object({
 type Input = z.infer<typeof receivingInput>
 type Query = z.infer<typeof receivingQuery>
 type Image = { id: string; name: string; url: string }
-const imageInclude = { images: { orderBy: { sortOrder: 'asc' as const } } }
+export const receivingDecision = z.object({ action: z.enum(['approve', 'reject']), reason: z.string().trim().min(1).max(1000) }).strict()
+const imageInclude = { images: { orderBy: { sortOrder: 'asc' as const } }, history: { orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }] } }
+export function receivingDecisionSummary(history: { reason: string; createdAt: Date; changes: unknown }[]) {
+  for (const entry of history.toReversed()) {
+    const parsed = z.object({ status: z.object({ after: z.enum(['APPROVED', 'REJECTED']) }) }).safeParse(entry.changes)
+    if (parsed.success) return { status: parsed.data.status.after, reason: entry.reason, at: entry.createdAt.toISOString() }
+  }
+  return null
+}
+function receivingPayload<T extends { history: { reason: string; createdAt: Date; changes: unknown }[] }>(record: T) {
+  const { history, ...fields } = record
+  return { ...fields, decision: receivingDecisionSummary(history) }
+}
 
 export function createReceivingRepository(client: PrismaClient) {
   return {
+    review: (id: string, input: z.infer<typeof receivingDecision>, user: AuthUser) => customerTransaction(client, async (transaction) => {
+      const actor = await transaction.user.findUnique({ where: { id: user.id } })
+      if (!actor || actor.role !== 'ADMIN' || actor.status !== 'ACTIVE' || actor.sessionVersion !== (user.sessionVersion ?? 0)) throw new AppError(403, ErrorCode.FORBIDDEN, '활성 관리자 권한이 필요합니다.')
+      const previous = await transaction.receiving.findUnique({ where: { id } })
+      if (!previous) throw new AppError(404, ErrorCode.NOT_FOUND, '입고 신청을 찾을 수 없습니다.')
+      if (previous.status !== 'REQUESTED') throw new AppError(409, ErrorCode.CONFLICT, '이미 처리된 입고 신청입니다. 최신 상태를 확인해 주세요.')
+      const status = input.action === 'approve' ? 'APPROVED' : 'REJECTED'
+      const changed = await transaction.receiving.updateMany({ where: { id, status: 'REQUESTED' }, data: { status } })
+      if (changed.count !== 1) throw new AppError(409, ErrorCode.CONFLICT, '다른 관리자가 먼저 처리했습니다. 최신 상태를 확인해 주세요.')
+      await transaction.receivingChange.create({ data: { receivingId: id, stage: 'RECEIVING', actorUserId: actor.id, reason: input.reason, changes: { status: { before: previous.status, after: status } } } })
+      return transaction.receiving.findUniqueOrThrow({ where: { id }, include: imageInclude })
+    }),
     create: (user: AuthUser, input: Input, images: Image[]) => customerTransaction(client, async (transaction) => {
       const current = await transaction.user.findUnique({ where: { id: user.id }, include: { customer: true } })
       if (!current || current.role !== 'CUSTOMER' || current.status !== 'ACTIVE' || !current.customerId || current.customerId !== user.customerId || current.customer?.status !== 'ACTIVE' || current.sessionVersion !== (user.sessionVersion ?? 0) || current.customer.accessVersion !== user.customer?.accessVersion) throw new AppError(403, ErrorCode.FORBIDDEN, '고객사 승인 또는 소속 확인이 필요합니다.')
@@ -64,6 +88,12 @@ function owner(context: Context) {
 export function receivingHandlers(repository: ReceivingRepository, storage?: ImageStorage) {
   let active = 0
   return {
+    review: async (context: Context) => {
+      context.header('Cache-Control', 'no-store')
+      const id = z.string().min(1).max(20).parse(context.req.param('id'))
+      const input = receivingDecision.parse(await context.req.json())
+      return success(context, { receiving: receivingPayload(await repository.review(id, input, context.get('authUser') as AuthUser)) })
+    },
     terms: (context: Context) => { owner(context); return success(context, receivingTerms) },
     list: async (context: Context) => {
       const user = owner(context)
@@ -76,7 +106,7 @@ export function receivingHandlers(repository: ReceivingRepository, storage?: Ima
       const id = z.string().min(1).max(20).parse(context.req.param('id'))
       const receiving = await repository.detail(user.customerId, id)
       if (!receiving) throw new AppError(404, ErrorCode.NOT_FOUND, '입고 신청을 찾을 수 없습니다.')
-      return success(context, { receiving })
+      return success(context, { receiving: receivingPayload(receiving) })
     },
     create: async (context: Context) => {
       const user = owner(context)
@@ -106,7 +136,7 @@ export function receivingHandlers(repository: ReceivingRepository, storage?: Ima
           try { await storage!.put(key, body) } catch { throw new AppError(503, ErrorCode.SERVICE_UNAVAILABLE, '사진 저장에 실패했습니다. 잠시 후 다시 신청해 주세요.') }
           images.push({ id, name: file.name || `${id}.webp`, url: `${imageOrigin}/${key}` })
         }
-        return success(context, { receiving: await repository.create(user, input, images) }, 201)
+        return success(context, { receiving: receivingPayload(await repository.create(user, input, images)) }, 201)
       } catch (error) {
         for (const key of uploaded) {
           try { if (!storage?.remove) throw new Error('Cleanup unavailable'); await storage.remove(key) } catch { console.error('receiving.image.cleanup_failed') }

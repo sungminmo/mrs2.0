@@ -147,6 +147,42 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     assert.equal(detail.termsText, receivingTerms.text)
     const list = await adminData.load(adminDataQuery.parse({ scope: 'receivings', customer: company.id }))
     assert.equal(list.receivings.every((entry) => !('images' in entry)), true)
+    const reviewer = (await auth.findById(admin.id))!
+    const approved = await repository.review(first.id, { action: 'approve', reason: '수거 조건 확인' }, reviewer)
+    assert.equal(approved.status, 'APPROVED')
+    assert.equal(approved.scheduledAt, null)
+    assert.equal(approved.receivedAt, null)
+    assert.equal(approved.history.length, 2)
+    assert.equal(approved.history[1]!.actorUserId, admin.id)
+    assert.deepEqual(approved.history[1]!.changes, { status: { before: 'REQUESTED', after: 'APPROVED' } })
+    const rejected = await repository.review(second.id, { action: 'reject', reason: '수거 조건 협의 불가' }, reviewer)
+    assert.equal(rejected.status, 'REJECTED')
+    assert.equal(rejected.images.length, 5)
+    assert.equal((await adminData.load(adminDataQuery.parse({ scope: 'receivings', id: second.id }))).receivings[0]!.decision?.reason, '수거 조건 협의 불가')
+    assert.equal((await repository.detail(company.id, second.id))?.history[1]!.reason, '수거 조건 협의 불가')
+    for (const record of [first, second]) await assert.rejects(repository.review(record.id, { action: 'approve', reason: '재처리' }, reviewer), /이미 처리/)
+    const contested = await repository.create(current, input, [])
+    await assert.rejects(repository.review(contested.id, { action: 'approve', reason: '비관리자' }, current), /관리자 권한/)
+    await assert.rejects(repository.review(contested.id, { action: 'approve', reason: '폐기된 세션' }, { ...reviewer, sessionVersion: reviewer.sessionVersion! + 1 }), /관리자 권한/)
+    await assert.rejects(repository.review('MISSING', { action: 'approve', reason: '없는 신청' }, reviewer), /찾을 수/)
+    const decisions = await Promise.allSettled([
+      repository.review(contested.id, { action: 'approve', reason: '관리자 승인' }, reviewer),
+      repository.review(contested.id, { action: 'reject', reason: '관리자 반려' }, reviewer),
+    ])
+    assert.equal(decisions.filter((result) => result.status === 'fulfilled').length, 1)
+    const conflict = decisions.find((result) => result.status === 'rejected') as PromiseRejectedResult
+    assert.equal(conflict.reason.status, 409)
+    assert.equal(await client.receivingChange.count({ where: { receivingId: contested.id } }), 2)
+    const rollback = await repository.create(current, input, [])
+    sql("CREATE TRIGGER test_receiving_review_failure BEFORE INSERT ON receiving_changes FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'test audit failure'")
+    try { await assert.rejects(repository.review(rollback.id, { action: 'approve', reason: '이력 실패' }, reviewer)) }
+    finally { sql('DROP TRIGGER test_receiving_review_failure') }
+    assert.equal((await repository.detail(company.id, rollback.id))?.status, 'REQUESTED')
+    assert.equal(await client.receivingChange.count({ where: { receivingId: rollback.id } }), 1)
+    for (const status of ['RECEIVED', 'CANCELLED'] as const) {
+      await client.receiving.update({ where: { id: rollback.id }, data: { status, receivedAt: status === 'RECEIVED' ? new Date() : null } })
+      await assert.rejects(repository.review(rollback.id, { action: 'reject', reason: '처리 불가' }, reviewer), /이미 처리/)
+    }
     const before = await client.receiving.count()
     await assert.rejects(repository.create(current, input, [images[0]!, images[0]!]))
     assert.equal(await client.receiving.count(), before)

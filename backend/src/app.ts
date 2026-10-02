@@ -11,7 +11,7 @@ import { adminAccountCreate, adminAccountUpdate, adminAccountHandlers, requireSy
 import { bodyLimit } from 'hono/body-limit'
 import type { Context } from 'hono'
 import { uploadAdminImage, saveAdminImages, replaceImagesSchema, type ImageStorage, type AdminImageRepository } from './admin-images.js'
-import { receivingHandlers, receivingInput, receivingQuery, type ReceivingRepository } from './receiving.js'
+import { receivingDecision, receivingHandlers, receivingInput, receivingQuery, type ReceivingRepository } from './receiving.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -48,6 +48,8 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
     const adminAuth = requireAuth(auth.repository, auth.secret, 'ADMIN')
     if (receivings) {
       const receiving = receivingHandlers(receivings, imageStorage)
+      app.post('/api/admin/receivings/:id/review', adminAuth, requireAdmin, receiving.review)
+      app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/receivings/{id}/review', tags: ['Receivings'], summary: '신청 대기 건 승인·반려 및 처리 사유 기록', security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string().min(1).max(20) }), body: { required: true, content: { 'application/json': { schema: receivingDecision } } } }, responses: { 200: { description: '저장된 신청과 변경 이력 반환' }, 400: { description: '잘못된 처리 또는 빈 사유' }, 401: { description: '관리자 인증 필요' }, 403: { description: '관리자 권한 필요' }, 404: { description: '신청 없음' }, 409: { description: '이미 처리됨 또는 동시 처리 충돌' } } })
       app.get('/api/customer/receivings/terms', customerAuth, receiving.terms)
       app.get('/api/customer/receivings', customerAuth, receiving.list)
       app.get('/api/customer/receivings/:id', customerAuth, receiving.detail)

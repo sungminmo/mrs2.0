@@ -48,6 +48,7 @@ const receivingRows: AdminRow[] = receivingRecords.map((request) => {
   return { id: request.id, title: request.summary || request.siteName || request.id, status: request.status, customerId, date: request.date, receivingImages: request.images,
     cells: [request.id, dateText(request.date), request.channel, customer?.name ?? customerId, request.siteName ?? site?.name ?? request.siteId, request.volume, request.status],
     fields: [['신청번호', request.id], ['고객사', customer?.name ?? customerId], ['현장명', request.siteName ?? site?.name ?? request.siteId], ['담당자', request.managerName ?? customer?.manager ?? '미등록'], ['연락처', request.managerPhone ?? customer?.phone ?? '미등록'], ['접수일', dateText(request.date)], ['신청 경로', request.channel], ['차량 기준 예상물량', request.volume], ['입고 예정일', dateText(request.scheduledAt)], ['폐기 규정 동의일', dateText(request.termsAt)], ...(request.termsVersion ? [['동의 규정 버전', request.termsVersion], ['동의 규정 원문', request.termsText ?? '미등록']] as [string, string][] : []), ['운반비 견적', money(request.estimate)], ['자재 사진', request.images?.length ? `${request.images.length}장` : '미등록'], ['요청 메모', request.note]],
+    sections: request.decision ? [{ title: '관리자 처리 결과', headers: ['결과', '처리일시', '처리 사유'], rows: [[request.decision.status === 'APPROVED' ? '승인' : '반려', campaignDateText(request.decision.at), request.decision.reason]] }] : undefined,
     links: [customerLink(customerId), ...(site ? [siteLink(site.id)] : []), ...inspectionRecords.filter((receipt) => receipt.receivingId === request.id).map((receipt) => receiptLink(receipt.id))],
   }
 })

@@ -168,10 +168,33 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
         </>}
         </>}
       </>}
+      {!pending && row && menu.id === 'receiving' && tab?.id === 'requests' && row.status === '입고 신청' && <ReceivingReview key={row.id} id={row.id} onChanged={() => setAccountRevision((value) => value + 1)} />}
       {!pending && row && !editing && (itemManagement || menu.id === 'inventory' && tab?.id === 'stock') && <ImagePicker key={`${menu.id}/${row.id}`} kind={itemManagement ? 'items' : 'assets'} recordId={row.id} images={(itemManagement ? items.find((entry) => entry.id === row.id) : assets.find((entry) => entry.id === row.id))?.images ?? []} limit={itemManagement ? 1 : 8} label={itemManagement ? '대표 이미지' : '자산 이미지'} onChange={(images) => { if (itemManagement) setItems((current) => current.map((entry) => entry.id === row.id ? { ...entry, images } : entry)); else setAssets((current) => current.map((entry) => entry.id === row.id ? { ...entry, images } : entry)) }} />}
       <footer className="adm-footer">MRS 스테이징 환경 · 실제 서비스 운영 환경 아님</footer>
     </main>
   </div>
+}
+
+function ReceivingReview({ id, onChanged }: { id: string; onChanged: () => void }) {
+  const [action, setAction] = useState<'approve' | 'reject' | null>(null)
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
+  const submitting = useRef(false)
+  const label = action === 'approve' ? '승인' : '반려'
+  return <section className="adm-receiving-review" aria-label="입고 신청 처리"><h2>입고 신청 처리</h2>{done ? <p role="status">처리가 완료되었습니다.</p> : action ? <form onSubmit={async (event) => {
+    event.preventDefault()
+    if (submitting.current || !reason.trim()) return
+    submitting.current = true; setBusy(true); setError('')
+    try {
+      const response = await adminAuthenticatedFetch(`/api/admin/receivings/${encodeURIComponent(id)}/review`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, reason }) })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error?.message ?? '입고 신청 처리에 실패했습니다.')
+      setDone(true); onChanged()
+    } catch (failure) { setError(failure instanceof Error ? failure.message : '처리에 실패했습니다.') }
+    finally { submitting.current = false; setBusy(false) }
+  }}><label htmlFor="receiving-review-reason">{label} 사유</label><textarea id="receiving-review-reason" required maxLength={1000} value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} />{error && <p className="adm-form-error" role="alert">{error}</p>}<div className="adm-management-buttons"><button className="adm-button adm-primary" disabled={busy || !reason.trim()}>{busy ? <LoaderCircle size={16} /> : action === 'approve' ? <Check size={16} /> : <X size={16} />}{busy ? '처리 중' : `${label} 확정`}</button><button type="button" className="adm-button" disabled={busy} onClick={() => { setAction(null); setError('') }}>취소</button></div></form> : <div className="adm-management-buttons"><button className="adm-button adm-primary" onClick={() => setAction('approve')}><Check size={16} />입고 승인</button><button className="adm-button" onClick={() => setAction('reject')}><X size={16} />입고 반려</button></div>}</section>
 }
 
 function MemberApproval({ onApprove }: { onApprove: () => Promise<void> }) {

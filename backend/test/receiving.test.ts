@@ -5,12 +5,13 @@ import { createApp } from '../src/app.js'
 import { hashPassword, type AuthRepository, type AuthUser } from '../src/auth.js'
 import type { ReceivingRepository } from '../src/receiving.js'
 import type { ImageStorage } from '../src/admin-images.js'
+import { AppError, ErrorCode } from '../src/http.js'
 
 async function fixture(storage?: ImageStorage, fail = false) {
   const user: AuthUser = { id: '11111111-1111-4111-8111-111111111111', customerId: 'CUS-TEST', customerRole: 'VIEWER', customer: { id: 'CUS-TEST', name: 'Test', businessNumber: '2208162517', representativeName: 'Owner', address: 'Seoul', phone: '010', status: 'ACTIVE', accessVersion: 0 }, email: 'receiving@example.test', passwordHash: await hashPassword('test-password'), companyName: 'Test', managerName: 'Manager', role: 'CUSTOMER', status: 'ACTIVE' }
   const auth: AuthRepository = { findByEmail: async () => user, findById: async () => user, createRegistration: async () => user, listMembers: async () => [], approveMember: async () => null }
   const captured: unknown[] = []
-  const repository = { create: async (...args: unknown[]) => { captured.push(args); if (fail) throw new Error('DB failure'); return { id: 'REQ-TEST', status: 'REQUESTED' } }, list: async (owner: string) => { captured.push(owner); return { records: [], totalElements: 0 } }, detail: async (owner: string) => { captured.push(owner); return null } } as unknown as ReceivingRepository
+  const repository = { create: async (...args: unknown[]) => { captured.push(args); if (fail) throw new Error('DB failure'); return { id: 'REQ-TEST', status: 'REQUESTED', history: [] } }, list: async (owner: string) => { captured.push(owner); return { records: [], totalElements: 0 } }, detail: async (owner: string) => { captured.push(owner); return null } } as unknown as ReceivingRepository
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret: 'test-only-secret-at-least-32-characters', expiresIn: '1h' }, receivings: repository, imageStorage: storage })
   const login = await app.request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email, password: 'test-password' }) })
   const token = (await login.json() as { data: { accessToken: string } }).data.accessToken
@@ -100,4 +101,43 @@ test('oversized bodies and stale customer access are rejected before persistence
   user.customer!.accessVersion++
   assert.equal((await submit(form())).status, 401)
   assert.equal(captured.length, 0)
+})
+
+test('receiving review requires admin authentication, strict action and reason and returns persisted decisions', async () => {
+  const { user } = await fixture()
+  const administrator: AuthUser = { ...user, id: '22222222-2222-4222-8222-222222222222', email: 'admin@example.test', role: 'ADMIN', adminRole: 'ADMIN', customerId: null, customer: null }
+  const auth: AuthRepository = { findByEmail: async (email) => email === administrator.email ? administrator : user, findById: async (id) => id === administrator.id ? administrator : user, createRegistration: async () => user, listMembers: async () => [], approveMember: async () => null }
+  const captured: unknown[] = []
+  let status = 'REQUESTED'
+  const repository = { review: async (id: string, input: { action: string; reason: string }, actor: AuthUser) => {
+    if (id === 'MISSING') throw new AppError(404, ErrorCode.NOT_FOUND, 'Not found')
+    if (status !== 'REQUESTED') throw new AppError(409, ErrorCode.CONFLICT, 'Already reviewed')
+    captured.push({ id, input, actor: actor.id }); status = input.action === 'approve' ? 'APPROVED' : 'REJECTED'
+    return { id, status, history: [{ reason: input.reason, createdAt: new Date('2026-10-02T00:00:00Z'), actorUserId: actor.id, changes: { status: { before: 'REQUESTED', after: status } } }] }
+  } } as unknown as ReceivingRepository
+  const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret: 'test-only-secret-at-least-32-characters', expiresIn: '1h' }, receivings: repository })
+  const login = async (admin: boolean) => {
+    const response = await app.request(admin ? '/api/admin/auth/login' : '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(admin ? { id: administrator.email, password: 'test-password' } : { email: user.email, password: 'test-password' }) })
+    return (await response.json() as { data: { accessToken: string } }).data.accessToken
+  }
+  const adminToken = await login(true); const customerToken = await login(false)
+  const review = (input: unknown, token = adminToken, id = 'REQ-TEST') => app.request(`/api/admin/receivings/${id}/review`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(input) })
+  assert.equal((await review({ action: 'approve', reason: '확인 완료' }, '')).status, 401)
+  assert.equal((await review({ action: 'approve', reason: '확인 완료' }, customerToken)).status, 401)
+  for (const input of [{ action: 'cancel', reason: '사유' }, { action: 'reject', reason: ' ' }, { action: 'approve' }, { action: 'approve', reason: 'x'.repeat(1001) }, { action: 'approve', reason: '사유', status: 'RECEIVED' }]) assert.equal((await review(input)).status, 400)
+  assert.equal((await review({ action: 'approve', reason: '확인 완료' }, adminToken, 'MISSING')).status, 404)
+  for (const action of ['approve', 'reject']) {
+    status = 'REQUESTED'
+    const response = await review({ action, reason: '  현장 확인 완료  ' })
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get('Cache-Control'), 'no-store')
+    const body = await response.json() as { data: { receiving: { status: string; decision: { reason: string; status: string }; history?: unknown } } }
+    assert.equal(body.data.receiving.status, action === 'approve' ? 'APPROVED' : 'REJECTED')
+    assert.equal(body.data.receiving.decision.reason, '현장 확인 완료')
+    assert.equal(body.data.receiving.history, undefined)
+    assert.equal((await review({ action, reason: '재처리' })).status, 409)
+  }
+  assert.equal(captured.length, 2)
+  administrator.status = 'SUSPENDED'
+  assert.equal((await review({ action: 'approve', reason: '확인' })).status, 401)
 })
