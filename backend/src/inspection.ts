@@ -22,7 +22,7 @@ export const inspectionRow = z.object({
   grade: z.enum(['S', 'A', 'B', 'F', '']), received: z.union([quantity, z.literal('')]), usable: z.union([quantity, z.literal('')]), disposal: z.union([quantity, z.literal('')]),
   reason: z.string().trim().max(1000).default(''), locationId: z.string().trim().max(20).default(''), photos: z.array(inspectionPhoto).max(8).default([]),
 }).strict()
-export const inspectionWrite = inspectionVersion.extend({ rows: z.array(inspectionRow).max(1000), reason: inspectionReason })
+export const inspectionWrite = inspectionVersion.extend({ rows: z.array(inspectionRow).max(1000), reason: inspectionReason, skipInvalidRowIds: z.array(z.uuid()).max(1000).default([]) })
 export const receiveInput = z.object({ receivedAt: z.iso.datetime({ offset: true }).refine((value) => new Date(value).getTime() <= Date.now(), '미래 입고일은 사용할 수 없습니다.'), reason: inspectionReason }).strict()
 export const inspectionListQuery = z.object({ page: z.coerce.number().int().min(1).max(100000).default(1), size: z.coerce.number().int().min(1).max(100).default(20), q: z.string().trim().max(160).default('') }).strict()
 type Row = z.infer<typeof inspectionRow>
@@ -53,35 +53,48 @@ function rows(current: Report): Row[] {
   return current.items.map((entry) => ({ id: entry.id, itemId: entry.itemId ?? '', name: entry.name, specification: entry.specification, brand: entry.brand, categoryId: entry.categoryId ?? '', unit: entry.unit, grade: entry.grade ?? '', received: entry.receivedQuantity.toString(), usable: entry.usableQuantity?.toString() ?? '', disposal: entry.disposalQuantity?.toString() ?? '', reason: entry.reason, locationId: entry.locationId ?? '', photos: entry.images.map((image) => ({ id: image.id, name: image.caption || '검수 사진', url: image.url })) }))
 }
 function payload(current: Report, admin: boolean) {
-  return { id: current.id, receivingId: current.receivingId, siteName: current.receiving.siteName, customerId: current.receiving.customerId, receivedAt: current.receiving.receivedAt, status: current.status, version: current.version, inspectedAt: current.inspectedAt, acknowledgedAt: current.acknowledgedAt, consentedAt: current.disposal?.consentedAt ?? null, disposalStatus: current.disposal?.status ?? null, consentText: disposalConsentText, rows: admin && current.status === 'PENDING' && current.draftData ? current.draftData : rows(current), assets: current.items.flatMap((entry) => entry.assetId ? [{ rowId: entry.id, id: entry.assetId }] : []), ...(admin ? { editable: current.status === 'PENDING' || editable(current), editBlock: '고객 확인 또는 자산 후속 변경 이후에는 수정할 수 없습니다.' } : {}) }
+  const draft = current.draftData
+  const draftRows = Array.isArray(draft) ? draft : draft && typeof draft === 'object' ? draft.rows : null
+  const skipInvalidRowIds = draft && !Array.isArray(draft) && typeof draft === 'object' && Array.isArray(draft.skipInvalidRowIds) ? draft.skipInvalidRowIds : []
+  return { id: current.id, receivingId: current.receivingId, siteName: current.receiving.siteName, customerId: current.receiving.customerId, receivedAt: current.receiving.receivedAt, status: current.status, version: current.version, inspectedAt: current.inspectedAt, acknowledgedAt: current.acknowledgedAt, consentedAt: current.disposal?.consentedAt ?? null, disposalStatus: current.disposal?.status ?? null, consentText: disposalConsentText, rows: admin && current.status === 'PENDING' && draftRows ? draftRows : rows(current), assets: current.items.flatMap((entry) => entry.assetId ? [{ rowId: entry.id, id: entry.assetId }] : []), ...(admin ? { skipInvalidRowIds, editable: current.status === 'PENDING' || editable(current), editBlock: '고객 확인 또는 자산 후속 변경 이후에는 수정할 수 없습니다.' } : {}) }
 }
-async function validateRows(tx: Tx, input: Row[], current: Report, amend: boolean) {
-  if (!input.length || !input.some((entry) => entry.usable && new Prisma.Decimal(entry.usable).gt(0))) throw invalid('재사용 가능한 자산이 한 개 이상 필요합니다. 전량 폐기 결과서는 이번에 지원하지 않습니다.')
+async function validateRows(tx: Tx, input: Row[], current: Report, amend: boolean, skipInvalidRowIds: string[] = []) {
   if (new Set(input.map((entry) => entry.id)).size !== input.length) throw invalid('중복 검수 행입니다.')
+  if (amend && skipInvalidRowIds.length) throw invalid('확정 결과 정정에서는 오류 행을 제외할 수 없습니다.')
+  const skippable = new Set(skipInvalidRowIds)
+  const accepted: Row[] = [], skippedRows: { id: string; row: number; message: string }[] = []
   if (amend && (input.length !== current.items.length || input.some((entry, index) => current.items[index]?.id !== entry.id))) throw invalid('확정 후 행 추가·삭제·순서 변경은 허용하지 않습니다.')
   const categories = await tx.materialCategory.findMany()
   for (const [index, entry] of input.entries()) {
-    if (!entry.name || !entry.unit || !entry.grade || !entry.received || !entry.usable || !entry.disposal) throw invalid(`${index + 1}행: 필수 입력을 확인해 주세요.`)
-    const received = new Prisma.Decimal(entry.received), usable = new Prisma.Decimal(entry.usable), disposal = new Prisma.Decimal(entry.disposal)
-    if (!received.gt(0) || !received.eq(usable.plus(disposal)) || entry.grade === 'F' && !usable.isZero() || disposal.gt(0) && !entry.reason) throw invalid(`${index + 1}행: 수량 합계·F등급·폐기 사유를 확인해 주세요.`)
-    if (['EA', 'BOX', 'PIECE'].includes(entry.unit) && [received, usable, disposal].some((value) => !value.isInteger())) throw invalid(`${index + 1}행: EA·Box·본 단위는 정수 수량입니다.`)
-    const previous = current.items.find((value) => value.id === entry.id)
-    if (amend && (!previous || (previous.itemId ?? '') !== entry.itemId || previous.unit !== entry.unit || Boolean(previous.assetId) !== usable.gt(0))) throw invalid('확정 후 품목·단위·재사용 여부를 변경할 수 없습니다.')
-    const category = categories.find((value) => value.id === entry.categoryId)
-    const parent = categories.find((value) => value.id === category?.parentId), root = categories.find((value) => value.id === parent?.parentId)
-    if (entry.categoryId && (!category || !parent || !root || root.parentId || categories.some((value) => value.parentId === category.id) || !(category.enabled && parent.enabled && root.enabled) && !(amend && previous?.categoryId === entry.categoryId))) throw invalid(`${index + 1}행: 활성 3차 카테고리가 필요합니다.`)
-    if (entry.itemId) {
-      const item = await tx.masterItem.findUnique({ where: { id: entry.itemId } })
-      if (!item) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}는 등록되지 않았습니다. 등록된 품목을 선택하거나 품목코드를 비워 미연결 자산으로 저장해 주세요.`)
-      if (!item.enabled && !amend) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}는 미사용 상태입니다. 사용 중인 품목을 선택해 주세요.`)
-      if (item.unit !== entry.unit) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}의 기준 단위는 ${item.unit ?? '미지정'}이며 입력 단위 ${entry.unit}와 일치하지 않습니다.`)
+    try {
+      if (!entry.name || !entry.unit || !entry.grade || !entry.received || !entry.usable || !entry.disposal) throw invalid(`${index + 1}행: 필수 입력을 확인해 주세요.`)
+      const received = new Prisma.Decimal(entry.received), usable = new Prisma.Decimal(entry.usable), disposal = new Prisma.Decimal(entry.disposal)
+      if (!received.gt(0) || !received.eq(usable.plus(disposal)) || entry.grade === 'F' && !usable.isZero() || disposal.gt(0) && !entry.reason) throw invalid(`${index + 1}행: 수량 합계·F등급·폐기 사유를 확인해 주세요.`)
+      if (['EA', 'BOX', 'PIECE'].includes(entry.unit) && [received, usable, disposal].some((value) => !value.isInteger())) throw invalid(`${index + 1}행: EA·Box·본 단위는 정수 수량입니다.`)
+      const previous = current.items.find((value) => value.id === entry.id)
+      if (amend && (!previous || (previous.itemId ?? '') !== entry.itemId || previous.unit !== entry.unit || Boolean(previous.assetId) !== usable.gt(0))) throw invalid('확정 후 품목·단위·재사용 여부를 변경할 수 없습니다.')
+      const category = categories.find((value) => value.id === entry.categoryId)
+      const parent = categories.find((value) => value.id === category?.parentId), root = categories.find((value) => value.id === parent?.parentId)
+      if (entry.categoryId && (!category || !parent || !root || root.parentId || categories.some((value) => value.parentId === category.id) || !(category.enabled && parent.enabled && root.enabled) && !(amend && previous?.categoryId === entry.categoryId))) throw invalid(`${index + 1}행: 활성 3차 카테고리가 필요합니다.`)
+      if (entry.itemId) {
+        const item = await tx.masterItem.findUnique({ where: { id: entry.itemId } })
+        if (!item) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}는 등록되지 않았습니다. 등록된 품목을 선택하거나 품목코드를 비워 미연결 자산으로 저장해 주세요.`)
+        if (!item.enabled && !amend) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}는 미사용 상태입니다. 사용 중인 품목을 선택해 주세요.`)
+        if (item.unit !== entry.unit) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}의 기준 단위는 ${item.unit ?? '미지정'}이며 입력 단위 ${entry.unit}와 일치하지 않습니다.`)
+      }
+      if (usable.gt(0) || entry.locationId) {
+        const location = await tx.location.findUnique({ where: { id: entry.locationId } })
+        if (!location || !location.enabled && !(amend && previous?.locationId === entry.locationId)) throw invalid(`${index + 1}행: 사용 중인 로케이션이 필요합니다.`)
+      }
+      if (new Set(entry.photos.map((image) => image.url)).size !== entry.photos.length) throw invalid(`${index + 1}행: 동일 사진을 중복 등록할 수 없습니다.`)
+      accepted.push(entry)
+    } catch (error) {
+      if (!(error instanceof AppError) || error.code !== ErrorCode.VALIDATION_ERROR || !skippable.has(entry.id)) throw error
+      skippedRows.push({ id: entry.id, row: index + 1, message: error.message })
     }
-    if (usable.gt(0)) {
-      const location = await tx.location.findUnique({ where: { id: entry.locationId } })
-      if (!location || !location.enabled && !(amend && previous?.locationId === entry.locationId)) throw invalid(`${index + 1}행: 사용 중인 로케이션이 필요합니다.`)
-    }
-    if (new Set(entry.photos.map((image) => image.url)).size !== entry.photos.length) throw invalid('동일 사진을 중복 등록할 수 없습니다.')
   }
+  if (!accepted.some((entry) => entry.usable && new Prisma.Decimal(entry.usable).gt(0))) throw invalid('등록 가능한 재사용 자산이 없습니다. 제외 대상의 입력값을 확인해 주세요.')
+  return { accepted, skippedRows }
 }
 
 export function createInspectionRepository(client: PrismaClient) {
@@ -108,7 +121,7 @@ export function createInspectionRepository(client: PrismaClient) {
       await administrator(tx, user)
       const current = await report(tx, id, input.version)
       if (current.status !== 'PENDING') throw conflict()
-      await tx.inspection.update({ where: { id }, data: { draftData: input.rows, version: { increment: 1 } } })
+      await tx.inspection.update({ where: { id }, data: { draftData: { rows: input.rows, skipInvalidRowIds: input.skipInvalidRowIds }, version: { increment: 1 } } })
       await audit(tx, current, user.id, input.reason, 'inspection.draft', { rowCount: input.rows.length })
       return payload(await tx.inspection.findUniqueOrThrow({ where: { id }, include }), true)
     }),
@@ -116,7 +129,8 @@ export function createInspectionRepository(client: PrismaClient) {
       await administrator(tx, user)
       const current = await report(tx, id, input.version)
       if (current.receiving.status !== 'RECEIVED' || (amend ? !editable(current) : current.status !== 'PENDING')) throw conflict()
-      await validateRows(tx, input.rows, current, amend)
+      const { accepted, skippedRows } = await validateRows(tx, input.rows, current, amend, input.skipInvalidRowIds)
+      input = { ...input, rows: accepted }
       let nextCode = 0
       const dateCode = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: '2-digit', month: '2-digit', day: '2-digit' }).format(current.receiving.receivedAt!).replaceAll('-', '')
       if (!amend) {
@@ -157,8 +171,8 @@ export function createInspectionRepository(client: PrismaClient) {
       const targets = input.rows.filter((entry) => new Prisma.Decimal(entry.disposal).gt(0))
       if (targets.length) await tx.disposal.create({ data: { inspectionId: id, items: { create: targets.map((entry) => ({ inspectionItemId: entry.id })) } } })
       await tx.inspection.update({ where: { id }, data: { status: 'AWAITING_ACKNOWLEDGEMENT', inspectorUserId: user.id, inspectedAt: new Date(), draftData: Prisma.DbNull, version: { increment: 1 } } })
-      await audit(tx, current, user.id, input.reason, amend ? 'inspection.amend' : 'inspection.confirm', { before: rows(current), after: input.rows })
-      return payload(await tx.inspection.findUniqueOrThrow({ where: { id }, include }), true)
+      await audit(tx, current, user.id, input.reason, amend ? 'inspection.amend' : 'inspection.confirm', { before: rows(current), after: input.rows, skippedRows })
+      return { ...payload(await tx.inspection.findUniqueOrThrow({ where: { id }, include }), true), skippedRows }
     }, { timeout: 120_000 }),
     customerAction: (id: string, version: number, user: AuthUser, consent: boolean) => customerTransaction(client, async (tx) => {
       const actor = await tx.user.findUnique({ where: { id: user.id }, include: { customer: true } })

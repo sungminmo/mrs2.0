@@ -52,7 +52,7 @@ export async function parseInspectionFile(bytes: ArrayBuffer): Promise<Inspectio
     const row = { ...emptyInspectionRow(), itemId, name, specification, brand, categoryId, unit, grade, received, usable, disposal, reason, locationId } as InspectionRow
     const messages = inspectionRowErrors(row)
     if (messages.length) errors.push({ row: line, messages })
-    rows.push(row)
+    else rows.push(row)
   }
   if (!rows.length && !errors.length) throw new Error('검수 데이터가 없습니다.')
   return { rows, errors }

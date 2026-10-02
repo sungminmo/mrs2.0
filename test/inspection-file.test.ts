@@ -39,17 +39,22 @@ test('XLSX accepts empty specification and category but validates supplied categ
   assert.equal(parsed.rows[0]!.categoryId, '')
   sheet.getRow(2).getCell(5).value = 'invalid'
   const invalid = await parseInspectionFile(await workbook.xlsx.writeBuffer() as ArrayBuffer)
+  assert.equal(invalid.rows.length, 0)
   assert.match(invalid.errors[0]!.messages.join(','), /카테고리/)
 })
 test('XLSX import reports invalid balances and rejects formulas, headers and corrupt input', async () => {
   const workbook = new ExcelJS.Workbook(), sheet = workbook.addWorksheet('1차검수')
   sheet.addRow(inspectionHeaders)
+  sheet.addRow([1, '정상 자산', '', '', 10101, 'M', 'A', '1.1', '0.7', '0.4', '손상', 'LOC-01'])
   sheet.addRow([1, '자산', '규격', '', 10101, 'M', 'A', '1.1', '0.7', '0.3', '손상', 'LOC-01'])
   sheet.addRow(['', { formula: '1+1' }, '', '', '', '', '', '', '', '', '', ''])
   const parsed = await parseInspectionFile(await workbook.xlsx.writeBuffer() as ArrayBuffer)
+  assert.equal(parsed.rows.length, 1)
+  assert.equal(parsed.rows[0]!.name, '정상 자산')
   assert.equal(parsed.rows[0]!.itemId, '000001')
   assert.equal(parsed.rows[0]!.categoryId, '010101')
   assert.equal(parsed.errors.length, 2)
+  assert.deepEqual(parsed.errors.map((entry) => entry.row), [3, 4])
   sheet.getRow(1).getCell(1).value = '잘못된 열'
   await assert.rejects(parseInspectionFile(await workbook.xlsx.writeBuffer() as ArrayBuffer), /열 이름/)
   await assert.rejects(parseInspectionFile(new ArrayBuffer(30)), /손상/)

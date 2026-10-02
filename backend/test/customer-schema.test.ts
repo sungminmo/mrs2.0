@@ -211,7 +211,8 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     await assert.rejects(repository.receive(receiving.id, receiveInput.parse({ receivedAt: '2026-09-28T12:00:00+09:00', reason: '중복' }), reviewer))
     const row = { id: randomUUID(), itemId: '', name: '품목 없는 자산', specification: '', brand: '', categoryId: '', unit: 'EA', grade: 'A', received: '10', usable: '8', disposal: '2', reason: '파손', locationId: location.id, photos: [] }
     const unused = { ...row, id: randomUUID(), name: '전량 폐기 행', grade: 'F', received: '5', usable: '0', disposal: '5', locationId: '' }
-    const draft = await repository.draft(initial.id, inspectionWrite.parse({ version: 0, rows: [{ ...row, grade: '', received: '' }], reason: '작성 중' }), reviewer)
+    const draft = await repository.draft(initial.id, inspectionWrite.parse({ version: 0, rows: [{ ...row, grade: '', received: '' }], skipInvalidRowIds: [row.id], reason: '작성 중' }), reviewer)
+    assert.deepEqual((await repository.detail(initial.id)).skipInvalidRowIds, [row.id])
     await assert.rejects(repository.detail(initial.id, inspectionCompany.id))
     const before = await client.asset.count()
     await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [unused], reason: '전량 폐기' }), reviewer, false))
@@ -227,7 +228,27 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     try { await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [row, unused], reason: '확정' }), reviewer, false)) }
     finally { sql('DROP TRIGGER test_inspection_audit_failure') }
     assert.equal(await client.asset.count(), before)
-    const confirmed = await repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [row, unused], reason: '확정' }), reviewer, false)
+    const rejectedRows = [
+      { ...row, id: randomUUID(), categoryId: '770100' },
+      { ...row, id: randomUUID(), itemId: '028818' },
+      { ...row, id: randomUUID(), locationId: 'MISSING-LOC' },
+      { ...row, id: randomUUID(), disposal: '3' },
+    ]
+    const skipInvalidRowIds = rejectedRows.map((entry) => entry.id)
+    sql("CREATE TRIGGER test_partial_inspection_audit_failure BEFORE INSERT ON receiving_changes FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='audit failure'")
+    try { await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [row, ...rejectedRows], skipInvalidRowIds, reason: '부분 등록 롤백' }), reviewer, false)) }
+    finally { sql('DROP TRIGGER test_partial_inspection_audit_failure') }
+    assert.equal(await client.asset.count(), before)
+    assert.equal(await client.inspectionItem.count({ where: { inspectionId: initial.id } }), 0)
+    await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: rejectedRows, skipInvalidRowIds, reason: '전체 오류' }), reviewer, false), /등록 가능한 재사용 자산이 없습니다/)
+    assert.equal(await client.asset.count(), before)
+    const confirmed = await repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [row, ...rejectedRows, unused], skipInvalidRowIds, reason: '확정' }), reviewer, false)
+    assert.equal(confirmed.skippedRows.length, 4)
+    assert.deepEqual(confirmed.skippedRows.map((entry) => entry.row), [2, 3, 4, 5])
+    assert.equal(await client.inspectionItem.count({ where: { id: { in: skipInvalidRowIds } } }), 0)
+    assert.equal(await client.asset.count(), before + 1)
+    const confirmationAudit = await client.receivingChange.findFirstOrThrow({ where: { receivingId: receiving.id, reason: '확정' } })
+    assert.match(JSON.stringify(confirmationAudit.changes), /skippedRows/)
     assert.equal(confirmed.assets.length, 1)
     assert.match(confirmed.assets[0]!.id, /^260928-\d{4}$/)
     const asset = await client.asset.findUniqueOrThrow({ where: { id: confirmed.assets[0]!.id } })
@@ -237,6 +258,7 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     assert.equal(savedRow.categoryId, null); assert.equal(savedRow.specification, '')
     assert.equal((await client.disposalItem.count({ where: { inspectionId: initial.id } })), 2)
     assert.equal(confirmed.editable, true)
+    await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: confirmed.version, rows: [row, unused], skipInvalidRowIds: [row.id], reason: '정정 행 제외' }), reviewer, true), /정정에서는 오류 행을 제외할 수 없습니다/)
     const amended = await repository.save(initial.id, inspectionWrite.parse({ version: confirmed.version, rows: [{ ...row, usable: '7', disposal: '3' }, unused], reason: '검수 수량 정정' }), reviewer, true)
     assert.equal(amended.assets[0]!.id, asset.id)
     assert.equal(amended.editable, true)
