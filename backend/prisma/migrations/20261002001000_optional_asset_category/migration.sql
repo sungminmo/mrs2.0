@@ -1,0 +1,1 @@
+ALTER TABLE `assets` MODIFY `categoryId` VARCHAR(6) NULL;

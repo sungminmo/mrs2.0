@@ -23,9 +23,9 @@ export function inspectionRowErrors(row: InspectionRow): string[] {
   const errors: string[] = []
   if (row.itemId && !/^\d{6}$/.test(row.itemId)) errors.push('품목코드: 6자리 숫자')
   if (!row.name.trim() || row.name.length > 160) errors.push('자산명: 1~160자')
-  if (!row.specification.trim() || row.specification.length > 500) errors.push('규격: 1~500자')
+  if (row.specification.length > 500) errors.push('규격: 500자 이하')
   if (row.brand.length > 160) errors.push('브랜드: 160자 이하')
-  if (!/^\d{6}$/.test(row.categoryId)) errors.push('카테고리: 6자리 코드')
+  if (row.categoryId && !/^\d{6}$/.test(row.categoryId)) errors.push('카테고리: 6자리 코드')
   if (!row.unit || !(row.unit in inspectionUnits)) errors.push('단위 선택')
   if (!['S', 'A', 'B', 'F'].includes(row.grade)) errors.push('등급 선택')
   const received = amount(row.received), usable = amount(row.usable), disposal = amount(row.disposal)

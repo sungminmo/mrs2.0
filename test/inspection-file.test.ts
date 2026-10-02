@@ -29,6 +29,18 @@ test('XLSX template preserves codes, optional item and F rows', async () => {
   assert.equal(parsed.rows[1]!.grade, 'F')
   assert.deepEqual(parsed.errors, [])
 })
+test('XLSX accepts empty specification and category but validates supplied category codes', async () => {
+  const workbook = new ExcelJS.Workbook(), sheet = workbook.addWorksheet('1차검수')
+  sheet.addRow(inspectionHeaders)
+  sheet.addRow(['', '미분류 자산', '', '', '', 'EA', 'A', '1', '1', '0', '', 'LOC-01'])
+  const parsed = await parseInspectionFile(await workbook.xlsx.writeBuffer() as ArrayBuffer)
+  assert.deepEqual(parsed.errors, [])
+  assert.equal(parsed.rows[0]!.specification, '')
+  assert.equal(parsed.rows[0]!.categoryId, '')
+  sheet.getRow(2).getCell(5).value = 'invalid'
+  const invalid = await parseInspectionFile(await workbook.xlsx.writeBuffer() as ArrayBuffer)
+  assert.match(invalid.errors[0]!.messages.join(','), /카테고리/)
+})
 test('XLSX import reports invalid balances and rejects formulas, headers and corrupt input', async () => {
   const workbook = new ExcelJS.Workbook(), sheet = workbook.addWorksheet('1차검수')
   sheet.addRow(inspectionHeaders)

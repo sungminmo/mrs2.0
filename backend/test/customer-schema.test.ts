@@ -209,13 +209,14 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     await receivings.review(receiving.id, { action: 'approve', reason: '승인' }, reviewer)
     const initial = await repository.receive(receiving.id, receiveInput.parse({ receivedAt: '2026-09-28T12:00:00+09:00', reason: '실제 입고' }), reviewer)
     await assert.rejects(repository.receive(receiving.id, receiveInput.parse({ receivedAt: '2026-09-28T12:00:00+09:00', reason: '중복' }), reviewer))
-    const row = { id: randomUUID(), itemId: '', name: '품목 없는 자산', specification: '직접 규격', brand: '', categoryId: '770101', unit: 'EA', grade: 'A', received: '10', usable: '8', disposal: '2', reason: '파손', locationId: location.id, photos: [] }
+    const row = { id: randomUUID(), itemId: '', name: '품목 없는 자산', specification: '', brand: '', categoryId: '', unit: 'EA', grade: 'A', received: '10', usable: '8', disposal: '2', reason: '파손', locationId: location.id, photos: [] }
     const unused = { ...row, id: randomUUID(), name: '전량 폐기 행', grade: 'F', received: '5', usable: '0', disposal: '5', locationId: '' }
     const draft = await repository.draft(initial.id, inspectionWrite.parse({ version: 0, rows: [{ ...row, grade: '', received: '' }], reason: '작성 중' }), reviewer)
     await assert.rejects(repository.detail(initial.id, inspectionCompany.id))
     const before = await client.asset.count()
     await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [unused], reason: '전량 폐기' }), reviewer, false))
     await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [{ ...row, disposal: '3' }], reason: '수량 오류' }), reviewer, false))
+    await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [{ ...row, categoryId: '770100' }], reason: '잘못된 분류' }), reviewer, false), /카테고리/)
     assert.equal(await client.asset.count(), before)
     sql("CREATE TRIGGER test_inspection_audit_failure BEFORE INSERT ON receiving_changes FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='audit failure'")
     try { await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [row, unused], reason: '확정' }), reviewer, false)) }
@@ -226,6 +227,9 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     assert.match(confirmed.assets[0]!.id, /^260928-\d{4}$/)
     const asset = await client.asset.findUniqueOrThrow({ where: { id: confirmed.assets[0]!.id } })
     assert.equal(asset.itemId, null); assert.equal(asset.quantity.toString(), '8'); assert.equal(asset.storageStatus, 'STORED'); assert.equal(asset.appraisal, null)
+    assert.equal(asset.categoryId, null); assert.equal(asset.specification, '')
+    const savedRow = await client.inspectionItem.findUniqueOrThrow({ where: { id: row.id } })
+    assert.equal(savedRow.categoryId, null); assert.equal(savedRow.specification, '')
     assert.equal((await client.disposalItem.count({ where: { inspectionId: initial.id } })), 2)
     assert.equal(confirmed.editable, true)
     const amended = await repository.save(initial.id, inspectionWrite.parse({ version: confirmed.version, rows: [{ ...row, usable: '7', disposal: '3' }, unused], reason: '검수 수량 정정' }), reviewer, true)
@@ -247,6 +251,9 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     await assert.rejects(repository.customerAction(initial.id, agreed.version, (await auth.findById(user.id))!, true))
     const actual = await createAssetRepository(client).detail!(inspectionCompany.id, asset.id)
     assert.equal(actual?.itemId, null)
+    assert.equal(actual?.category, null)
+    const assetPage = await createAssetRepository(client).list(inspectionCompany.id, { page: 1, size: 20, sort: 'updatedDesc' }, new Date())
+    assert.equal(assetPage.records[0]!.category, null)
     await client.user.update({ where: { id: member.id }, data: { customerRole: 'VIEWER' } })
     await assert.rejects(repository.customerAction(initial.id, agreed.version, manager, true))
     const disabled = await locationRepository.save(location.id, { name: location.name, zone: location.zone, enabled: false, version: location.version, reason: '사용중지' }, reviewer)

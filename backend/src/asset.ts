@@ -30,7 +30,7 @@ type AssetListRecord = {
   itemId: string | null
   receivingId: string
   name: string
-  category: { id: string; name: string; path: string }
+  category: { id: string; name: string; path: string } | null
   specification: string
   brand: string
   grade: 'S' | 'A' | 'B' | 'F'
@@ -46,7 +46,7 @@ type AssetListRecord = {
   updatedAt: Date
 }
 
-type AssetDetail = { id: string; name: string; itemId: string | null; receivingId: string; specification: string; brand: string; grade: string; quantity: string; unit: string; appraisalValue: string | null; storageStatus: string; saleStatus: string; locationId: string | null; category: { id: string; name: string; path: string }; createdAt: Date; images: Array<{ id: string; name: string; url: string }> }
+type AssetDetail = { id: string; name: string; itemId: string | null; receivingId: string; specification: string; brand: string; grade: string; quantity: string; unit: string; appraisalValue: string | null; storageStatus: string; saleStatus: string; locationId: string | null; category: { id: string; name: string; path: string } | null; createdAt: Date; images: Array<{ id: string; name: string; url: string }> }
 type AssetSummary = { total: number; appraisalValue: string | null; unappraised: number; groups: Array<{ storageStatus: string; saleStatus: string; count: number }>; quantities: Array<{ unit: string; quantity: string }> }
 
 export type AssetRepository = {
@@ -66,7 +66,7 @@ const assetSchema = z.object({
   itemId: z.string().nullable(),
   receivingId: z.string(),
   name: z.string(),
-  category: categorySchema,
+  category: categorySchema.nullable(),
   specification: z.string(),
   brand: z.string(),
   grade: z.enum(['S', 'A', 'B', 'F']),
@@ -269,7 +269,7 @@ export function createAssetRepository(client: PrismaClient): AssetRepository {
           itemId: record.itemId,
           receivingId: record.receivingId,
           name: record.name,
-          category: { id: record.category.id, name: record.category.name, path: categoryPath(categories, record.category.id) },
+          category: record.category ? { id: record.category.id, name: record.category.name, path: categoryPath(categories, record.category.id) } : null,
           specification: record.specification,
           brand: record.brand,
           grade: record.grade,
@@ -291,7 +291,7 @@ export function createAssetRepository(client: PrismaClient): AssetRepository {
       const record = await client.asset.findFirst({ where: { id, customerId }, include: { category: true, images: { orderBy: { sortOrder: 'asc' } } } })
       if (!record) return null
       const categories = await client.materialCategory.findMany({ select: { id: true, parentId: true, name: true } })
-      return { id: record.id, itemId: record.itemId, receivingId: record.receivingId, name: record.name, specification: record.specification, brand: record.brand, grade: record.grade, quantity: record.quantity.toString(), unit: record.unit, appraisalValue: record.appraisal?.toString() ?? null, storageStatus: record.storageStatus, saleStatus: record.saleStatus, locationId: record.locationId, createdAt: record.createdAt, category: { id: record.category.id, name: record.category.name, path: categoryPath(categories, record.category.id) }, images: record.images.flatMap((image) => { const url = privateImage(image.url); return url ? [{ id: image.id, name: image.name, url }] : [] }) }
+      return { id: record.id, itemId: record.itemId, receivingId: record.receivingId, name: record.name, specification: record.specification, brand: record.brand, grade: record.grade, quantity: record.quantity.toString(), unit: record.unit, appraisalValue: record.appraisal?.toString() ?? null, storageStatus: record.storageStatus, saleStatus: record.saleStatus, locationId: record.locationId, createdAt: record.createdAt, category: record.category ? { id: record.category.id, name: record.category.name, path: categoryPath(categories, record.category.id) } : null, images: record.images.flatMap((image) => { const url = privateImage(image.url); return url ? [{ id: image.id, name: image.name, url }] : [] }) }
     },
     summary: async (customerId) => {
       await assertOwnerConsistency(client, customerId)

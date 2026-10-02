@@ -61,7 +61,7 @@ async function validateRows(tx: Tx, input: Row[], current: Report, amend: boolea
   if (amend && (input.length !== current.items.length || input.some((entry, index) => current.items[index]?.id !== entry.id))) throw invalid('확정 후 행 추가·삭제·순서 변경은 허용하지 않습니다.')
   const categories = await tx.materialCategory.findMany()
   for (const [index, entry] of input.entries()) {
-    if (!entry.name || !entry.specification || !entry.unit || !entry.grade || !entry.received || !entry.usable || !entry.disposal) throw invalid(`${index + 1}행: 필수 입력을 확인해 주세요.`)
+    if (!entry.name || !entry.unit || !entry.grade || !entry.received || !entry.usable || !entry.disposal) throw invalid(`${index + 1}행: 필수 입력을 확인해 주세요.`)
     const received = new Prisma.Decimal(entry.received), usable = new Prisma.Decimal(entry.usable), disposal = new Prisma.Decimal(entry.disposal)
     if (!received.gt(0) || !received.eq(usable.plus(disposal)) || entry.grade === 'F' && !usable.isZero() || disposal.gt(0) && !entry.reason) throw invalid(`${index + 1}행: 수량 합계·F등급·폐기 사유를 확인해 주세요.`)
     if (['EA', 'BOX', 'PIECE'].includes(entry.unit) && [received, usable, disposal].some((value) => !value.isInteger())) throw invalid(`${index + 1}행: EA·Box·본 단위는 정수 수량입니다.`)
@@ -69,7 +69,7 @@ async function validateRows(tx: Tx, input: Row[], current: Report, amend: boolea
     if (amend && (!previous || (previous.itemId ?? '') !== entry.itemId || previous.unit !== entry.unit || Boolean(previous.assetId) !== usable.gt(0))) throw invalid('확정 후 품목·단위·재사용 여부를 변경할 수 없습니다.')
     const category = categories.find((value) => value.id === entry.categoryId)
     const parent = categories.find((value) => value.id === category?.parentId), root = categories.find((value) => value.id === parent?.parentId)
-    if (!category || !parent || !root || root.parentId || categories.some((value) => value.parentId === category.id) || !(category.enabled && parent.enabled && root.enabled) && !(amend && previous?.categoryId === entry.categoryId)) throw invalid(`${index + 1}행: 활성 3차 카테고리가 필요합니다.`)
+    if (entry.categoryId && (!category || !parent || !root || root.parentId || categories.some((value) => value.parentId === category.id) || !(category.enabled && parent.enabled && root.enabled) && !(amend && previous?.categoryId === entry.categoryId))) throw invalid(`${index + 1}행: 활성 3차 카테고리가 필요합니다.`)
     if (entry.itemId) {
       const item = await tx.masterItem.findUnique({ where: { id: entry.itemId } })
       if (!item || item.unit !== entry.unit || !item.enabled && !amend) throw invalid(`${index + 1}행: 사용 품목과 기준 단위를 확인해 주세요.`)
@@ -135,7 +135,7 @@ export function createInspectionRepository(client: PrismaClient) {
         const usable = new Prisma.Decimal(entry.usable)
         const assetId = usable.gt(0) ? previous?.assetId ?? `${dateCode}-${String(nextCode++).padStart(4, '0')}` : null
         if (assetId) {
-          const fields = { itemId: entry.itemId || null, categoryId: entry.categoryId, name: entry.name, specification: entry.specification, brand: entry.brand, grade: entry.grade as 'S' | 'A' | 'B', unit: entry.unit as ItemUnit, quantity: usable, locationId: entry.locationId }
+          const fields = { itemId: entry.itemId || null, categoryId: entry.categoryId || null, name: entry.name, specification: entry.specification, brand: entry.brand, grade: entry.grade as 'S' | 'A' | 'B', unit: entry.unit as ItemUnit, quantity: usable, locationId: entry.locationId }
           if (amend) {
             await tx.asset.update({ where: { id: assetId }, data: fields })
             await tx.assetImage.deleteMany({ where: { assetId } })
@@ -143,7 +143,7 @@ export function createInspectionRepository(client: PrismaClient) {
           } else await tx.asset.create({ data: { ...fields, id: assetId, receivingId: current.receivingId, receiptId: id, customerId: current.receiving.customerId, storageStatus: 'STORED', saleStatus: 'PENDING' } })
           if (entry.photos.length) await tx.assetImage.createMany({ data: entry.photos.map((image, index) => ({ id: randomUUID(), assetId, name: image.name, url: image.url, sortOrder: index })) })
         }
-        const data = { itemId: entry.itemId || null, categoryId: entry.categoryId, brand: entry.brand, locationId: entry.locationId || null, name: entry.name, specification: entry.specification, unit: entry.unit as ItemUnit, grade: entry.grade as 'S' | 'A' | 'B' | 'F', receivedQuantity: entry.received, usableQuantity: entry.usable, disposalQuantity: entry.disposal, reason: entry.reason, sortOrder, assetId }
+        const data = { itemId: entry.itemId || null, categoryId: entry.categoryId || null, brand: entry.brand, locationId: entry.locationId || null, name: entry.name, specification: entry.specification, unit: entry.unit as ItemUnit, grade: entry.grade as 'S' | 'A' | 'B' | 'F', receivedQuantity: entry.received, usableQuantity: entry.usable, disposalQuantity: entry.disposal, reason: entry.reason, sortOrder, assetId }
         if (amend) { await tx.inspectionItem.update({ where: { id: entry.id }, data }); await tx.inspectionItemImage.deleteMany({ where: { inspectionItemId: entry.id } }) }
         else await tx.inspectionItem.create({ data: { ...data, id: entry.id, inspectionId: id } })
         if (entry.photos.length) await tx.inspectionItemImage.createMany({ data: entry.photos.map((image, index) => ({ id: randomUUID(), inspectionItemId: entry.id, url: image.url, caption: image.name, sortOrder: index })) })

@@ -127,7 +127,7 @@ test('Prisma repository scopes ownership and expands descendant categories', asy
   assert.deepEqual(countWhere?.categoryId, { in: ['ROOT', 'CHILD', 'LEAF'] })
   assert.deepEqual(findArguments?.where, countWhere)
   assert.deepEqual(findArguments?.orderBy, [{ name: 'asc' }, { id: 'asc' }])
-  assert.equal(result.records[0]?.category.path, 'Root > Child > Leaf')
+  assert.equal(result.records[0]?.category?.path, 'Root > Child > Leaf')
   assert.equal(result.records[0]?.appraisalValue, null)
 })
 
