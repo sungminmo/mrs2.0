@@ -72,7 +72,9 @@ async function validateRows(tx: Tx, input: Row[], current: Report, amend: boolea
     if (entry.categoryId && (!category || !parent || !root || root.parentId || categories.some((value) => value.parentId === category.id) || !(category.enabled && parent.enabled && root.enabled) && !(amend && previous?.categoryId === entry.categoryId))) throw invalid(`${index + 1}행: 활성 3차 카테고리가 필요합니다.`)
     if (entry.itemId) {
       const item = await tx.masterItem.findUnique({ where: { id: entry.itemId } })
-      if (!item || item.unit !== entry.unit || !item.enabled && !amend) throw invalid(`${index + 1}행: 사용 품목과 기준 단위를 확인해 주세요.`)
+      if (!item) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}는 등록되지 않았습니다. 등록된 품목을 선택하거나 품목코드를 비워 미연결 자산으로 저장해 주세요.`)
+      if (!item.enabled && !amend) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}는 미사용 상태입니다. 사용 중인 품목을 선택해 주세요.`)
+      if (item.unit !== entry.unit) throw invalid(`${index + 1}행: 품목코드 ${entry.itemId}의 기준 단위는 ${item.unit ?? '미지정'}이며 입력 단위 ${entry.unit}와 일치하지 않습니다.`)
     }
     if (usable.gt(0)) {
       const location = await tx.location.findUnique({ where: { id: entry.locationId } })

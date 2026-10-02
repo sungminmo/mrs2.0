@@ -217,6 +217,11 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [unused], reason: '전량 폐기' }), reviewer, false))
     await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [{ ...row, disposal: '3' }], reason: '수량 오류' }), reviewer, false))
     await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [{ ...row, categoryId: '770100' }], reason: '잘못된 분류' }), reviewer, false), /카테고리/)
+    await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [{ ...row, itemId: '028818' }], reason: '미등록 품목' }), reviewer, false), /품목코드 028818는 등록되지 않았습니다/)
+    await client.masterItem.create({ data: { id: '778818', name: '검수 단위 검증', specification: '', unit: 'M', enabled: true, note: '' } })
+    await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [{ ...row, itemId: '778818' }], reason: '단위 불일치' }), reviewer, false), /기준 단위는 M.*입력 단위 EA/)
+    await client.masterItem.update({ where: { id: '778818' }, data: { enabled: false } })
+    await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [{ ...row, itemId: '778818' }], reason: '미사용 품목' }), reviewer, false), /미사용 상태/)
     assert.equal(await client.asset.count(), before)
     sql("CREATE TRIGGER test_inspection_audit_failure BEFORE INSERT ON receiving_changes FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='audit failure'")
     try { await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: draft.version, rows: [row, unused], reason: '확정' }), reviewer, false)) }
