@@ -25,7 +25,7 @@ export default function ItemFileActions({ items, assets, categories, onImport }:
     if (!file) return
     setError('')
     if (!file.name.toLocaleLowerCase().endsWith('.csv')) { setError('CSV 파일만 등록할 수 있습니다.'); return }
-    if (!file.size || file.size > 2 * 1024 * 1024) { setError('파일은 2MB 이하로 등록해 주세요.'); return }
+    if (!file.size || file.size > 5 * 1024 * 1024) { setError('파일은 5MB 이하로 등록해 주세요.'); return }
     setUploading(true)
     try { onImport(await registerAdminItems(parseItemFile(await file.text(), items, assets, categories))) } catch (reason) { setError(reason instanceof Error ? reason.message : '파일을 읽지 못했습니다.') } finally { setUploading(false) }
   }
