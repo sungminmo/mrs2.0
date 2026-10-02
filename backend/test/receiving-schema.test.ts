@@ -68,9 +68,9 @@ test('receiving schema on isolated MySQL 8.4', { skip: process.env.RUN_RECEIVING
     reject("DELETE FROM receivings WHERE id = 'REQ-TEST-1'", /foreign key constraint fails/)
   })
 
-  await context.test('consent cannot be bypassed or granted before estimating cost', () => {
+  await context.test('material consent is independent of cost but cannot be bypassed', () => {
     reject("UPDATE disposals SET status = '처리 예정' WHERE inspectionId = 'RCV-TEST-1'", /disposals_consent_check/)
-    reject("UPDATE disposals SET consentedAt = NOW(3) WHERE inspectionId = 'RCV-TEST-1'", /disposals_consent_check/)
+    sql("START TRANSACTION; UPDATE disposals SET consentedAt = NOW(3) WHERE inspectionId = 'RCV-TEST-1'; ROLLBACK;")
     sql("START TRANSACTION; UPDATE disposals SET costStatus = '예상 비용 안내', estimate = 0, consentedAt = NOW(3), status = '처리 예정' WHERE inspectionId = 'RCV-TEST-1'; ROLLBACK;")
   })
 

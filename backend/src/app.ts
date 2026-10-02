@@ -12,6 +12,8 @@ import { bodyLimit } from 'hono/body-limit'
 import type { Context } from 'hono'
 import { uploadAdminImage, saveAdminImages, replaceImagesSchema, type ImageStorage, type AdminImageRepository } from './admin-images.js'
 import { receivingDecision, receivingHandlers, receivingInput, receivingQuery, type ReceivingRepository } from './receiving.js'
+import { inspectionHandlers, inspectionWrite, inspectionVersion, receiveInput, inspectionListQuery, type InspectionRepository } from './inspection.js'
+import { locationHandlers, locationInput, locationUpdate, locationQuery, type LocationRepository } from './location.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -25,9 +27,11 @@ type Dependencies = {
   imageStorage?: ImageStorage
   adminImages?: AdminImageRepository
   receivings?: ReceivingRepository
+  inspections?: InspectionRepository
+  locations?: LocationRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations }: Dependencies) {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (result.success) return
@@ -46,6 +50,37 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
   if (auth) {
     const customerAuth = requireAuth(auth.repository, auth.secret, 'CUSTOMER')
     const adminAuth = requireAuth(auth.repository, auth.secret, 'ADMIN')
+    if (inspections) {
+      const inspection = inspectionHandlers(inspections)
+      app.use('/api/admin/inspections/:id/*', bodyLimit({ maxSize: 10 * 1024 * 1024, onError: (context) => failure(context, 413, ErrorCode.VALIDATION_ERROR, '검수 요청은 10MB 이하입니다. 행과 사진을 나눠 주세요.') }))
+      app.post('/api/admin/receivings/:id/receive', adminAuth, requireAdmin, inspection.receive)
+      app.get('/api/admin/inspections/:id', adminAuth, requireAdmin, inspection.detail)
+      app.put('/api/admin/inspections/:id/draft', adminAuth, requireAdmin, inspection.draft)
+      app.post('/api/admin/inspections/:id/confirm', adminAuth, requireAdmin, inspection.save(false))
+      app.put('/api/admin/inspections/:id/result', adminAuth, requireAdmin, inspection.save(true))
+      app.get('/api/customer/inspections', customerAuth, inspection.list)
+      app.get('/api/customer/inspections/:id', customerAuth, inspection.customerDetail)
+      app.post('/api/customer/inspections/:id/acknowledge', customerAuth, inspection.customerAction(false))
+      app.post('/api/customer/inspections/:id/disposal-consent', customerAuth, inspection.customerAction(true))
+      for (const [method, path, schema] of [
+        ['post', '/api/admin/receivings/{id}/receive', receiveInput],
+        ['get', '/api/admin/inspections/{id}', null],
+        ['put', '/api/admin/inspections/{id}/draft', inspectionWrite],
+        ['post', '/api/admin/inspections/{id}/confirm', inspectionWrite],
+        ['put', '/api/admin/inspections/{id}/result', inspectionWrite],
+        ['get', '/api/customer/inspections/{id}', null],
+        ['post', '/api/customer/inspections/{id}/acknowledge', inspectionVersion],
+        ['post', '/api/customer/inspections/{id}/disposal-consent', inspectionVersion.extend({ agreed: z.literal(true) })],
+      ] as const) app.openAPIRegistry.registerPath({ method, path, tags: ['First inspections'], summary: path, security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string().max(20) }), ...(schema ? { body: { required: true, content: { 'application/json': { schema } } } } : {}) }, responses: { 200: { description: '검수 결과 저장·조회' }, 201: { description: '입고 완료·검수 대기 생성' }, 400: { description: '입력·수량·참조 오류' }, 401: { description: '인증 필요' }, 403: { description: '권한 필요' }, 404: { description: '결과 없음 또는 타 고객사' }, 409: { description: '버전·상태·후속 작업 충돌' } } })
+      app.openAPIRegistry.registerPath({ method: 'get', path: '/api/customer/inspections', tags: ['First inspections'], summary: '고객사 확정 검수 결과 목록', security: [{ BearerAuth: [] }], request: { query: inspectionListQuery }, responses: { 200: { description: '고객사별 페이지 목록' } } })
+    }
+    if (locations) {
+      const location = locationHandlers(locations)
+      app.get('/api/admin/locations', adminAuth, requireAdmin, location.list)
+      app.post('/api/admin/locations', adminAuth, requireAdmin, location.save(false))
+      app.patch('/api/admin/locations/:id', adminAuth, requireAdmin, location.save(true))
+      for (const [method, path, schema] of [['get', '/api/admin/locations', null], ['post', '/api/admin/locations', locationInput], ['patch', '/api/admin/locations/{id}', locationUpdate]] as const) app.openAPIRegistry.registerPath({ method, path, tags: ['Locations'], summary: '로케이션 DB 관리', security: [{ BearerAuth: [] }], request: { ...(method === 'get' ? { query: locationQuery } : { body: { required: true, content: { 'application/json': { schema: schema! } } } }), ...(method === 'patch' ? { params: z.object({ id: z.string().max(20) }) } : {}) }, responses: { 200: { description: '조회·수정' }, 201: { description: '생성' }, 400: { description: '입력 오류' }, 401: { description: '관리자 인증 필요' }, 409: { description: '이름 중복·버전 충돌' } } })
+    }
     if (receivings) {
       const receiving = receivingHandlers(receivings, imageStorage)
       app.post('/api/admin/receivings/:id/review', adminAuth, requireAdmin, receiving.review)
@@ -62,7 +97,7 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
     }
     if (imageStorage) {
       app.post('/api/admin/images/:kind', adminAuth, requireAdmin, bodyLimit({ maxSize: 6 * 1024 * 1024, onError: (context) => failure(context, 413, ErrorCode.VALIDATION_ERROR, '이미지 파일은 5MB 이하로 업로드해 주세요.') }), async (context: Context, next) => { if (customers) await customers.throttle('image-upload', (context.get('authUser') as { id: string }).id, 100); await next() }, uploadAdminImage(imageStorage))
-      app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/images/{kind}', summary: '관리자 이미지 파일 S3 업로드', tags: ['Images'], security: [{ BearerAuth: [] }], request: { params: z.object({ kind: z.enum(['items', 'assets', 'banners']) }), body: { required: true, content: { 'multipart/form-data': { schema: z.object({ file: z.string().openapi({ type: 'string', format: 'binary' }) }) } } } }, responses: { 201: { description: 'S3 이미지 id/name/url' }, 400: { description: '잘못된 이미지' }, 401: { description: '관리자 인증 필요' }, 413: { description: '크기 초과' }, 429: { description: '업로드 요청 제한' }, 503: { description: 'S3 저장 실패' } } })
+      app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/images/{kind}', summary: '관리자 이미지 파일 S3 업로드', tags: ['Images'], security: [{ BearerAuth: [] }], request: { params: z.object({ kind: z.enum(['items', 'assets', 'banners', 'inspections']) }), body: { required: true, content: { 'multipart/form-data': { schema: z.object({ file: z.string().openapi({ type: 'string', format: 'binary' }) }) } } } }, responses: { 201: { description: 'S3 이미지 id/name/url' }, 400: { description: '잘못된 이미지' }, 401: { description: '관리자 인증 필요' }, 413: { description: '크기 초과' }, 429: { description: '업로드 요청 제한' }, 503: { description: 'S3 저장 실패' } } })
     }
     if (adminImages) for (const kind of ['items', 'assets'] as const) {
       app.put(`/api/admin/${kind}/:id/images`, adminAuth, requireAdmin, saveAdminImages(adminImages, kind))

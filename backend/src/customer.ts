@@ -40,9 +40,9 @@ function conflict() {
   return new AppError(409, ErrorCode.CONFLICT, '상태가 변경되었거나 처리할 수 없습니다. 새로고침 후 확인해 주세요.')
 }
 
-export async function customerTransaction<T>(client: PrismaClient, work: (transaction: Transaction) => Promise<T>): Promise<T> {
+export async function customerTransaction<T>(client: PrismaClient, work: (transaction: Transaction) => Promise<T>, options: { timeout?: number } = {}): Promise<T> {
   try {
-    return await client.$transaction(work, { isolationLevel: 'Serializable' })
+    return await client.$transaction(work, { isolationLevel: 'Serializable', ...options })
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && ['P2002', 'P2034'].includes(String(error.code))) throw conflict()
     throw error

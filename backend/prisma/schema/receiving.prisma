@@ -103,6 +103,8 @@ model Inspection {
   notifiedAt          DateTime?
   notificationChannel String?          @db.VarChar(80)
   acknowledgedAt      DateTime?
+  version             Int              @default(0)
+  draftData           Json?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
@@ -120,6 +122,11 @@ model InspectionItem {
   id               String      @id @default(uuid()) @db.VarChar(36)
   inspectionId     String      @db.VarChar(20)
   assetId          String?     @unique @db.VarChar(11)
+  itemId           String?     @db.VarChar(6)
+  categoryId       String?     @db.VarChar(6)
+  brand            String      @default("") @db.VarChar(160)
+  locationId       String?     @db.VarChar(20)
+  assetBaseline    Json?
   name             String      @db.VarChar(160)
   specification    String      @default("") @db.VarChar(500)
   grade            AssetGrade?

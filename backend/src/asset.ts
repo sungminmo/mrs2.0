@@ -27,7 +27,7 @@ export type AssetListQuery = z.infer<typeof assetListQuerySchema>
 
 type AssetListRecord = {
   id: string
-  itemId: string
+  itemId: string | null
   receivingId: string
   name: string
   category: { id: string; name: string; path: string }
@@ -46,7 +46,7 @@ type AssetListRecord = {
   updatedAt: Date
 }
 
-type AssetDetail = { id: string; name: string; itemId: string; receivingId: string; specification: string; brand: string; grade: string; quantity: string; unit: string; appraisalValue: string | null; storageStatus: string; saleStatus: string; locationId: string | null; category: { id: string; name: string; path: string }; createdAt: Date; images: Array<{ id: string; name: string; url: string }> }
+type AssetDetail = { id: string; name: string; itemId: string | null; receivingId: string; specification: string; brand: string; grade: string; quantity: string; unit: string; appraisalValue: string | null; storageStatus: string; saleStatus: string; locationId: string | null; category: { id: string; name: string; path: string }; createdAt: Date; images: Array<{ id: string; name: string; url: string }> }
 type AssetSummary = { total: number; appraisalValue: string | null; unappraised: number; groups: Array<{ storageStatus: string; saleStatus: string; count: number }>; quantities: Array<{ unit: string; quantity: string }> }
 
 export type AssetRepository = {
@@ -63,7 +63,7 @@ const categorySchema = z.object({
 
 const assetSchema = z.object({
   id: z.string(),
-  itemId: z.string(),
+  itemId: z.string().nullable(),
   receivingId: z.string(),
   name: z.string(),
   category: categorySchema,

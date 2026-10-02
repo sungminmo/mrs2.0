@@ -35,6 +35,9 @@ try {
       update: { name: 'Steel', parentId: '990100', enabled: true, sortOrder: 2 },
       create: { id: '990102', name: 'Steel', parentId: '990100', enabled: true, sortOrder: 2 },
     })
+    for (const id of ['TEST-LOC-A1', 'TEST-LOC-B2']) {
+      await transaction.location.upsert({ where: { id }, update: {}, create: { id, name: id, zone: 'Test', enabled: true } })
+    }
 
     await transaction.user.upsert({
       where: { email: 'admin@example.test' },
