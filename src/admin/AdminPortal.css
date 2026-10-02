@@ -95,14 +95,22 @@
 .adm-status-done { color: #2a6042; background: #e4efe6; }
 .adm-status-active { color: #345d70; background: #e8f0f3; }
 .adm-status-muted { color: #65645f; background: #ededea; }
-.adm-pagination { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; color: var(--adm-muted); font-size: 12px; }
-.adm-pagination > div { display: flex; align-items: center; gap: 14px; }
+.adm-pagination { display: flex; flex-direction: column; gap: 14px; padding: 16px 0; color: var(--adm-muted); font-size: 12px; }
+.adm-pagination-summary { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
+.adm-pagination-controls { display: flex; flex-direction: column; align-items: center; gap: 12px; min-width: 0; }
 .adm-row-count, .adm-page-numbers { display: flex; align-items: center; gap: 6px; }
 .adm-row-count select { min-width: 74px; }
-.adm-page-numbers { font-variant-numeric: tabular-nums; }
+.adm-page-numbers { max-width: 100%; overflow-x: auto; font-variant-numeric: tabular-nums; padding: 4px; }
+.adm-page-entry { display: inline-flex; align-items: center; flex-shrink: 0; }
+.adm-page-ellipsis { width: 28px; text-align: center; }
+.adm-page-step { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; min-height: 36px; padding: 0 6px; border: 0; background: transparent; color: var(--adm-muted); }
+.adm-page-step:disabled { opacity: .45; cursor: default; }
 .adm-page-number { width: 36px; height: 36px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #38443b; font: inherit; }
 .adm-page-number:hover { background: #f0f3ef; }
 .adm-page-number[aria-current="page"] { border-color: #36745a; background: #e4efe6; color: #1f5138; font-weight: 700; }
+.adm-page-jump { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
+.adm-page-jump input { box-sizing: border-box; width: 72px; height: 36px; padding: 6px; border: 1px solid var(--adm-border); border-radius: 4px; background: #fff; color: #38443b; text-align: center; }
+.adm-page-jump .adm-button { min-height: 36px; }
 .adm-empty { padding: 48px 20px; text-align: center; color: var(--adm-muted); border-bottom: 1px solid var(--adm-border); }
 .adm-empty h2 { margin: 12px 0; }
 .adm-note { color: var(--adm-muted); font-size: 12px; line-height: 1.8; }
