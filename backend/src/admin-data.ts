@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { customerTransaction } from './customer.js'
 import { publicImageUrl } from './admin-images.js'
 import { receivingDecisionSummary } from './receiving.js'
@@ -55,7 +56,7 @@ export function createAdminDataRepository(client: PrismaClient) {
       const paging = { skip: id ? 0 : (page - 1) * rows, take: id ? 1 : rows }
       const locationAssets = scope === 'locations' && id ? await client.asset.findMany({ where: { locationId: id, storageStatus: 'STORED', quantity: { gt: 0 } }, skip: (page - 1) * rows, take: rows, include: { images: { take: 0 }, history: { take: 0 } }, orderBy: { id: 'asc' } }) : []
       const locationWhere = id ? { id } : { ...search, ...(status ? { enabled: status === '사용' } : {}) }
-      const locations = scope === 'locations' ? await client.location.findMany({ where: locationWhere, ...paging, include: { _count: { select: { assets: { where: { storageStatus: 'STORED', quantity: { gt: 0 } } } } } }, orderBy: { id: 'asc' } }) : []
+      const locations = scope === 'locations' || scope === 'assets' && id ? await client.location.findMany({ where: scope === 'locations' ? locationWhere : { OR: [{ enabled: true }, { assets: { some: { id } } }] }, ...(scope === 'locations' ? paging : {}), include: { _count: { select: { assets: { where: { storageStatus: 'STORED', quantity: { gt: 0 } } } } } }, orderBy: { id: 'asc' } }) : []
       const [items, pageAssets, pageReceivings, inspections, products, campaigns] = await Promise.all([
         scope === 'items' ? client.masterItem.findMany({ where: itemWhere, ...paging, include: { images: { orderBy: { sortOrder: 'asc' }, take: 1 } }, orderBy: query.sort === 'name' ? [{ name: 'asc' }, { id: 'asc' }] : { id: 'asc' } }) : [],
         scope === 'assets' ? client.asset.findMany({ where: assetWhere, ...paging, include: { images: { orderBy: { sortOrder: 'asc' }, take: id ? 8 : 1 }, history: { orderBy: { createdAt: 'asc' }, take: id ? 100 : 0 } }, orderBy: query.sort === 'name' ? [{ name: 'asc' }, { id: 'asc' }] : { id: 'asc' } }) : [],
@@ -89,7 +90,7 @@ export function createAdminDataRepository(client: PrismaClient) {
         locations: locations.map(({ _count, ...entry }) => ({ ...entry, assetCount: _count.assets, status: _count.assets ? '사용 중' : '비어 있음', rate: null })),
         categories: categories.map((category) => ({ id: category.id, parentId: category.parentId, name: category.name, enabled: category.enabled, order: category.sortOrder })),
         items: items.map(itemPayload),
-        assets: assets.map((asset) => ({ id: asset.id, itemId: asset.itemId, receivingId: asset.receivingId, customerId: asset.customerId, receiptId: asset.receiptId, locationId: asset.locationId ?? '', name: asset.name, category: asset.categoryId ?? '', brand: asset.brand, grade: asset.grade, quantity: Number(asset.quantity), unit: unit[asset.unit], appraisal: asset.appraisal === null ? null : Number(asset.appraisal), status: storageStatus[asset.storageStatus], saleStatus: saleStatus[asset.saleStatus], specification: asset.specification, images: asset.images.map((image) => ({ id: image.id, name: image.name, url: image.url })), history: asset.history.map((entry) => ({ at: entry.createdAt.toISOString(), reason: entry.reason, changes: entry.changes })) })),
+        assets: assets.map((asset) => ({ updatedAt: asset.updatedAt.toISOString(), id: asset.id, itemId: asset.itemId, receivingId: asset.receivingId, customerId: asset.customerId, receiptId: asset.receiptId, locationId: asset.locationId ?? '', name: asset.name, category: asset.categoryId ?? '', brand: asset.brand, grade: asset.grade, quantity: Number(asset.quantity), unit: unit[asset.unit], appraisal: asset.appraisal === null ? null : Number(asset.appraisal), status: storageStatus[asset.storageStatus], saleStatus: saleStatus[asset.saleStatus], specification: asset.specification, images: asset.images.map((image) => ({ id: image.id, name: image.name, url: image.url })), history: asset.history.map((entry) => ({ at: entry.createdAt.toISOString(), reason: entry.reason, changes: entry.changes })) })),
         receivings: receivings.map((receiving) => ({ id: receiving.id, customerId: receiving.customerId, siteId: receiving.siteId ?? receiving.id, siteName: receiving.siteName, managerName: receiving.managerName, managerPhone: receiving.managerPhone, date: receiving.requestedAt.toISOString(), channel: receivingChannel[receiving.channel], volume: receiving.volumeDescription || receivingVolume[receiving.volume], summary: receiving.summary, status: receivingStatus[receiving.status], scheduledAt: receiving.scheduledAt?.toISOString() ?? null, termsAt: receiving.termsAgreedAt.toISOString(), estimate: receiving.transportEstimate === null ? null : Number(receiving.transportEstimate), note: receiving.note, ...(scope === 'receivings' && id ? { images: receiving.images.map(({ id: imageId, name, url }) => ({ id: imageId, name, url })), termsVersion: receiving.termsVersion, termsText: receiving.termsText, decision: receivingDecisionSummary(receiving.history) } : {}) })),
         inspections: inspections.map((inspection) => ({ id: inspection.id, receivingId: inspection.receivingId, date: inspection.createdAt.toISOString(), inspectedAt: inspection.inspectedAt?.toISOString() ?? null, notifiedAt: inspection.notifiedAt?.toISOString() ?? null, status: inspectionStatus[inspection.status], acknowledgedAt: inspection.acknowledgedAt?.toISOString() ?? null, disposalStatus: inspection.disposal ? disposalStatus[inspection.disposal.status] : '판정 대기', materials: inspection.items.map((item) => ({ assetId: item.assetId, name: item.name, grade: item.grade, unit: unit[item.unit], received: Number(item.receivedQuantity), usable: item.usableQuantity === null ? null : Number(item.usableQuantity), disposal: item.disposalQuantity === null ? null : Number(item.disposalQuantity), processed: item.disposal?.processedQuantity === null || item.disposal?.processedQuantity === undefined ? null : Number(item.disposal.processedQuantity), reason: item.reason })), evidence: inspection.disposal?.evidence ?? null })),
         products: products.map((product) => ({ id: product.id, assetId: product.assetId, name: product.name, price: Number(product.originalUnitPrice), discountRate: product.discountRate, unit: unit[product.asset.unit], status: productStatus[product.status] })),
@@ -132,6 +133,35 @@ export function createAdminDataRepository(client: PrismaClient) {
       await transaction.customerChange.create({ data: { actorUserId: actor, action: 'item.update', reason: '품목 정보 수정', changes: { before: itemPayload(previous), after: itemPayload(saved) } } })
       return itemPayload(saved)
     }),
+    updateAsset: (id: string, input: z.output<typeof assetUpdateInput>) => customerTransaction(client, async (transaction) => {
+      const previous = await transaction.asset.findUnique({ where: { id }, include: { product: true } })
+      if (!previous) throw new AppError(404, ErrorCode.NOT_FOUND, '자산을 찾을 수 없습니다.')
+      if (previous.updatedAt.toISOString() !== input.expectedUpdatedAt) throw new AppError(409, ErrorCode.CONFLICT, '자산이 변경되었습니다. 새로고침 후 다시 수정해 주세요.')
+      const { expectedUpdatedAt, reason, category, status, saleStatus: saleLabel, ...fields } = input
+      const storage = enumKey(storageStatus, status)!
+      const sale = enumKey(saleStatus, saleLabel)!
+      const invalid = (message: string) => new AppError(400, ErrorCode.VALIDATION_ERROR, message)
+      if (['EA', 'BOX', 'PIECE'].includes(previous.unit) && !Number.isInteger(fields.quantity)) throw invalid('EA·Box·본 수량은 정수로 입력해 주세요.')
+      if (storage === 'RELEASED' ? fields.quantity !== 0 : fields.quantity <= 0) throw invalid('출고완료 수량은 0, 나머지 상태의 수량은 0보다 커야 합니다.')
+      if ((fields.grade === 'F' || storage === 'PENDING') && sale !== 'PENDING' || sale === 'ON_SALE' && storage !== 'STORED') throw invalid('등급·보관 상태·판매 상태 조합을 확인해 주세요.')
+      if (category && category !== previous.categoryId) {
+        const leaf = await transaction.materialCategory.findUnique({ where: { id: category }, include: { parent: { include: { parent: true } }, children: true } })
+        if (!leaf?.enabled || !leaf.parent?.enabled || !leaf.parent.parent?.enabled || leaf.parent.parent.parentId || leaf.children.length) throw invalid('사용 중인 3차 카테고리를 선택해 주세요.')
+      }
+      if (fields.locationId) {
+        const location = await transaction.location.findUnique({ where: { id: fields.locationId } })
+        if (!location || !location.enabled && previous.locationId !== fields.locationId) throw invalid('사용 중인 로케이션을 선택해 주세요.')
+      } else if (storage === 'STORED') throw invalid('보관중 자산의 로케이션을 선택해 주세요.')
+      if (previous.product && (Number(previous.quantity) !== fields.quantity || previous.grade !== fields.grade || previous.storageStatus !== storage || previous.saleStatus !== sale)) throw new AppError(409, ErrorCode.CONFLICT, '연결 상품이 있는 자산의 수량·등급·상태는 마켓 업무에서 변경해 주세요.')
+      const data = { ...fields, categoryId: category || null, storageStatus: storage, saleStatus: sale }
+      const labels: Record<string, string> = { name: '자산명', specification: '규격', brand: '브랜드', quantity: '현재 수량', grade: '등급', locationId: '로케이션', categoryId: '카테고리', storageStatus: '보관 상태', saleStatus: '판매 상태' }
+      const display = (key: string, value: unknown) => key === 'storageStatus' ? storageStatus[value as keyof typeof storageStatus] ?? '미등록' : key === 'saleStatus' ? saleStatus[value as keyof typeof saleStatus] ?? '미등록' : String(value ?? '') || '미등록'
+      const changes = Object.entries(data).filter(([key, value]) => String(previous[key as keyof typeof previous] ?? '') !== String(value ?? '')).map(([key, value]) => [labels[key] ?? key, display(key, previous[key as keyof typeof previous]), display(key, value)])
+      if (changes.length) {
+        await transaction.asset.update({ where: { id }, data })
+        await transaction.assetChange.create({ data: { id: randomUUID(), assetId: id, reason, changes } })
+      }
+    }),
     saveCategory: (category: AdminCategoryInput) => client.$transaction(async (transaction) => {
       const categories = await transaction.materialCategory.findMany({ select: { id: true, parentId: true, name: true, enabled: true, sortOrder: true } })
       validateCategory(category, categories)
@@ -153,6 +183,14 @@ export function loadAdminData(repository: AdminDataRepository) {
 
 const imageInput = z.object({ id: z.uuid(), name: z.string().trim().min(1).max(255), url: z.string().min(1).max(2048).refine((value) => publicImageUrl(value) !== null, 'S3 업로드 이미지 주소를 사용해 주세요.') })
 const itemUnit = z.enum(Object.values(unit) as [(typeof unit)[ItemUnit], ...(typeof unit)[ItemUnit][]])
+export const assetUpdateInput = z.object({
+  expectedUpdatedAt: z.iso.datetime(), reason: z.string().trim().min(1).max(500),
+  name: z.string().trim().min(1).max(160), specification: z.string().trim().max(500), brand: z.string().trim().max(160),
+  category: z.union([z.string().regex(/^\d{6}$/), z.literal('')]),
+  quantity: z.number().min(0).max(1e9).refine((value) => Math.abs(value * 1000 - Math.round(value * 1000)) < 0.0001),
+  grade: z.enum(['S', 'A', 'B', 'F']), locationId: z.string().max(20).transform((value) => value || null),
+  status: z.enum(['입고대기', '보관중', '출고완료']), saleStatus: z.enum(['판매대기', '판매중', '판매완료']),
+}).strict()
 const itemInput = z.object({
   id: z.string().regex(/^\d{6}$/),
   name: z.string().trim().max(160),
@@ -225,6 +263,15 @@ export function updateAdminItem(repository: AdminDataRepository) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2003') throw new AppError(400, ErrorCode.VALIDATION_ERROR, '카테고리 또는 이미지 연결 정보를 확인해 주세요.')
       throw error
     }
+  }
+}
+
+export function updateAdminAsset(repository: AdminDataRepository) {
+  return async (context: Context) => {
+    const id = z.string().regex(/^\d{6}-\d{4}$/).parse(context.req.param('id'))
+    await repository.updateAsset(id, assetUpdateInput.parse(await context.req.json()))
+    const data = await repository.load(adminDataQuery.parse({ scope: 'assets', id }))
+    return success(context, { asset: data.assets[0] })
   }
 }
 

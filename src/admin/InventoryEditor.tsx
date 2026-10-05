@@ -6,18 +6,64 @@ import CategorySelect from '../CategorySelect'
 import { nextAssetCode, prepareInventory, validateMasterItem } from './adminInventory'
 import { registerAdminItems, updateAdminItem } from './adminItems'
 import { uploadImage, saveImages } from './adminImages'
+import { adminAccountRequest } from '../adminAuthSession'
 
 type Props = { kind: 'items' | 'inventory'; items: MasterItem[]; assets: Inventory[]; inspections?: Inspection[]; categories: MaterialCategory[]; locations: Location[]; id: string | null; cancelHref: string; onSaveItem: (item: MasterItem, previousId: string | null) => void; onSaveAsset: (asset: Inventory) => void }
 
 export default function InventoryEditor(props: Props) {
   return <section className="adm-editor">
     <a className="adm-button adm-back" href={props.cancelHref}><ArrowLeft size={15} />취소하고 돌아가기</a>
-    {props.kind === 'items' ? <ItemForm {...props} /> : <AssetForm {...props} />}
+    {props.kind === 'items' ? <ItemForm {...props} /> : props.id ? <ExistingAssetForm {...props} /> : <AssetForm {...props} />}
   </section>
 }
 
 const text = (data: FormData, name: string) => String(data.get(name) ?? '').trim()
 const price = (data: FormData, name: string) => text(data, name) === '' ? null : Number(text(data, name))
+
+function ExistingAssetForm({ assets, categories, locations, id, onSaveAsset }: Props) {
+  const asset = assets.find((entry) => entry.id === id)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const working = useRef(false)
+  if (!asset) return <p role="alert">자산을 찾을 수 없습니다.</p>
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (working.current || !asset) return
+    const data = new FormData(event.currentTarget)
+    working.current = true; setBusy(true); setError('')
+    try {
+      const { asset: saved } = await adminAccountRequest<{ asset: Inventory }>(`/api/admin/assets/${asset.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedUpdatedAt: asset.updatedAt, reason: text(data, 'reason'), name: text(data, 'name'), category: text(data, 'category'), specification: text(data, 'specification'), brand: text(data, 'brand'), quantity: Number(text(data, 'quantity')), grade: text(data, 'grade'), locationId: text(data, 'locationId'), status: text(data, 'status'), saleStatus: text(data, 'saleStatus') }) })
+      onSaveAsset(saved)
+    } catch (failure) { setError(failure instanceof Error ? failure.message : '자산 저장에 실패했습니다.') }
+    finally { working.current = false; setBusy(false) }
+  }
+  return <form className="adm-edit-form" onSubmit={submit}>
+    <fieldset disabled={busy}>
+      <h2>연결 정보</h2><div className="adm-edit-fields">
+        <label>자산번호<input value={asset.id} readOnly /></label>
+        <label>입고 신청번호<input value={asset.receivingId} readOnly /></label>
+        <label>고객사 코드<input value={asset.customerId} readOnly /></label>
+        <label>품목코드<input value={asset.itemId ?? ''} readOnly placeholder="미연결" /></label>
+      </div>
+      <h2>자산 정보</h2><div className="adm-edit-fields">
+        <label>자산명<input name="name" defaultValue={asset.name} required maxLength={160} autoFocus /></label>
+        <CategorySelect categories={categories} defaultValue={asset.category} retainedId={asset.category} />
+        <label>규격 (선택)<input name="specification" defaultValue={asset.specification} maxLength={500} /></label>
+        <label>브랜드 (선택)<input name="brand" defaultValue={asset.brand} maxLength={160} /></label>
+        <label>현재 수량<input name="quantity" type="number" defaultValue={asset.quantity} required min={0} max={1e9} step={['EA', 'Box', '본'].includes(asset.unit) ? 1 : 0.001} /></label>
+        <label>단위<input value={asset.unit} readOnly /></label>
+      </div>
+      <h2>보관 및 판매</h2><div className="adm-edit-fields">
+        <label>로케이션<select name="locationId" defaultValue={asset.locationId}><option value="">미지정</option>{asset.locationId && !locations.some((entry) => entry.id === asset.locationId) && <option value={asset.locationId}>{asset.locationId}</option>}{locations.filter((entry) => entry.enabled || entry.id === asset.locationId).map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.zone}</option>)}</select></label>
+        <label>등급<select name="grade" defaultValue={asset.grade}>{['S', 'A', 'B', 'F'].map((value) => <option key={value}>{value}</option>)}</select></label>
+        <label>보관 상태<select name="status" defaultValue={asset.status}>{['입고대기', '보관중', '출고완료'].map((value) => <option key={value}>{value}</option>)}</select></label>
+        <label>판매 상태<select name="saleStatus" defaultValue={asset.saleStatus}>{['판매대기', '판매중', '판매완료'].map((value) => <option key={value}>{value}</option>)}</select></label>
+      </div>
+      <label className="adm-edit-memo">변경 사유<textarea name="reason" rows={3} required maxLength={500} /></label>
+    </fieldset>
+    <SaveFooter busy={busy} error={error} />
+  </form>
+}
 
 function ItemForm({ items, assets, categories, id, onSaveItem }: Props) {
   const item = items.find((candidate) => candidate.id === id)

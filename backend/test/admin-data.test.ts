@@ -28,6 +28,7 @@ async function fixture(role: AuthUser['role']) {
       return category
     },
     updateItem: async (id: string, item: unknown, actor: string) => { updated.push({ id, item, actor }); return item },
+    updateAsset: async (id: string, input: unknown) => { updated.push({ id, input }); data.assets = [{ id, ...(input as object) }] as never },
   }
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret, expiresIn: '1h' }, adminData: adminData as never })
   const login = await app.request(role === 'ADMIN' ? '/api/admin/auth/login' : '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(role === 'ADMIN' ? { id: user.email, password: 'test-password' } : { email: user.email, password: 'test-password' }) })
@@ -103,6 +104,21 @@ test('item update requires admin authentication, validates fields and returns th
   assert.equal((await response.json() as { data: { item: { name: string } } }).data.item.name, '수정 품목')
   const customer = await fixture('CUSTOMER')
   assert.equal((await customer.app.request('/api/admin/items/000001', { method: 'PUT', headers: { Authorization: `Bearer ${customer.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(item) })).status, 401)
+})
+
+test('asset edit requires admin, reason and concurrency token and rejects immutable fields', async () => {
+  const admin = await fixture('ADMIN')
+  const input = { expectedUpdatedAt: '2026-10-06T00:00:00.000Z', reason: '재고 정정', name: '수정 자산', category: '', specification: '', brand: '', quantity: 2, grade: 'A', locationId: '', status: '입고대기', saleStatus: '판매대기' }
+  const request = (body: unknown) => admin.app.request('/api/admin/assets/261006-0001', { method: 'PUT', headers: { Authorization: `Bearer ${admin.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  assert.equal((await admin.app.request('/api/admin/assets/261006-0001', { method: 'PUT' })).status, 401)
+  for (const body of [{ ...input, reason: '' }, { ...input, expectedUpdatedAt: undefined }, { ...input, quantity: 0.1234 }, { ...input, customerId: 'OTHER' }]) assert.equal((await request(body)).status, 400)
+  assert.equal(admin.updated.length, 0)
+  const response = await request(input)
+  assert.equal(response.status, 200)
+  assert.equal((await response.json() as { data: { asset: { name: string } } }).data.asset.name, input.name)
+  assert.deepEqual(admin.updated, [{ id: '261006-0001', input: { ...input, locationId: null } }])
+  const customer = await fixture('CUSTOMER')
+  assert.equal((await customer.app.request('/api/admin/assets/261006-0001', { method: 'PUT', headers: { Authorization: `Bearer ${customer.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(input) })).status, 401)
 })
 
 test('administrator can save a category to the database', async () => {

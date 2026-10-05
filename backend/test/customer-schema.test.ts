@@ -8,7 +8,7 @@ import { createAuthRepository, createCustomerRepository } from '../src/customer.
 import { createAssetRepository } from '../src/asset.js'
 import { createAdminAccountRepository } from '../src/admin-accounts.js'
 import { hashPassword } from '../src/auth.js'
-import { adminDataQuery, createAdminDataRepository } from '../src/admin-data.js'
+import { adminDataQuery, assetUpdateInput, createAdminDataRepository } from '../src/admin-data.js'
 import { adminListQuery } from '../src/admin-pagination.js'
 import { createAdminImageRepository, imageOrigin } from '../src/admin-images.js'
 import { createReceivingRepository, receivingInput, receivingQuery, receivingTerms } from '../src/receiving.js'
@@ -370,6 +370,33 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     assert.equal(new Set(bulk.assets.map((asset) => asset.id)).size, 1000)
     assert.equal(bulk.assets.at(-1)!.id, '260925-1000')
     assert.equal(await client.disposal.count({ where: { inspectionId: third.id } }), 0)
+  })
+  await context.test('asset edits persist, preserve ownership/images, reject stale and invalid changes and rollback audit failures', async () => {
+    const location = await client.location.create({ data: { id: 'EDIT-LOC', name: '편집 위치', zone: 'E' } })
+    const asset = await client.asset.create({ data: { id: '261006-8001', receivingId: 'EDIT-REQUEST', customerId: 'CUS-INSPECTION', name: '편집 대상', specification: '', grade: 'A', quantity: '2', unit: 'EA', storageStatus: 'STORED', saleStatus: 'PENDING', locationId: location.id, appraisal: '1234', images: { create: { id: randomUUID(), name: '기존 사진', url: '/legacy.jpg' } } } })
+    const repository = createAdminDataRepository(client)
+    const input = assetUpdateInput.parse({ expectedUpdatedAt: asset.updatedAt.toISOString(), reason: '수량 및 이름 정정', name: '저장된 자산', category: '', specification: '', brand: '브랜드', quantity: 3, grade: 'B', locationId: location.id, status: '보관중', saleStatus: '판매대기' })
+    for (const invalid of [{ ...input, category: '770100' }, { ...input, locationId: 'MISSING' }, { ...input, quantity: 1.5 }, { ...input, quantity: 0 }, { ...input, grade: 'F' as const, saleStatus: '판매중' as const }]) await assert.rejects(repository.updateAsset(asset.id, invalid))
+    assert.equal(await client.assetChange.count({ where: { assetId: asset.id } }), 0)
+    await repository.updateAsset(asset.id, input)
+    const saved = await client.asset.findUniqueOrThrow({ where: { id: asset.id }, include: { images: true, history: true } })
+    assert.equal(saved.name, input.name); assert.equal(saved.quantity.toString(), '3')
+    assert.equal(saved.itemId, null); assert.equal(saved.categoryId, null); assert.equal(saved.customerId, asset.customerId)
+    assert.equal(saved.receivingId, asset.receivingId); assert.equal(saved.appraisal?.toString(), '1234'); assert.equal(saved.images[0]!.url, '/legacy.jpg')
+    assert.equal(saved.history.length, 1); assert.equal(saved.history[0]!.reason, input.reason)
+    await assert.rejects(repository.updateAsset(asset.id, input), /변경되었습니다/)
+    const next = { ...input, expectedUpdatedAt: saved.updatedAt.toISOString(), name: '실패 수정' }
+    sql("CREATE TRIGGER test_asset_edit_audit_failure BEFORE INSERT ON asset_changes FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='audit failure'")
+    try { await assert.rejects(repository.updateAsset(asset.id, next)) }
+    finally { sql('DROP TRIGGER test_asset_edit_audit_failure') }
+    assert.equal((await client.asset.findUniqueOrThrow({ where: { id: asset.id } })).name, saved.name)
+    await client.product.create({ data: { id: 'EDIT-PRODUCT', assetId: asset.id, name: '연결 상품', originalUnitPrice: '100', listedQuantity: '3' } })
+    await assert.rejects(repository.updateAsset(asset.id, { ...next, quantity: 4 }), /연결 상품/)
+    const concurrent = await Promise.allSettled([repository.updateAsset(asset.id, { ...next, name: '동시 수정 A' }), repository.updateAsset(asset.id, { ...next, name: '동시 수정 B' })])
+    assert.equal(concurrent.filter((entry) => entry.status === 'fulfilled').length, 1)
+    const loaded = await repository.load(adminDataQuery.parse({ scope: 'assets', id: asset.id }))
+    assert.ok(loaded.assets[0]!.updatedAt); assert.equal(loaded.assets[0]!.history.length, 2)
+    assert.ok(loaded.locations.some((entry) => entry.id === location.id))
   })
   await context.test('real asset queries isolate detail, images, pagination and full-company totals', async () => {
     const other = await client.customer.create({ data: { id: 'OTHER', name: 'Other' } })

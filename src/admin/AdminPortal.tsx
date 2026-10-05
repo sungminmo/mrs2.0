@@ -90,7 +90,8 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
   const locationEditing = menu.id === 'inventory' && tab?.id === 'locations'
   const itemManagement = menu.id === 'basic' && tab?.id === 'items'
   const categoryManagement = menu.id === 'basic' && tab?.id === 'categories'
-  const editable = itemManagement || menu.id === 'inventory' && locationEditing || campaignEditing
+  const assetEditing = menu.id === 'inventory' && tab?.id === 'stock'
+  const editable = itemManagement || menu.id === 'inventory' && (locationEditing || assetEditing && !!row) || campaignEditing
   const recordKind = campaignEditing ? '기획전' : locationEditing ? '로케이션' : itemManagement ? '품목' : '자산'
   const statusTab = menu.id === 'market' && tab && Object.hasOwn(marketStatusOptions, tab.id) ? tab.id as MarketStatusTab : undefined
   const inspectionStage = menu.id === 'receiving' && tab?.id !== 'requests' ? tab?.id : undefined
@@ -104,7 +105,7 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
   const mode = url.searchParams.get('mode')
   const discountEditing = productManagement && mode === 'discount' && row?.status === '판매대기'
   const occupancyEditing = false
-  const editing = editable && (mode === 'new' || mode === 'edit' && !!row)
+  const editing = editable && (mode === 'new' && !assetEditing || mode === 'edit' && !!row)
   const [menuOpen, setMenuOpen] = useState(false)
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => { heading.current?.focus(); window.scrollTo(0, 0) }, [menu.id, tab?.id, id, mode])
