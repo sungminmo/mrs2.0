@@ -1,4 +1,15 @@
 import { appraisalMoney, appraisalTotal } from '../src/appraisal'
+import { detailedInspectionStatus, saleInspectionReady } from '../src/admin/adminMarket'
+import { inventory, saleRequests } from '../src/admin/adminData'
+
+test('detailed inspection requires registered fields and matching quantity; zero appraisal is registered', () => {
+  const asset = { ...inventory[0]!, itemId: '032203', category: '030400', specification: '3회로', brand: '뉴원', grade: 'S' as const, quantity: 1, appraisal: 0, status: '보관중' as const, saleStatus: '판매대기' as const }
+  const request = { ...saleRequests[0]!, quantity: 1 }
+  assert.equal(saleInspectionReady(asset, request), true)
+  for (const fields of [{ itemId: null }, { category: '' }, { specification: ' ' }, { brand: ' ' }, { appraisal: null }, { grade: 'F' as const }, { status: '출고완료' as const }]) assert.equal(saleInspectionReady({ ...asset, ...fields }, request), false)
+  assert.equal(saleInspectionReady(asset, { ...request, quantity: 2 }), false)
+  assert.equal(detailedInspectionStatus({ ...request, inspection: '판매용 정밀 검수 완료' }), '상세 검수 완료')
+})
 
 test('appraisal totals preserve decimal quantities, large values, zero and missing prices', () => {
   assert.equal(appraisalTotal('725', '2.5'), '1812.5')

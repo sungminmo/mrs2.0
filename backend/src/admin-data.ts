@@ -167,6 +167,20 @@ export function createAdminDataRepository(client: PrismaClient) {
         await transaction.assetChange.create({ data: { id: randomUUID(), assetId: id, reason, changes } })
       }
     }),
+    completeSaleInspection: (id: string, expectedUpdatedAt: string, user: { id: string; sessionVersion?: number }) => customerTransaction(client, async (transaction) => {
+      const actor = await transaction.user.findUnique({ where: { id: user.id } })
+      if (!actor || actor.role !== 'ADMIN' || actor.status !== 'ACTIVE' || actor.sessionVersion !== (user.sessionVersion ?? 0)) throw new AppError(403, ErrorCode.FORBIDDEN, '활성 관리자 권한이 필요합니다.')
+      const request = await transaction.saleRequest.findUnique({ where: { id }, include: { asset: true } })
+      if (!request) throw new AppError(404, ErrorCode.NOT_FOUND, '판매 요청을 찾을 수 없습니다.')
+      const asset = request.asset
+      if (request.inspection !== 'PENDING' || request.status !== 'PENDING' || asset.updatedAt.toISOString() !== expectedUpdatedAt) throw new AppError(409, ErrorCode.CONFLICT, '요청 또는 자산이 변경되었습니다. 새로고침 후 확인해 주세요.')
+      if (!asset.itemId || !asset.categoryId || !asset.specification.trim() || !asset.brand.trim() || !['S', 'A', 'B'].includes(asset.grade) || asset.appraisal === null || asset.storageStatus !== 'STORED' || asset.saleStatus !== 'PENDING' || !request.quantity.gt(0) || !request.quantity.equals(asset.quantity)) throw new AppError(400, ErrorCode.VALIDATION_ERROR, '자산 상세화 항목 등록과 판매 요청 수량 확인을 완료해 주세요.')
+      const changed = await transaction.saleRequest.updateMany({ where: { id, inspection: 'PENDING', status: 'PENDING' }, data: { inspection: 'COMPLETED' } })
+      if (changed.count !== 1) throw new AppError(409, ErrorCode.CONFLICT, '상세 검수 상태가 변경되었습니다.')
+      await transaction.assetChange.create({ data: { id: randomUUID(), assetId: asset.id, reason: '판매 요청 상세 검수 완료', changes: [['상세 검수 상태', '상세 검수 대기', '상세 검수 완료']] } })
+      await transaction.customerChange.create({ data: { actorUserId: actor.id, customerId: asset.customerId, action: 'sale.inspection.complete', reason: '판매 요청 상세 검수 완료', changes: { requestId: id, assetId: asset.id, quantity: request.quantity.toString(), appraisal: asset.appraisal.toString(), before: 'PENDING', after: 'COMPLETED' } } })
+      return { id, inspection: 'COMPLETED' }
+    }),
     saveCategory: (category: AdminCategoryInput) => client.$transaction(async (transaction) => {
       const categories = await transaction.materialCategory.findMany({ select: { id: true, parentId: true, name: true, enabled: true, sortOrder: true } })
       validateCategory(category, categories)
@@ -278,6 +292,15 @@ export function updateAdminAsset(repository: AdminDataRepository) {
     await repository.updateAsset(id, assetUpdateInput.parse(await context.req.json()))
     const data = await repository.load(adminDataQuery.parse({ scope: 'assets', id }))
     return success(context, { asset: data.assets[0] })
+  }
+}
+
+export const saleInspectionCompleteInput = z.object({ expectedUpdatedAt: z.iso.datetime() }).strict()
+export function completeAdminSaleInspection(repository: AdminDataRepository) {
+  return async (context: Context) => {
+    const id = z.uuid().parse(context.req.param('id'))
+    const input = saleInspectionCompleteInput.parse(await context.req.json())
+    return success(context, { request: await repository.completeSaleInspection(id, input.expectedUpdatedAt, context.get('authUser')) })
   }
 }
 

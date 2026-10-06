@@ -6,7 +6,7 @@ import { businessNumberSchema, customerFieldsSchema, customerHandlers, decisionS
 import { getConnInfo } from '@hono/node-server/conninfo'
 import { listAdminBanners, listPublicBanners, saveBanner, type BannerRepository } from './banner.js'
 import { ErrorCode, failure, handleError, success } from './http.js'
-import { createAdminItems, updateAdminItem, updateAdminAsset, assetUpdateInput, itemUpdateInput, loadAdminData, saveAdminCategory, type AdminDataRepository } from './admin-data.js'
+import { completeAdminSaleInspection, saleInspectionCompleteInput, createAdminItems, updateAdminItem, updateAdminAsset, assetUpdateInput, itemUpdateInput, loadAdminData, saveAdminCategory, type AdminDataRepository } from './admin-data.js'
 import { adminAccountCreate, adminAccountUpdate, adminAccountHandlers, requireSystemAdmin, type AdminAccountRepository } from './admin-accounts.js'
 import { bodyLimit } from 'hono/body-limit'
 import type { Context } from 'hono'
@@ -168,6 +168,8 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
       app.post('/api/admin/items', adminAuth, requireAdmin, createAdminItems(adminData))
       app.put('/api/admin/items/:id', adminAuth, requireAdmin, updateAdminItem(adminData))
       app.put('/api/admin/assets/:id', adminAuth, requireAdmin, updateAdminAsset(adminData))
+      app.post('/api/admin/sale-requests/:id/inspection/complete', adminAuth, requireAdmin, completeAdminSaleInspection(adminData))
+      app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/sale-requests/{id}/inspection/complete', tags: ['Admin'], summary: '자산 상세화 등록·수량 확인 후 상세 검수 완료 (판매 승인은 별도)', security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.uuid() }), body: { required: true, content: { 'application/json': { schema: saleInspectionCompleteInput } } } }, responses: { 200: { description: '상세 검수 완료' }, 400: { description: '등록 항목 또는 수량 미충족' }, 401: { description: '관리자 인증 필요' }, 403: { description: '활성 관리자 권한 필요' }, 404: { description: '판매 요청 없음' }, 409: { description: '자산 또는 요청 상태 변경' } } })
       app.openAPIRegistry.registerPath({ method: 'put', path: '/api/admin/assets/{id}', summary: '기존 자산 정보 수정 및 변경 이력 저장', tags: ['Admin assets'], security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string().regex(/^\d{6}-\d{4}$/) }), body: { required: true, content: { 'application/json': { schema: assetUpdateInput } } } }, responses: { 200: { description: 'DB에 저장된 data.asset 반환' }, 400: { description: '입력·상태·참조 오류' }, 401: { description: '관리자 인증 필요' }, 404: { description: '자산 없음' }, 409: { description: '동시 변경 또는 연결 상품 충돌' } } })
       app.openAPIRegistry.registerPath({ method: 'put', path: '/api/admin/items/{id}', summary: '기존 품목 정보와 이미지 수정', tags: ['Admin items'], security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string().regex(/^\d{6}$/) }), body: { required: true, content: { 'application/json': { schema: itemUpdateInput } } } }, responses: { 200: { description: 'DB에 저장된 data.item 반환' }, 400: { description: '입력 또는 카테고리·이미지 오류' }, 401: { description: '관리자 인증 필요' }, 404: { description: '품목 없음' }, 409: { description: '중복 코드, 연결 자산 단위 변경 또는 동시 변경 충돌' } } })
       app.put('/api/admin/categories/:id', adminAuth, requireAdmin, saveAdminCategory(adminData))

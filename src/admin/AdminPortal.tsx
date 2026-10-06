@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronRight, ClipboardCheck, Images, ImageOff, LayoutDashboard, ListChecks, LoaderCircle, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
-import { adminAuthenticatedFetch, adminSignOut, showAdminToast } from '../adminAuthSession'
+import { adminAccountRequest, adminAuthenticatedFetch, adminSignOut, showAdminToast } from '../adminAuthSession'
 import { dateText, invoiceAmount, invoices, money, receivingStatuses, referenceDate, type Campaign, type Inspection, type Inventory, type Location, type MasterItem, type MemberAccount, type Product, type Receiving, type SaleRequest } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
 import { materialPhotos } from '../assetPhotos'
@@ -18,7 +18,7 @@ import AdminAccountManager from './AdminAccountManager'
 import type { AdminRole } from '../adminAuthSession'
 import type { CustomerAccount } from '../customerAccounts'
 import ItemFileActions from './ItemFileActions'
-import { changeMarketStatus, marketStatusOptions, type MarketData, type MarketStatusTab } from './adminMarket'
+import { changeMarketStatus, detailedInspectionStatus, saleInspectionReady, marketStatusOptions, type MarketData, type MarketStatusTab } from './adminMarket'
 import './AdminPortal.css'
 import AdminPagination, { LoadingTable, type Pagination } from './AdminPagination'
 import AdminToast from './AdminToast'
@@ -175,6 +175,7 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
       {!pending && row && menu.id === 'receiving' && tab?.id === 'requests' && row.status === '입고 신청' && <ReceivingReview key={row.id} id={row.id} onChanged={() => setAccountRevision((value) => value + 1)} />}
       {!pending && row && menu.id === 'receiving' && tab?.id === 'requests' && row.status === '입고 승인' && <ReceiveCompletion key={row.id} id={row.id} />}
       {!pending && row && menu.id === 'receiving' && tab?.id === 'detailed' && assets.filter((asset) => asset.id === market.sales.find((request) => request.id === row.id)?.assetId).map((asset) => <AssetAppraisalEditor key={`${asset.id}/${asset.updatedAt}`} asset={asset} onSaved={() => setAccountRevision((value) => value + 1)} />)}
+      {!pending && row && menu.id === 'receiving' && tab?.id === 'detailed' && market.sales.filter((request) => request.id === row.id).map((request) => { const asset = assets.find((entry) => entry.id === request.assetId); return asset ? <DetailedInspectionCompletion key={`${request.id}/${request.inspection}/${asset.updatedAt}`} request={request} asset={asset} onChanged={() => setAccountRevision((value) => value + 1)} /> : null })}
       {!pending && row && !editing && (itemManagement || menu.id === 'inventory' && tab?.id === 'stock') && <ImagePicker key={`${menu.id}/${row.id}`} kind={itemManagement ? 'items' : 'assets'} recordId={row.id} images={(itemManagement ? items.find((entry) => entry.id === row.id) : assets.find((entry) => entry.id === row.id))?.images ?? []} limit={itemManagement ? 1 : 8} label={itemManagement ? '대표 이미지' : '자산 이미지'} onChange={(images) => { if (itemManagement) setItems((current) => current.map((entry) => entry.id === row.id ? { ...entry, images } : entry)); else setAssets((current) => current.map((entry) => entry.id === row.id ? { ...entry, images } : entry)) }} />}
       <footer className="adm-footer">MRS 스테이징 환경 · 실제 서비스 운영 환경 아님</footer>
     </main>
@@ -208,6 +209,22 @@ function MemberApproval({ onApprove }: { onApprove: () => Promise<void> }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   return <section className="adm-member-approval" aria-label="회원 가입 승인">{error && <span role="alert">{error}</span>}{confirming ? <><span>이 회원의 가입을 승인하시겠습니까? 승인 후 즉시 로그인할 수 있습니다.</span><button className="adm-button adm-primary" disabled={submitting} onClick={() => { setSubmitting(true); setError(''); void onApprove().catch((reason) => { setError(reason instanceof Error ? reason.message : '회원 가입 승인에 실패했습니다.'); setSubmitting(false) }) }}><Check size={16} />{submitting ? '승인 처리 중' : '승인 확정'}</button><button className="adm-button" disabled={submitting} onClick={() => setConfirming(false)}><X size={16} />취소</button></> : <><span>가입 신청 정보를 확인한 후 승인 처리해 주세요.</span><button className="adm-button adm-primary" onClick={() => setConfirming(true)}><Check size={16} />가입 승인</button></>}</section>
+}
+
+function DetailedInspectionCompletion({ request, asset, onChanged }: { request: SaleRequest; asset: Inventory; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [done, setDone] = useState(false)
+  const working = useRef(false)
+  const completed = done || detailedInspectionStatus(request) === '상세 검수 완료'
+  const ready = saleInspectionReady(asset, request) && request.status === '승인 대기' && !!asset.updatedAt
+  return <section className="adm-receiving-review" aria-label="상세 검수 완료 처리"><h2>상세 검수 완료 처리</h2>{error && <p className="adm-form-error" role="alert">{error}</p>}{completed ? <p role="status">상세 검수 완료 · 판매 요청 수량 확인 완료</p> : <button className="adm-button adm-primary" disabled={busy || !ready} onClick={async () => {
+    if (working.current || !ready) return
+    working.current = true; setBusy(true); setError('')
+    try {
+      await adminAccountRequest(`/api/admin/sale-requests/${request.id}/inspection/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedUpdatedAt: asset.updatedAt }) })
+      setDone(true); onChanged()
+    } catch (failure) { setError(failure instanceof Error ? failure.message : '상세 검수 완료 처리에 실패했습니다.') }
+    finally { working.current = false; setBusy(false) }
+  }}>{busy ? <LoaderCircle size={16} /> : <ClipboardCheck size={16} />}{busy ? '처리 중' : '상세 검수 완료'}</button>}</section>
 }
 
 function InspectionAction({ row, stage }: { row: AdminRow; stage: string }) {

@@ -1,4 +1,4 @@
-import type { Campaign, Product, Quote, SaleRequest } from './adminData.ts'
+import type { Campaign, Inventory, Product, Quote, SaleRequest } from './adminData.ts'
 import { categoryEnabled, categoryChain, type MaterialCategory } from '../categories.ts'
 
 export type MarketData = { sales: SaleRequest[]; products: Product[]; quotes: Quote[]; campaigns: Campaign[] }
@@ -9,6 +9,7 @@ export const marketStatusOptions = {
 } as const
 export type MarketStatusTab = keyof typeof marketStatusOptions
 export const detailedInspectionStatus = (request: SaleRequest) => request.inspection.includes('완료') ? '상세 검수 완료' : '상세 검수 대기'
+export const saleInspectionReady = (asset: Inventory, request: SaleRequest) => !!asset.itemId && !!asset.category && !!asset.specification.trim() && !!asset.brand.trim() && ['S', 'A', 'B'].includes(asset.grade) && asset.appraisal !== null && asset.status === '보관중' && asset.saleStatus === '판매대기' && request.quantity > 0 && request.quantity === asset.quantity
 export const discountedPrice = (product: Product) => Math.round(product.price * (100 - product.discountRate) / 100)
 
 export function setProductDiscount(product: Product, discountRate: number): Product {
