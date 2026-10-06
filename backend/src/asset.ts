@@ -4,7 +4,7 @@ import { customerTransaction } from './customer.js'
 import { createRoute, z } from '@hono/zod-openapi'
 import type { Context } from 'hono'
 import type { AuthUser } from './auth.js'
-import type { Prisma, PrismaClient } from './generated/prisma/client.js'
+import { Prisma, type PrismaClient } from './generated/prisma/client.js'
 import { AppError, ErrorCode } from './http.js'
 
 const dayMs = 24 * 60 * 60 * 1000
@@ -75,7 +75,7 @@ const assetSchema = z.object({
   grade: z.enum(['S', 'A', 'B', 'F']),
   quantity: z.string(),
   unit: z.string(),
-  appraisalValue: z.string().nullable(),
+  appraisalValue: z.string().nullable().describe('개당 평가금액(원), null은 미평가. 총액은 현재 수량을 곱해 계산'),
   storageStatus: z.enum(['PENDING', 'STORED', 'RELEASED']),
   saleStatus: z.enum(['PENDING', 'ON_SALE', 'SOLD']),
   locationId: z.string().nullable(),
@@ -276,6 +276,22 @@ export function createAssetRepository(client: PrismaClient): AssetRepository {
           include: { category: true, images: { orderBy: { sortOrder: 'asc' }, take: 1 } },
         }),
       ])
+      if (query.sort === 'valueDesc') {
+        const conditions = [Prisma.sql`customerId = ${customerId}`]
+        if (query.q) conditions.push(Prisma.sql`(LOCATE(${query.q}, id) > 0 OR LOCATE(${query.q}, name) > 0 OR LOCATE(${query.q}, specification) > 0 OR LOCATE(${query.q}, brand) > 0)`)
+        if (query.storageStatus) conditions.push(Prisma.sql`storageStatus = ${{ PENDING: '입고대기', STORED: '보관중', RELEASED: '출고완료' }[query.storageStatus]}`)
+        if (query.saleStatus) conditions.push(Prisma.sql`saleStatus = ${{ PENDING: '판매대기', ON_SALE: '판매중', SOLD: '판매완료' }[query.saleStatus]}`)
+        if (query.grade) conditions.push(Prisma.sql`grade = ${query.grade}`)
+        if (query.locationId) conditions.push(Prisma.sql`locationId = ${query.locationId}`)
+        if (query.categoryId) conditions.push(Prisma.sql`categoryId IN (${Prisma.join(descendants(categories, query.categoryId))})`)
+        if (query.receivedFrom) conditions.push(Prisma.sql`createdAt >= ${new Date(`${query.receivedFrom}T00:00:00.000Z`)}`)
+        if (query.receivedTo) conditions.push(Prisma.sql`createdAt < ${new Date(new Date(`${query.receivedTo}T00:00:00.000Z`).getTime() + dayMs)}`)
+        if (query.storageDaysFrom !== undefined) conditions.push(Prisma.sql`createdAt <= ${new Date(now.getTime() - query.storageDaysFrom * dayMs)}`)
+        if (query.storageDaysTo !== undefined) conditions.push(Prisma.sql`createdAt > ${new Date(now.getTime() - (query.storageDaysTo + 1) * dayMs)}`)
+        const ids = await client.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT id FROM assets WHERE ${Prisma.join(conditions, ' AND ')} ORDER BY appraisal * quantity DESC, id ASC LIMIT ${query.size} OFFSET ${(query.page - 1) * query.size}`)
+        const sorted = await client.asset.findMany({ where: { ...where, id: { in: ids.map((entry) => entry.id) } }, include: { category: true, images: { orderBy: { sortOrder: 'asc' }, take: 1 } } })
+        records.splice(0, records.length, ...ids.flatMap(({ id }) => sorted.filter((entry) => entry.id === id)))
+      }
       return {
         totalElements,
         records: records.map((record) => ({
@@ -324,12 +340,12 @@ export function createAssetRepository(client: PrismaClient): AssetRepository {
       await assertOwnerConsistency(client, customerId)
       const where: Prisma.AssetWhereInput = { customerId, storageStatus: { not: 'RELEASED' } }
       const [total, unappraised, groups, quantities] = await client.$transaction([
-        client.asset.aggregate({ where, _count: true, _sum: { appraisal: true } }),
+        client.$queryRaw<Array<{ count: bigint; amount: Prisma.Decimal | null }>>(Prisma.sql`SELECT COUNT(*) AS count, SUM(appraisal * quantity) AS amount FROM assets WHERE customerId = ${customerId} AND storageStatus <> '출고완료'`),
         client.asset.count({ where: { ...where, appraisal: null } }),
         client.asset.groupBy({ by: ['storageStatus', 'saleStatus'], where, _count: true }),
         client.asset.groupBy({ by: ['unit'], where, _sum: { quantity: true } }),
       ], { isolationLevel: 'RepeatableRead' })
-      return { total: total._count, appraisalValue: total._sum.appraisal?.toString() ?? null, unappraised, groups: groups.map((group) => ({ storageStatus: group.storageStatus, saleStatus: group.saleStatus, count: group._count })), quantities: quantities.map((group) => ({ unit: group.unit, quantity: group._sum.quantity?.toString() ?? '0' })) }
+      return { total: Number(total[0]!.count), appraisalValue: total[0]!.amount?.toString() ?? null, unappraised, groups: groups.map((group) => ({ storageStatus: group.storageStatus, saleStatus: group.saleStatus, count: group._count })), quantities: quantities.map((group) => ({ unit: group.unit, quantity: group._sum.quantity?.toString() ?? '0' })) }
     },
   }
 }

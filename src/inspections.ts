@@ -1,7 +1,7 @@
 import type { AdminImage } from './admin/adminData'
 
 export const inspectionUnits = { EA: 'EA', SET: 'Set', ROLL: '롤', BAR: '봉', SURFACE: '면', BOX: 'Box', KG: 'kg', TON: 'ton', M: 'M', M3: 'm³', PIECE: '본', PAIR: '켤레', GROUP: '조', SHEET: '장', SETUP: '식', CASE: '건', CONTAINER: '통', BUNDLE: '묶음', UNIT: '대', BAG: '포', PACK: '곽', CARTON: '갑', OTHER: '기타' } as const
-export type InspectionRow = { id: string; itemId: string; name: string; specification: string; brand: string; categoryId: string; unit: keyof typeof inspectionUnits | ''; grade: 'S' | 'A' | 'B' | 'F' | ''; received: string; usable: string; disposal: string; reason: string; locationId: string; photos: AdminImage[] }
+export type InspectionRow = { id: string; itemId: string; appraisal?: string | null; name: string; specification: string; brand: string; categoryId: string; unit: keyof typeof inspectionUnits | ''; grade: 'S' | 'A' | 'B' | 'F' | ''; received: string; usable: string; disposal: string; reason: string; locationId: string; photos: AdminImage[] }
 export type InspectionReport = { id: string; receivingId: string; siteName: string; customerId: string; receivedAt: string; status: 'PENDING' | 'AWAITING_ACKNOWLEDGEMENT' | 'COMPLETED'; version: number; inspectedAt: string | null; acknowledgedAt: string | null; consentedAt: string | null; disposalStatus: string | null; consentText: string; rows: InspectionRow[]; assets: { rowId: string; id: string }[]; editable?: boolean; editBlock?: string; skipInvalidRowIds?: string[]; skippedRows?: { id: string; row: number; message: string }[] }
 export const inspectionLabels = { PENDING: '검수 대기', AWAITING_ACKNOWLEDGEMENT: '결과 확인 대기', COMPLETED: '검수 종료' }
 function inspectionRowId(): string {
@@ -22,6 +22,7 @@ const amount = (value: string) => {
 export function inspectionRowErrors(row: InspectionRow): string[] {
   const errors: string[] = []
   if (row.itemId && !/^\d{6}$/.test(row.itemId)) errors.push('품목코드: 6자리 숫자')
+  if (row.appraisal != null && (!/^\d{1,13}$/.test(row.appraisal) || Number(row.appraisal) > 1e12)) errors.push('개당 평가금액: 0~1조원 정수 또는 미평가')
   if (!row.name.trim() || row.name.length > 160) errors.push('자산명: 1~160자')
   if (row.specification.length > 500) errors.push('규격: 500자 이하')
   if (row.brand.length > 160) errors.push('브랜드: 160자 이하')

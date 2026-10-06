@@ -12,7 +12,7 @@ import { adminDataQuery, assetUpdateInput, createAdminDataRepository } from '../
 import { adminListQuery } from '../src/admin-pagination.js'
 import { createAdminImageRepository, imageOrigin } from '../src/admin-images.js'
 import { createReceivingRepository, receivingInput, receivingQuery, receivingTerms } from '../src/receiving.js'
-import { createInspectionRepository, inspectionWrite, receiveInput } from '../src/inspection.js'
+import { createInspectionRepository, inspectionRow, inspectionWrite, receiveInput } from '../src/inspection.js'
 import { createLocationRepository } from '../src/location.js'
 import { ItemUnit } from '../src/generated/prisma/client.js'
 
@@ -38,7 +38,7 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
   assert.equal(sql("SELECT CONCAT(id, ':', status, ':', businessNumber IS NULL) FROM customers WHERE id='LEGACY-CUS'"), 'LEGACY-CUS:PENDING:1')
   assert.equal(sql("SELECT status FROM users WHERE id='legacy-user'"), 'PENDING')
   assert.equal(sql("SELECT CONCAT(id, ':', status) FROM customers WHERE id='LEGACY-ASSET-OWNER'"), 'LEGACY-ASSET-OWNER:PENDING')
-  assert.equal(sql("SELECT CONCAT(COUNT(*), ':', SUM(quantity), ':', SUM(appraisal)) FROM assets WHERE customerId='LEGACY-ASSET-OWNER'"), '1:2.500:12345')
+  assert.equal(sql("SELECT CONCAT(COUNT(*), ':', SUM(quantity), ':', SUM(appraisal)) FROM assets WHERE customerId='LEGACY-ASSET-OWNER'"), '1:2.500:4938')
   assert.equal(sql("SELECT CONCAT(id, ':', enabled) FROM locations WHERE id='LEGACY-LOC'"), 'LEGACY-LOC:0')
   assert.equal(sql("SELECT locationId FROM assets WHERE id='260929-0001'"), 'LEGACY-LOC')
   assert.throws(() => sql("DELETE FROM locations WHERE id='LEGACY-LOC'"), /Command failed/)
@@ -259,6 +259,15 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     assert.equal(savedRow.categoryId, null); assert.equal(savedRow.specification, '')
     assert.equal((await client.disposalItem.count({ where: { inspectionId: initial.id } })), 2)
     assert.equal(confirmed.editable, true)
+    await client.masterItem.update({ where: { id: '778818' }, data: { enabled: true, unit: 'EA', inboundPrice: 1000 } })
+    const priced = await repository.save(initial.id, inspectionWrite.parse({ version: confirmed.version, rows: [{ ...row, itemId: '778818', grade: 'A' }, unused], reason: '입고단가 자동 평가' }), reviewer, true)
+    assert.equal((await client.asset.findUniqueOrThrow({ where: { id: asset.id } })).appraisal?.toString(), '800')
+    assert.equal(inspectionRow.array().parse(priced.rows)[0]!.appraisal, '800')
+    const overridden = await repository.save(initial.id, inspectionWrite.parse({ version: priced.version, rows: [{ ...row, itemId: '778818', appraisal: '725' }, unused], reason: '단가 수동 평가' }), reviewer, true)
+    assert.equal(inspectionRow.array().parse(overridden.rows)[0]!.appraisal, '725')
+    const unpriced = await repository.save(initial.id, inspectionWrite.parse({ version: overridden.version, rows: [{ ...row, appraisal: null }, unused], reason: '선택 평가 삭제' }), reviewer, true)
+    assert.equal(inspectionRow.array().parse(unpriced.rows)[0]!.appraisal, null)
+    confirmed.version = unpriced.version
     await assert.rejects(repository.save(initial.id, inspectionWrite.parse({ version: confirmed.version, rows: [row, unused], skipInvalidRowIds: [row.id], reason: '정정 행 제외' }), reviewer, true), /정정에서는 오류 행을 제외할 수 없습니다/)
     const amended = await repository.save(initial.id, inspectionWrite.parse({ version: confirmed.version, rows: [{ ...row, usable: '7', disposal: '3' }, unused], reason: '검수 수량 정정' }), reviewer, true)
     assert.equal(amended.assets[0]!.id, asset.id)
@@ -403,9 +412,25 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
       assert.equal((await client.asset.findUniqueOrThrow({ where: { id: asset.id } })).categoryId, category || null)
     }
     assert.equal(assetUpdateInput.parse({ ...input, category: undefined }).category, '')
+    for (const appraisal of [725, 0, null]) {
+      const latest = await client.asset.findUniqueOrThrow({ where: { id: asset.id } })
+      await repository.updateAsset(asset.id, { ...input, name: latest.name, appraisal, expectedUpdatedAt: latest.updatedAt.toISOString() })
+      assert.equal((await client.asset.findUniqueOrThrow({ where: { id: asset.id } })).appraisal?.toString() ?? null, appraisal === null ? null : String(appraisal))
+    }
     await client.materialCategory.create({ data: { id: '780000', name: '미사용 분류', enabled: false } })
     const current = await client.asset.findUniqueOrThrow({ where: { id: asset.id } })
     await assert.rejects(repository.updateAsset(asset.id, { ...input, category: '780000', expectedUpdatedAt: current.updatedAt.toISOString() }), /사용 중인 카테고리/)
+  })
+  await context.test('legacy appraisal totals and inspection baselines convert using their own quantities', async () => {
+    const entry = await client.inspectionItem.findFirstOrThrow({ where: { assetId: { not: null } } })
+    const migration = readFileSync(new URL('20261006001000_unit_asset_appraisal/migration.sql', migrations), 'utf8')
+    assert.equal(sql(`START TRANSACTION;
+      UPDATE assets SET appraisal=1000, quantity=2 WHERE id='${entry.assetId}';
+      UPDATE inspection_items SET assetBaseline=JSON_OBJECT('quantity', '3', 'appraisal', '1500') WHERE id='${entry.id}';
+      ${migration}
+      SELECT CONCAT(asset.appraisal, ':', JSON_UNQUOTE(JSON_EXTRACT(inspection_item.assetBaseline, '$.appraisal')))
+      FROM inspection_items AS inspection_item INNER JOIN assets AS asset ON asset.id=inspection_item.assetId WHERE inspection_item.id='${entry.id}';
+      ROLLBACK;`), '500:500')
   })
   await context.test('sale requests persist, appear in admin lists, isolate owners and rollback failed audits', async () => {
     const company = await client.customer.create({ data: { id: 'SALE-COMPANY', name: '판매 고객사', status: 'ACTIVE', businessNumber: '9876543201', representativeName: '대표', address: '서울', phone: '0212345678' } })
@@ -460,7 +485,9 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     assert.equal(page.records.length, 1)
     const totals = await assets.summary!(company.id)
     assert.equal(totals.total, 101)
-    assert.equal(totals.appraisalValue, '990')
+    assert.equal(totals.appraisalValue, '1237.5')
+    const valuePage = await assets.list(company.id, { page: 1, size: 2, sort: 'valueDesc', storageStatus: 'STORED', categoryId: '990000', q: 'Asset' }, new Date())
+    assert.deepEqual(valuePage.records.map((entry) => entry.id), ['260930-0003', '260930-0004'])
     assert.equal(totals.unappraised, 1)
     assert.deepEqual(totals.quantities, [{ unit: 'EA', quantity: '126.25' }])
     assert.equal(await assets.detail!(other.id, '260930-0001'), null)

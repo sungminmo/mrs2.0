@@ -15,11 +15,16 @@ export const inspectionReason = z.string().trim().min(1).max(500)
 export const inspectionVersion = z.object({ version: z.number().int().min(0) }).strict()
 export const inspectionPhoto = z.object({ id: z.uuid(), name: z.string().min(1).max(255), url: z.string().max(2048).refine((value) => publicImageUrl(value) !== null) }).strict()
 const quantity = z.string().regex(/^\d{1,10}(?:\.\d{1,3})?$/).refine((value) => /^\d{1,10}(?:\.\d{1,3})?$/.test(value) && new Prisma.Decimal(value).lte(1e9), '수량은 10억 이하입니다.')
+export function defaultAppraisal(inboundPrice: Prisma.Decimal | null, grade: string): string | null {
+  const percentage = { S: 90, A: 80, B: 60 }[grade as 'S' | 'A' | 'B']
+  return inboundPrice === null || percentage === undefined ? null : inboundPrice.mul(percentage).div(100).toFixed(0, Prisma.Decimal.ROUND_HALF_UP)
+}
 export const inspectionRow = z.object({
   id: z.uuid(), itemId: z.union([z.string().regex(/^\d{6}$/), z.literal('')]).default(''),
   name: z.string().trim().max(160), specification: z.string().trim().max(500), brand: z.string().trim().max(160).default(''),
   categoryId: z.union([z.string().regex(/^\d{6}$/), z.literal('')]), unit: z.union([z.enum(ItemUnit), z.literal('')]),
   grade: z.enum(['S', 'A', 'B', 'F', '']), received: z.union([quantity, z.literal('')]), usable: z.union([quantity, z.literal('')]), disposal: z.union([quantity, z.literal('')]),
+  appraisal: z.string().regex(/^\d{1,13}$/).refine((value) => Number(value) <= 1e12).nullable().optional(),
   reason: z.string().trim().max(1000).default(''), locationId: z.string().trim().max(20).default(''), photos: z.array(inspectionPhoto).max(8).default([]),
 }).strict()
 export const inspectionWrite = inspectionVersion.extend({ rows: z.array(inspectionRow).max(1000), reason: inspectionReason, skipInvalidRowIds: z.array(z.uuid()).max(1000).default([]) })
@@ -50,7 +55,11 @@ function editable(current: Report) {
   return current.status === 'AWAITING_ACKNOWLEDGEMENT' && !current.acknowledgedAt && !current.disposal?.consentedAt && (!current.disposal || current.disposal.status === 'UNPROCESSED' && current.disposal.costStatus === 'UNESTIMATED' && !current.disposal.comments.length && !current.disposal.costLines.length && !current.disposal.scheduledAt && !current.disposal.completedAt && !current.disposal.evidence && current.disposal.items.every((entry) => entry.processedQuantity === null)) && current.items.every((entry) => !entry.assetId || entry.asset && entry.assetBaseline && isDeepStrictEqual(baseline(entry.asset), entry.assetBaseline))
 }
 function rows(current: Report): Row[] {
-  return current.items.map((entry) => ({ id: entry.id, itemId: entry.itemId ?? '', name: entry.name, specification: entry.specification, brand: entry.brand, categoryId: entry.categoryId ?? '', unit: entry.unit, grade: entry.grade ?? '', received: entry.receivedQuantity.toString(), usable: entry.usableQuantity?.toString() ?? '', disposal: entry.disposalQuantity?.toString() ?? '', reason: entry.reason, locationId: entry.locationId ?? '', photos: entry.images.map((image) => ({ id: image.id, name: image.caption || '검수 사진', url: image.url })) }))
+  return current.items.map((entry) => ({ id: entry.id, itemId: entry.itemId ?? '', name: entry.name, specification: entry.specification, brand: entry.brand, categoryId: entry.categoryId ?? '', unit: entry.unit, grade: entry.grade ?? '', appraisal: entry.asset?.appraisal?.toString() ?? null, received: entry.receivedQuantity.toString(), usable: entry.usableQuantity?.toString() ?? '', disposal: entry.disposalQuantity?.toString() ?? '', reason: entry.reason, locationId: entry.locationId ?? '', photos: entry.images.map((image) => ({ id: image.id, name: image.caption || '검수 사진', url: image.url })) }))
+}
+async function appraiseRows(tx: Tx, input: Row[]): Promise<Row[]> {
+  const items = await tx.masterItem.findMany({ where: { id: { in: [...new Set(input.filter((entry) => entry.appraisal === undefined && entry.itemId).map((entry) => entry.itemId))] } }, select: { id: true, inboundPrice: true } })
+  return input.map((entry) => ({ ...entry, appraisal: entry.grade === 'F' ? null : entry.appraisal !== undefined ? entry.appraisal : defaultAppraisal(items.find((item) => item.id === entry.itemId)?.inboundPrice ?? null, entry.grade) }))
 }
 function payload(current: Report, admin: boolean) {
   const draft = current.draftData
@@ -120,6 +129,7 @@ export function createInspectionRepository(client: PrismaClient) {
       await administrator(tx, user)
       const current = await report(tx, id, input.version)
       if (current.status !== 'PENDING') throw conflict()
+      input = { ...input, rows: await appraiseRows(tx, input.rows) }
       await tx.inspection.update({ where: { id }, data: { draftData: { rows: input.rows, skipInvalidRowIds: input.skipInvalidRowIds }, version: { increment: 1 } } })
       await audit(tx, current, user.id, input.reason, 'inspection.draft', { rowCount: input.rows.length })
       return payload(await tx.inspection.findUniqueOrThrow({ where: { id }, include }), true)
@@ -128,6 +138,7 @@ export function createInspectionRepository(client: PrismaClient) {
       await administrator(tx, user)
       const current = await report(tx, id, input.version)
       if (current.receiving.status !== 'RECEIVED' || (amend ? !editable(current) : current.status !== 'PENDING')) throw conflict()
+      input = { ...input, rows: await appraiseRows(tx, input.rows) }
       const { accepted, skippedRows } = await validateRows(tx, input.rows, current, amend, input.skipInvalidRowIds)
       input = { ...input, rows: accepted }
       let nextCode = 0
@@ -150,7 +161,7 @@ export function createInspectionRepository(client: PrismaClient) {
         const usable = new Prisma.Decimal(entry.usable)
         const assetId = usable.gt(0) ? previous?.assetId ?? `${dateCode}-${String(nextCode++).padStart(4, '0')}` : null
         if (assetId) {
-          const fields = { itemId: entry.itemId || null, categoryId: entry.categoryId || null, name: entry.name, specification: entry.specification, brand: entry.brand, grade: entry.grade as 'S' | 'A' | 'B', unit: entry.unit as ItemUnit, quantity: usable, locationId: entry.locationId }
+          const fields = { itemId: entry.itemId || null, categoryId: entry.categoryId || null, name: entry.name, specification: entry.specification, brand: entry.brand, grade: entry.grade as 'S' | 'A' | 'B', unit: entry.unit as ItemUnit, quantity: usable, locationId: entry.locationId, appraisal: entry.appraisal ?? null }
           if (previous?.assetId) {
             await tx.asset.update({ where: { id: assetId }, data: fields })
             await tx.assetImage.deleteMany({ where: { assetId } })

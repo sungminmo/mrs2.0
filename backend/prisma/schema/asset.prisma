@@ -1,4 +1,4 @@
-/// 검수로 확정되는 품질 등급. 판매가 할인율에 연동(S 10%, A 30%, B 50% 할인), F는 재사용 불가로 폐기 대상
+/// 검수 품질 등급. 입고단가 대비 평가 할인율 S 10%, A 20%, B 40%. F는 폐기 대상
 enum AssetGrade {
   S
   A
@@ -35,7 +35,7 @@ model Asset {
   grade         AssetGrade         // 검수 시 확정되는 품질 등급
   quantity      Decimal            @db.Decimal(18, 3) // 검수로 확정된 실수량(입고 신청 lot 수량과 다를 수 있음)
   unit          ItemUnit
-  appraisal     Decimal?           @db.Decimal(19, 0) // 평가 가치(참고 금액). null=미평가, 0과 구분
+  appraisal     Decimal?           @db.Decimal(19, 0) // 개당 평가금액(원). null=미평가. 총액은 현재 수량을 곱해 계산
   storageStatus AssetStorageStatus
   saleStatus    AssetSaleStatus
   createdAt     DateTime           @default(now())

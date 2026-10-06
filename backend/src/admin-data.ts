@@ -159,7 +159,7 @@ export function createAdminDataRepository(client: PrismaClient) {
       if (previous.product && (Number(previous.quantity) !== fields.quantity || previous.grade !== fields.grade || previous.storageStatus !== storage || previous.saleStatus !== sale)) throw new AppError(409, ErrorCode.CONFLICT, '연결 상품이 있는 자산의 수량·등급·상태는 마켓 업무에서 변경해 주세요.')
       if (previous.saleRequest && (Number(previous.quantity) !== fields.quantity || previous.storageStatus !== storage || previous.saleStatus !== sale || fields.grade === 'F')) throw new AppError(409, ErrorCode.CONFLICT, '판매 요청된 자산의 수량·보관/판매 상태 및 F등급 변경은 제한됩니다.')
       const data = { ...fields, categoryId: category || null, storageStatus: storage, saleStatus: sale }
-      const labels: Record<string, string> = { name: '자산명', specification: '규격', brand: '브랜드', quantity: '현재 수량', grade: '등급', locationId: '로케이션', categoryId: '카테고리', storageStatus: '보관 상태', saleStatus: '판매 상태' }
+      const labels: Record<string, string> = { appraisal: '개당 평가금액', name: '자산명', specification: '규격', brand: '브랜드', quantity: '현재 수량', grade: '등급', locationId: '로케이션', categoryId: '카테고리', storageStatus: '보관 상태', saleStatus: '판매 상태' }
       const display = (key: string, value: unknown) => key === 'storageStatus' ? storageStatus[value as keyof typeof storageStatus] ?? '미등록' : key === 'saleStatus' ? saleStatus[value as keyof typeof saleStatus] ?? '미등록' : String(value ?? '') || '미등록'
       const changes = Object.entries(data).filter(([key, value]) => String(previous[key as keyof typeof previous] ?? '') !== String(value ?? '')).map(([key, value]) => [labels[key] ?? key, display(key, previous[key as keyof typeof previous]), display(key, value)])
       if (changes.length) {
@@ -192,6 +192,7 @@ export const assetUpdateInput = z.object({
   expectedUpdatedAt: z.iso.datetime(), reason: z.string().trim().min(1).max(500),
   name: z.string().trim().min(1).max(160), specification: z.string().trim().max(500), brand: z.string().trim().max(160),
   category: z.union([z.string().regex(/^\d{6}$/), z.literal('')]).default(''),
+  appraisal: z.number().int().min(0).max(1e12).nullable().optional(),
   quantity: z.number().min(0).max(1e9).refine((value) => Math.abs(value * 1000 - Math.round(value * 1000)) < 0.0001),
   grade: z.enum(['S', 'A', 'B', 'F']), locationId: z.string().max(20).transform((value) => value || null),
   status: z.enum(['입고대기', '보관중', '출고완료']), saleStatus: z.enum(['판매대기', '판매중', '판매완료']),

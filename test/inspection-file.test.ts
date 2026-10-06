@@ -1,3 +1,12 @@
+import { appraisalMoney, appraisalTotal } from '../src/appraisal'
+
+test('appraisal totals preserve decimal quantities, large values, zero and missing prices', () => {
+  assert.equal(appraisalTotal('725', '2.5'), '1812.5')
+  assert.equal(appraisalMoney(appraisalTotal('725', '2.5')), '1,812.5원')
+  assert.equal(appraisalTotal('1000000000000', '999999999.999'), '999999999999000000000')
+  assert.equal(appraisalTotal(null, '5'), null)
+  assert.equal(appraisalTotal('0', '5'), '0')
+})
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import ExcelJS from 'exceljs'

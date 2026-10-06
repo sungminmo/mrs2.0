@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createApp } from '../src/app.js'
 import { hashPassword, type AuthRepository, type AuthUser } from '../src/auth.js'
-import { inspectionWrite, type InspectionRepository } from '../src/inspection.js'
+import { defaultAppraisal, inspectionWrite, type InspectionRepository } from '../src/inspection.js'
+import { Prisma } from '../src/generated/prisma/client.js'
 
 test('inspection routes isolate audiences, validate versions and consent and control ownership', async () => {
   const passwordHash = await hashPassword('inspection-test-123')
@@ -42,4 +43,14 @@ test('draft quantities never throw decimal errors for malformed input and photos
   assert.equal(inspectionWrite.safeParse({ version: 0, reason: '초안', rows: [row] }).success, true)
   for (const received of ['oops', '-1', '1.1234', '1000000001']) assert.equal(inspectionWrite.safeParse({ version: 0, reason: '초안', rows: [{ ...row, received }] }).success, false)
   assert.equal(inspectionWrite.safeParse({ version: 0, reason: '초안', rows: [{ ...row, photos: [{ id: row.id, name: '사진', url: 'https://example.com/a.webp' }] }] }).success, false)
+})
+
+test('unit appraisal discounts inbound prices and permits optional overrides', () => {
+  for (const [grade, expected] of [['S', '900'], ['A', '800'], ['B', '600'], ['F', null]]) assert.equal(defaultAppraisal(new Prisma.Decimal(1000), grade!), expected)
+  assert.equal(defaultAppraisal(null, 'S'), null)
+  assert.equal(defaultAppraisal(new Prisma.Decimal(0), 'A'), '0')
+  assert.equal(defaultAppraisal(new Prisma.Decimal(105), 'S'), '95')
+  const row = { id: '11111111-1111-4111-8111-111111111111', name: '', specification: '', categoryId: '', unit: '', grade: '', received: '', usable: '', disposal: '' }
+  for (const appraisal of [undefined, null, '0', '1234', '1000000000000']) assert.equal(inspectionWrite.safeParse({ version: 0, reason: '초안', rows: [{ ...row, appraisal }] }).success, true)
+  for (const appraisal of ['-1', '1.5', '1000000000001', 'oops', '']) assert.equal(inspectionWrite.safeParse({ version: 0, reason: '초안', rows: [{ ...row, appraisal }] }).success, false)
 })

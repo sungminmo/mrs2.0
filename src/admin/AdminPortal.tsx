@@ -4,7 +4,7 @@ import { adminAuthenticatedFetch, adminSignOut, showAdminToast } from '../adminA
 import { dateText, invoiceAmount, invoices, money, receivingStatuses, referenceDate, type Campaign, type Inspection, type Inventory, type Location, type MasterItem, type MemberAccount, type Product, type Receiving, type SaleRequest } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
 import { materialPhotos } from '../assetPhotos'
-import InventoryEditor, { ImagePicker } from './InventoryEditor'
+import InventoryEditor, { AssetAppraisalEditor, ImagePicker } from './InventoryEditor'
 import LocationEditor from './LocationEditor'
 import LocationOccupancyEditor from './LocationOccupancyEditor'
 import { categoryMatches, type MaterialCategory } from '../categories'
@@ -174,6 +174,7 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
       </>}
       {!pending && row && menu.id === 'receiving' && tab?.id === 'requests' && row.status === '입고 신청' && <ReceivingReview key={row.id} id={row.id} onChanged={() => setAccountRevision((value) => value + 1)} />}
       {!pending && row && menu.id === 'receiving' && tab?.id === 'requests' && row.status === '입고 승인' && <ReceiveCompletion key={row.id} id={row.id} />}
+      {!pending && row && menu.id === 'receiving' && tab?.id === 'detailed' && assets.filter((asset) => asset.id === market.sales.find((request) => request.id === row.id)?.assetId).map((asset) => <AssetAppraisalEditor key={`${asset.id}/${asset.updatedAt}`} asset={asset} onSaved={() => setAccountRevision((value) => value + 1)} />)}
       {!pending && row && !editing && (itemManagement || menu.id === 'inventory' && tab?.id === 'stock') && <ImagePicker key={`${menu.id}/${row.id}`} kind={itemManagement ? 'items' : 'assets'} recordId={row.id} images={(itemManagement ? items.find((entry) => entry.id === row.id) : assets.find((entry) => entry.id === row.id))?.images ?? []} limit={itemManagement ? 1 : 8} label={itemManagement ? '대표 이미지' : '자산 이미지'} onChange={(images) => { if (itemManagement) setItems((current) => current.map((entry) => entry.id === row.id ? { ...entry, images } : entry)); else setAssets((current) => current.map((entry) => entry.id === row.id ? { ...entry, images } : entry)) }} />}
       <footer className="adm-footer">MRS 스테이징 환경 · 실제 서비스 운영 환경 아님</footer>
     </main>

@@ -8,6 +8,7 @@ import type { Location, MasterItem } from './adminData'
 import type { InspectionImport } from './inspectionFile'
 import { uploadImage } from './adminImages'
 import './InspectionEditor.css'
+import { appraisalMoney, appraisalTotal } from '../appraisal'
 
 function excel(bytes?: ArrayBuffer): Promise<ArrayBuffer | InspectionImport> {
   return new Promise((resolve, reject) => {
@@ -60,8 +61,19 @@ export default function InspectionEditor({ id, categories, onChanged, readOnly =
     return () => { window.removeEventListener('beforeunload', unload); document.removeEventListener('click', navigate, true) }
   }, [dirty])
   const row = rows.find((entry) => entry.id === selected), pending = report?.status === 'PENDING'
+  useEffect(() => {
+    if (!pending || !row || row.appraisal !== undefined || !/^\d{6}$/.test(row.itemId) || !['S', 'A', 'B'].includes(row.grade)) return
+    const controller = new AbortController(), rowId = row.id, itemId = row.itemId, grade = row.grade
+    adminAccountRequest<{ items: MasterItem[] }>(`/api/admin/data?scope=items&id=${itemId}`, { signal: controller.signal }).then(({ items }) => {
+      const item = items.find((entry) => entry.id === itemId)
+      const percentage = { S: 90, A: 80, B: 60 }[grade as 'S' | 'A' | 'B']
+      const appraisal = item?.inboundPrice == null ? null : String(Math.round(item.inboundPrice * percentage / 100))
+      if (!controller.signal.aborted) setRows((current) => current.map((entry) => entry.id === rowId && entry.itemId === itemId && entry.grade === grade && entry.appraisal === undefined ? { ...entry, appraisal } : entry))
+    }).catch((failure) => { if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : '입고단가 조회 실패') })
+    return () => controller.abort()
+  }, [pending, row])
   const editable = report?.editable && !readOnly
-  const update = (values: Partial<InspectionRow>) => { setRows((current) => current.map((entry) => entry.id === selected ? { ...entry, ...values } : entry)); setDirty(true); setConfirming(false) }
+  const update = (values: Partial<InspectionRow>) => { setRows((current) => current.map((entry) => entry.id === selected ? { ...entry, ...(pending && ('itemId' in values || 'grade' in values) ? { appraisal: undefined } : {}), ...values } : entry)); setDirty(true); setConfirming(false) }
   const submissionRows = rows.filter((entry) => !pending || !importedIds.includes(entry.id) || !inspectionRowErrors(entry).length)
   const errors = submissionRows.flatMap((entry) => inspectionRowErrors(entry).map((message) => `${rows.indexOf(entry) + 1}행: ${message}`))
   const finalErrors = !submissionRows.length ? ['등록 가능한 검수 행이 없습니다.'] : pending && !submissionRows.some((entry) => Number(entry.usable) > 0) ? [...errors, '재사용 가능한 자산이 한 개 이상 필요합니다.'] : errors
@@ -105,6 +117,7 @@ export default function InspectionEditor({ id, categories, onChanged, readOnly =
         <div className="adm-edit-fields"><label>품목코드 (선택)<input value={row.itemId} maxLength={6} onChange={(event) => update({ itemId: event.target.value })} /></label><ReferenceSearch kind="items" onSelect={(entry) => { const item = entry as MasterItem; const unit = Object.entries(inspectionUnits).find(([, label]) => label === item.unit)?.[0] as InspectionRow['unit']; update({ itemId: item.id, name: item.name, specification: item.specification, brand: item.brand, categoryId: item.category, unit: unit ?? '' }) }} />
         <label>자산명<input value={row.name} maxLength={160} onChange={(event) => update({ name: event.target.value })} /></label><label>규격 (선택)<input value={row.specification} maxLength={500} onChange={(event) => update({ specification: event.target.value })} /></label><label>브랜드 (선택)<input value={row.brand} maxLength={160} onChange={(event) => update({ brand: event.target.value })} /></label></div>
         <CategorySelect categories={categories} value={row.categoryId} retainedId={!pending ? report.rows.find((entry) => entry.id === row.id)?.categoryId : undefined} onChange={(categoryId) => update({ categoryId })} />
+        <div className="adm-edit-fields"><label>개당 평가금액 (원·선택)<input type="number" min={0} max={1e12} step={1} value={row.appraisal ?? ''} placeholder="미평가" onChange={(event) => update({ appraisal: event.target.value || null })} /></label><label>평가 총액 (재사용 수량)<output>{appraisalMoney(appraisalTotal(row.appraisal, row.usable))}</output></label></div>
         <div className="adm-edit-fields"><label>단위<select value={row.unit} onChange={(event) => update({ unit: event.target.value as InspectionRow['unit'] })}><option value="">선택</option>{Object.entries(inspectionUnits).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label><label>등급<select value={row.grade} onChange={(event) => update({ grade: event.target.value as InspectionRow['grade'] })}><option value="">선택</option>{['S', 'A', 'B', 'F'].map((grade) => <option key={grade}>{grade}</option>)}</select></label>{(['received', 'usable', 'disposal'] as const).map((key, index) => <label key={key}>{['입고수량', '재사용수량', '폐기수량'][index]}<input inputMode="decimal" value={row[key]} onChange={(event) => update({ [key]: event.target.value })} /></label>)}<label>로케이션코드<input value={row.locationId} maxLength={20} onChange={(event) => update({ locationId: event.target.value })} /></label><ReferenceSearch kind="locations" onSelect={(entry) => update({ locationId: entry.id })} /><label className="inspection-wide">폐기사유<textarea value={row.reason} maxLength={1000} onChange={(event) => update({ reason: event.target.value })} /></label></div>
         <div className="inspection-photos">{row.photos.map((image) => <figure key={image.id}><a href={image.url} target="_blank" rel="noreferrer"><img src={image.url} alt={image.name} loading="lazy" /></a><figcaption>{image.name}</figcaption><button className="adm-icon" title="사진 제거" aria-label={`${image.name} 제거`} onClick={() => update({ photos: row.photos.filter((entry) => entry.id !== image.id) })}><Trash2 size={14} /></button></figure>)}</div><button className="adm-button" disabled={row.photos.length >= 8} onClick={() => photo.current?.click()}><ImagePlus size={16} />검수 사진 추가 ({row.photos.length}/8)</button><input ref={photo} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={async (event) => {
           const input = event.target.files?.[0]; if (!input || working.current) return

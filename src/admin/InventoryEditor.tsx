@@ -7,6 +7,7 @@ import { nextAssetCode, prepareInventory, validateMasterItem } from './adminInve
 import { registerAdminItems, updateAdminItem } from './adminItems'
 import { uploadImage, saveImages } from './adminImages'
 import { adminAccountRequest } from '../adminAuthSession'
+import { appraisalMoney, appraisalTotal } from '../appraisal'
 
 type Props = { kind: 'items' | 'inventory'; items: MasterItem[]; assets: Inventory[]; inspections?: Inspection[]; categories: MaterialCategory[]; locations: Location[]; id: string | null; cancelHref: string; onSaveItem: (item: MasterItem, previousId: string | null) => void; onSaveAsset: (asset: Inventory) => void }
 
@@ -23,6 +24,8 @@ const price = (data: FormData, name: string) => text(data, name) === '' ? null :
 function ExistingAssetForm({ assets, categories, locations, id, onSaveAsset }: Props) {
   const asset = assets.find((entry) => entry.id === id)
   const [category, setCategory] = useState(asset?.category ?? '')
+  const [appraisal, setAppraisal] = useState(asset?.appraisal?.toString() ?? '')
+  const [quantity, setQuantity] = useState(asset?.quantity.toString() ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const working = useRef(false)
@@ -33,7 +36,7 @@ function ExistingAssetForm({ assets, categories, locations, id, onSaveAsset }: P
     const data = new FormData(event.currentTarget)
     working.current = true; setBusy(true); setError('')
     try {
-      const { asset: saved } = await adminAccountRequest<{ asset: Inventory }>(`/api/admin/assets/${asset.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedUpdatedAt: asset.updatedAt, reason: text(data, 'reason'), name: text(data, 'name'), category, specification: text(data, 'specification'), brand: text(data, 'brand'), quantity: Number(text(data, 'quantity')), grade: text(data, 'grade'), locationId: text(data, 'locationId'), status: text(data, 'status'), saleStatus: text(data, 'saleStatus') }) })
+      const { asset: saved } = await adminAccountRequest<{ asset: Inventory }>(`/api/admin/assets/${asset.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedUpdatedAt: asset.updatedAt, reason: text(data, 'reason'), name: text(data, 'name'), category, specification: text(data, 'specification'), brand: text(data, 'brand'), quantity: Number(text(data, 'quantity')), appraisal: price(data, 'appraisal'), grade: text(data, 'grade'), locationId: text(data, 'locationId'), status: text(data, 'status'), saleStatus: text(data, 'saleStatus') }) })
       onSaveAsset(saved)
     } catch (failure) { setError(failure instanceof Error ? failure.message : '자산 저장에 실패했습니다.') }
     finally { working.current = false; setBusy(false) }
@@ -51,8 +54,10 @@ function ExistingAssetForm({ assets, categories, locations, id, onSaveAsset }: P
         <CategorySelect categories={categories} value={category} onChange={setCategory} retainedId={asset.category} />
         <label>규격 (선택)<input name="specification" defaultValue={asset.specification} maxLength={500} /></label>
         <label>브랜드 (선택)<input name="brand" defaultValue={asset.brand} maxLength={160} /></label>
-        <label>현재 수량<input name="quantity" type="number" defaultValue={asset.quantity} required min={0} max={1e9} step={['EA', 'Box', '본'].includes(asset.unit) ? 1 : 0.001} /></label>
+        <label>현재 수량<input name="quantity" type="number" value={quantity} onChange={(event) => setQuantity(event.target.value)} required min={0} max={1e9} step={['EA', 'Box', '본'].includes(asset.unit) ? 1 : 0.001} /></label>
         <label>단위<input value={asset.unit} readOnly /></label>
+        <label>개당 평가금액 (원·선택)<input name="appraisal" type="number" value={appraisal} onChange={(event) => setAppraisal(event.target.value)} min={0} max={1e12} step={1} placeholder="미평가" /></label>
+        <label>평가 총액<output>{appraisalMoney(appraisalTotal(appraisal || null, quantity))}</output></label>
       </div>
       <h2>보관 및 판매</h2><div className="adm-edit-fields">
         <label>로케이션<select name="locationId" defaultValue={asset.locationId}><option value="">미지정</option>{asset.locationId && !locations.some((entry) => entry.id === asset.locationId) && <option value={asset.locationId}>{asset.locationId}</option>}{locations.filter((entry) => entry.enabled || entry.id === asset.locationId).map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.zone}</option>)}</select></label>
@@ -158,6 +163,23 @@ function AssetForm({ items, assets, inspections = [], categories, locations, id,
     <p className="adm-note">현재 수량은 입고대기 시 예정 수량, 보관중 시 잔량입니다. 출고완료는 0으로 입력합니다. 판매 상태 변경은 마켓 승인·상품 노출·정산을 실행하지 않습니다.</p>
     <SaveFooter busy={busy} error={error} />
   </form>
+}
+
+export function AssetAppraisalEditor({ asset, onSaved }: { asset: Inventory; onSaved: () => void }) {
+  const [appraisal, setAppraisal] = useState(asset.appraisal?.toString() ?? '')
+  const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  const working = useRef(false)
+  return <section className="adm-receiving-review" aria-label="상세 검수 평가금액"><h2>상세 검수 평가금액</h2><form onSubmit={async (event) => {
+    event.preventDefault()
+    if (working.current) return
+    const data = new FormData(event.currentTarget)
+    working.current = true; setBusy(true); setError('')
+    try {
+      await adminAccountRequest(`/api/admin/assets/${asset.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedUpdatedAt: asset.updatedAt, reason: text(data, 'reason'), name: asset.name, category: asset.category, specification: asset.specification, brand: asset.brand, quantity: asset.quantity, grade: asset.grade, locationId: asset.locationId ?? '', status: asset.status, saleStatus: asset.saleStatus, appraisal: appraisal === '' ? null : Number(appraisal) }) })
+      onSaved()
+    } catch (failure) { setError(failure instanceof Error ? failure.message : '평가금액 저장 실패') }
+    finally { working.current = false; setBusy(false) }
+  }}><fieldset disabled={busy}><div className="adm-edit-fields"><label>개당 평가금액 (원·선택)<input type="number" min={0} max={1e12} step={1} value={appraisal} placeholder="미평가" onChange={(event) => setAppraisal(event.target.value)} /></label><label>평가 총액<output>{appraisalMoney(appraisalTotal(appraisal || null, String(asset.quantity)))}</output></label><label>변경 사유<input name="reason" required maxLength={500} /></label></div></fieldset><SaveFooter busy={busy} error={error} label="평가금액 저장" /></form></section>
 }
 
 function SaveFooter({ busy, error, label = '저장' }: { busy: boolean; error: string; label?: string }) {
