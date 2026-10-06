@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Archive, ArrowLeft, Box, ChevronLeft, ChevronRight, ClipboardCheck, LayoutDashboard, RefreshCw, Search, ShoppingCart, UserRound } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Archive, ArrowDownToLine, ArrowLeft, Box, ChevronLeft, ChevronRight, ClipboardCheck, LayoutDashboard, MapPin, RefreshCw, Save, Search, ShoppingCart, UserRound, Warehouse } from 'lucide-react'
 import AdminShell from './AdminShell'
 import LoginPage from './LoginPage'
 import ShopifyMarket from './ShopifyMarket'
@@ -11,6 +11,7 @@ import { submitReceiving } from './receivings'
 import CustomerReceivings from './CustomerReceivings'
 import CustomerInspections from './CustomerInspections'
 import './App.css'
+import './ShopifyAssetDetail.css'
 import './CustomerWorkspace.css'
 
 type AssetRecord = { id: string; name: string; itemId: string | null; receivingId: string; category: { id: string; name: string; path: string } | null; specification: string; brand: string; grade: string; quantity: string; unit: string; appraisalValue: string | null; storageStatus: string; saleStatus: string; locationId: string | null; thumbnailUrl?: string | null; createdAt: string; images?: Array<{ id: string; name: string; url: string }> }
@@ -94,10 +95,10 @@ function MemberWorkspace({ session }: { session: AuthSession }) {
     setParameters(next)
   }
   return <ReceivingRequestProvider contact={{ name: session.user.managerName, phone: session.user.managerPhone ?? '' }} onSubmit={async (form) => { const receiving = await submitReceiving(form); setRevision((value) => value + 1); return receiving }} onViewHistory={() => { selectReceiving(null); setReceivingParameters({ page: '1', size: '20' }); navigate('receivings') }}><AdminShell navigation={navigation} customerName={company?.name ?? session.user.companyName} readOnly className="customer-workspace"><main className="sa-main">
-    <div className="sa-heading"><div><div className="sa-breadcrumb">{company?.name ?? session.user.companyName}</div><h1>{selectedId ? '자산 상세' : view === 'overview' ? '자산 현황' : view === 'assets' ? '자산 목록' : view === 'receivings' ? '입고 신청 내역' : view === 'inspections' ? '검수·폐기 내역' : view === 'market' ? '마켓' : '계정 정보'}</h1></div><div className="customer-heading-actions"><ReceivingRequestButton /><button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div></div>
+    {!selectedId && <div className="sa-heading"><div><div className="sa-breadcrumb">{company?.name ?? session.user.companyName}</div><h1>{view === 'overview' ? '자산 현황' : view === 'assets' ? '자산 목록' : view === 'receivings' ? '입고 신청 내역' : view === 'inspections' ? '검수·폐기 내역' : view === 'market' ? '마켓' : '계정 정보'}</h1></div><div className="customer-heading-actions"><ReceivingRequestButton /><button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div></div>}
     {!['receivings', 'inspections'].includes(view) && error && <p className="customer-error" role="alert">{error}</p>}
     {!['receivings', 'inspections'].includes(view) && loading && <p role="status">불러오는 중...</p>}
-    {view === 'inspections' ? <CustomerInspections historyKey={`${session.user.id}:${session.user.customerId}`} manager={session.user.customerRole === 'MANAGER'} revision={revision} onAsset={(id) => { setView('assets'); selectId(id) }} /> : view === 'receivings' ? <CustomerReceivings revision={revision} parameters={receivingParameters} setParameters={setReceivingParameters} selected={receivingId} select={selectReceiving} back={backReceiving} /> : selectedId ? <><button className="sa-button" onClick={back}><ArrowLeft size={16} />목록으로</button>{!loading && detail && <AssetDetails asset={detail} />}</>
+    {view === 'inspections' ? <CustomerInspections historyKey={`${session.user.id}:${session.user.customerId}`} manager={session.user.customerRole === 'MANAGER'} revision={revision} onAsset={(id) => { setView('assets'); selectId(id) }} /> : view === 'receivings' ? <CustomerReceivings revision={revision} parameters={receivingParameters} setParameters={setReceivingParameters} selected={receivingId} select={selectReceiving} back={backReceiving} /> : selectedId ? <>{(loading || !detail) && <div className="customer-heading-actions"><button className="sa-button" onClick={back}><ArrowLeft size={16} />목록으로</button><button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div>}{!loading && detail && <AssetDetails key={detail.id} asset={detail} records={loadedPage?.data ?? []} onBack={back} onNavigate={selectId} onRefresh={() => setRevision((value) => value + 1)} />}</>
       : view === 'profile' ? <section className="customer-section"><dl className="customer-data">{[['고객사', company?.name ?? session.user.companyName], ['사업자등록번호', company?.businessNumber ?? '미확인'], ['대표자', company?.representativeName ?? ''], ['사업장 주소', company?.address ?? ''], ['대표 연락처', company?.phone ?? ''], ['담당자', session.user.managerName], ['이메일', session.user.email], ['담당자 연락처', session.user.managerPhone ?? ''], ['권한', session.user.customerRole === 'MANAGER' ? '고객사 관리자' : '조회자']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '미등록'}</dd></div>)}</dl></section>
         : view === 'market' ? <section className="customer-section"><p>현재 조회 가능한 상품이 없습니다.</p></section>
           : view === 'overview' ? !loading && summary && <>
@@ -118,6 +119,43 @@ function MemberWorkspace({ session }: { session: AuthSession }) {
   </main></AdminShell></ReceivingRequestProvider>
 }
 
-function AssetDetails({ asset }: { asset: AssetRecord }) {
-  return <section className="customer-section"><h2>{asset.name}</h2><dl className="customer-data">{[['자산번호', asset.id], ['입고 신청번호', asset.receivingId], ['품목 코드', asset.itemId], ['카테고리', asset.category?.path ?? '미분류'], ['규격', asset.specification], ['브랜드', asset.brand], ['등급', asset.grade], ['수량', `${asset.quantity} ${asset.unit}`], ['평가금액', money(asset.appraisalValue)], ['보관 상태', storageLabels[asset.storageStatus]], ['판매 상태', saleLabels[asset.saleStatus]], ['보관 위치', asset.locationId ?? '미지정'], ['등록일', date(asset.createdAt)]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '미등록'}</dd></div>)}</dl><div className="customer-photos">{asset.images?.length ? asset.images.map((image) => <figure key={image.id}><img src={image.url} alt={image.name} /><figcaption>{image.name}</figcaption></figure>) : <p><Box size={24} />등록된 공개 가능 사진이 없습니다.</p>}</div></section>
+function AssetDetails({ asset, records, onBack, onNavigate, onRefresh }: { asset: AssetRecord; records: AssetRecord[]; onBack: () => void; onNavigate: (id: string) => void; onRefresh: () => void }) {
+  const [imageIndex, setImageIndex] = useState(0)
+  const [failedImages, setFailedImages] = useState<string[]>([])
+  const [message, setMessage] = useState('')
+  const [now] = useState(() => Date.now())
+  const heading = useRef<HTMLHeadingElement>(null)
+  const images = asset.images ?? []
+  const image = images[imageIndex]
+  const index = records.findIndex((entry) => entry.id === asset.id)
+  const previous = index > 0 ? records[index - 1] : undefined
+  const next = index >= 0 ? records[index + 1] : undefined
+  const days = Math.max(0, Math.floor((now - new Date(asset.createdAt).getTime()) / 86_400_000))
+  const status = asset.saleStatus === 'ON_SALE' ? '판매 중' : storageLabels[asset.storageStatus]
+  const state = asset.saleStatus === 'ON_SALE' ? 'selling' : asset.storageStatus === 'PENDING' ? 'pending' : 'stored'
+  useEffect(() => { heading.current?.focus({ preventScroll: true }); window.scrollTo(0, 0) }, [])
+  function exportAsset() {
+    const escape = (value: string) => `"${(/^[=+\-@\t\r]/.test(value) ? `'${value}` : value).replaceAll('"', '""')}"`
+    const rows = [['자산번호', '자산명', '카테고리', '규격', '브랜드', '등급', '현재 수량', '관리 단위', '평가금액', '보관 상태', '판매 상태', '보관 위치 코드', '등록일'], [asset.id, asset.name, asset.category?.path ?? '미분류', asset.specification, asset.brand, asset.grade, asset.quantity, asset.unit, asset.appraisalValue ?? '미평가', storageLabels[asset.storageStatus], saleLabels[asset.saleStatus], asset.locationId ?? '미지정', date(asset.createdAt)]]
+    const url = URL.createObjectURL(new Blob(['\uFEFF', rows.map((row) => row.map(escape).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8;' }))
+    const link = document.createElement('a'); link.href = url; link.download = `${asset.id}.csv`; link.click(); URL.revokeObjectURL(url)
+    setMessage('자산 정보를 CSV로 내보냈습니다.')
+  }
+  return <div className="shopify-detail customer-asset-detail">
+    <div className="sd-breadcrumb"><button onClick={onBack}>내 자산</button><ChevronRight size={12} /><span>{asset.id}</span></div>
+    <div className="sd-heading"><button className="sd-icon" title="자산 목록으로" aria-label="자산 목록으로" onClick={onBack}><ArrowLeft size={18} /></button><div className="sd-title"><h1 tabIndex={-1} ref={heading}>{asset.name}</h1><span className={`sd-badge ${state}`}><i />{status}</span></div><div className="sd-paging"><button className="sd-icon" title="이전 자산" aria-label="이전 자산" disabled={!previous} onClick={() => previous && onNavigate(previous.id)}><ChevronLeft size={17} /></button><button className="sd-icon" title="다음 자산" aria-label="다음 자산" disabled={!next} onClick={() => next && onNavigate(next.id)}><ChevronRight size={17} /></button></div></div>
+    <div className="sd-actions"><span>등록일 {date(asset.createdAt)} <i>·</i> 등록 경과 {days.toLocaleString('ko-KR')}일</span><div><button className="sd-icon" title="새로고침" aria-label="새로고침" onClick={onRefresh}><RefreshCw size={15} /></button><button className="sd-button" onClick={exportAsset}><ArrowDownToLine size={14} />내보내기</button></div></div>
+    <div className="sd-layout"><div className="sd-primary-column">
+      <section className="sd-section"><div className="sd-section-heading"><h2>자산 정보</h2><span className="sd-grade">{asset.grade}등급</span></div><dl className="sd-fields">{[['자산명', asset.name], ['자산번호', asset.id], ['브랜드', asset.brand], ['규격', asset.specification], ['입고 신청번호', asset.receivingId], ['품목 코드', asset.itemId]].map(([label, value]) => <div key={label} className={label === '자산명' || label === '규격' ? 'sd-wide' : undefined}><dt>{label}</dt><dd>{value || '미등록'}</dd></div>)}</dl></section>
+      <section className="sd-section"><div className="sd-section-heading"><h2>미디어</h2><span>{images.length ? `이미지 ${images.length}개` : '이미지 없음'}</span></div><figure className="sd-media"><div>{image && !failedImages.includes(image.id) ? <img src={image.url} alt={image.name || asset.name} onError={() => setFailedImages((previousIds) => [...previousIds, image.id])} /> : <span className="sd-no-image"><Box size={32} />{image ? '이미지를 불러올 수 없습니다' : '등록된 공개 가능 사진이 없습니다'}</span>}</div>{image && <figcaption>{image.name || '자산 사진'}</figcaption>}</figure>{images.length > 1 && <div className="customer-asset-thumbnails" role="group" aria-label="자산 사진 선택">{images.map((entry, position) => <button key={entry.id} type="button" aria-label={`${position + 1}번 사진: ${entry.name || '자산 사진'}`} aria-pressed={imageIndex === position} onClick={() => setImageIndex(position)}>{failedImages.includes(entry.id) ? <Box size={20} /> : <img src={entry.url} alt="" onError={() => setFailedImages((previousIds) => [...previousIds, entry.id])} />}<span>{position + 1}</span></button>)}</div>}</section>
+      <section className="sd-section"><div className="sd-section-heading"><h2>평가 및 판매</h2><span>KRW</span></div><dl className="sd-fields sd-prices"><div><dt>평가 가치</dt><dd>{money(asset.appraisalValue)}</dd></div><div><dt>판매 가격</dt><dd className="customer-value-missing">미등록</dd><small className="sd-price-rule">기준 판매가 미등록 · 등급 할인율 미등록</small></div></dl><div className="sd-price-summary"><span>평가 가치 대비 할인 적용 판매 가격</span><b>미등록</b></div></section>
+      <section className="sd-section"><div className="sd-section-heading"><h2>재고 정보</h2><span><MapPin size={13} />{asset.locationId ?? '미지정'}</span></div><div className="sd-stock"><div><span>현재 수량</span><strong>{Number(asset.quantity).toLocaleString('ko-KR', { maximumFractionDigits: 3 })}<small>{asset.unit}</small></strong></div><dl><div><dt>관리 단위</dt><dd>{asset.unit}</dd></div><div><dt>등록일</dt><dd>{date(asset.createdAt)}</dd></div></dl></div></section>
+    </div><aside className="sd-secondary-column" aria-label="자산 관리">
+      <section className="sd-section"><div className="sd-section-heading"><h2>자산 상태</h2><span className={`sd-badge ${state}`}><i />{status}</span></div><dl className="sd-side-fields"><div><dt>보관 상태</dt><dd>{storageLabels[asset.storageStatus]}</dd></div><div><dt>판매 상태</dt><dd>{saleLabels[asset.saleStatus]}</dd></div></dl><button className="sd-button customer-market-unavailable" disabled title="마켓 등록 신청은 현재 지원하지 않습니다"><ShoppingCart size={15} />마켓에 등록하기</button></section>
+      <section className="sd-section"><div className="sd-section-heading"><h2>보관 정보</h2><Warehouse size={16} /></div><dl className="sd-side-fields"><div><dt>보관 위치 코드</dt><dd>{asset.locationId ?? '미지정'}</dd></div><div><dt>등록 경과일</dt><dd>{days.toLocaleString('ko-KR')}일</dd></div><div><dt>등록일</dt><dd>{date(asset.createdAt)}</dd></div></dl></section>
+      <section className="sd-section"><div className="sd-section-heading"><h2>자산 분류</h2><Box size={16} /></div><dl className="sd-side-fields"><div><dt>카테고리</dt><dd>{asset.category?.path ?? '미분류'}</dd></div><div><dt>브랜드</dt><dd>{asset.brand || '미등록'}</dd></div><div><dt>품질 등급</dt><dd><span className="sd-grade">{asset.grade}</span></dd></div><div><dt>관리 단위</dt><dd>{asset.unit}</dd></div></dl></section>
+      <section className="sd-section"><div className="sd-section-heading"><h2><label htmlFor="customer-asset-note">자산 메모</label></h2><span>미등록</span></div><textarea id="customer-asset-note" value="" readOnly disabled rows={6} aria-label="자산 메모" title="자산 메모 저장은 현재 지원하지 않습니다" /></section>
+    </aside></div>
+    <div className="sd-savebar"><span role="status">{message || '조회 전용'}</span><div><button className="sd-button" disabled>변경 취소</button><button className="sd-button sd-save" disabled><Save size={15} />저장</button></div></div>
+  </div>
 }
