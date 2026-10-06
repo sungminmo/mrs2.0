@@ -22,6 +22,7 @@ const price = (data: FormData, name: string) => text(data, name) === '' ? null :
 
 function ExistingAssetForm({ assets, categories, locations, id, onSaveAsset }: Props) {
   const asset = assets.find((entry) => entry.id === id)
+  const [category, setCategory] = useState(asset?.category ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const working = useRef(false)
@@ -32,7 +33,7 @@ function ExistingAssetForm({ assets, categories, locations, id, onSaveAsset }: P
     const data = new FormData(event.currentTarget)
     working.current = true; setBusy(true); setError('')
     try {
-      const { asset: saved } = await adminAccountRequest<{ asset: Inventory }>(`/api/admin/assets/${asset.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedUpdatedAt: asset.updatedAt, reason: text(data, 'reason'), name: text(data, 'name'), category: text(data, 'category'), specification: text(data, 'specification'), brand: text(data, 'brand'), quantity: Number(text(data, 'quantity')), grade: text(data, 'grade'), locationId: text(data, 'locationId'), status: text(data, 'status'), saleStatus: text(data, 'saleStatus') }) })
+      const { asset: saved } = await adminAccountRequest<{ asset: Inventory }>(`/api/admin/assets/${asset.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedUpdatedAt: asset.updatedAt, reason: text(data, 'reason'), name: text(data, 'name'), category, specification: text(data, 'specification'), brand: text(data, 'brand'), quantity: Number(text(data, 'quantity')), grade: text(data, 'grade'), locationId: text(data, 'locationId'), status: text(data, 'status'), saleStatus: text(data, 'saleStatus') }) })
       onSaveAsset(saved)
     } catch (failure) { setError(failure instanceof Error ? failure.message : '자산 저장에 실패했습니다.') }
     finally { working.current = false; setBusy(false) }
@@ -47,7 +48,7 @@ function ExistingAssetForm({ assets, categories, locations, id, onSaveAsset }: P
       </div>
       <h2>자산 정보</h2><div className="adm-edit-fields">
         <label>자산명<input name="name" defaultValue={asset.name} required maxLength={160} autoFocus /></label>
-        <CategorySelect categories={categories} defaultValue={asset.category} retainedId={asset.category} />
+        <CategorySelect categories={categories} value={category} onChange={setCategory} retainedId={asset.category} />
         <label>규격 (선택)<input name="specification" defaultValue={asset.specification} maxLength={500} /></label>
         <label>브랜드 (선택)<input name="brand" defaultValue={asset.brand} maxLength={160} /></label>
         <label>현재 수량<input name="quantity" type="number" defaultValue={asset.quantity} required min={0} max={1e9} step={['EA', 'Box', '본'].includes(asset.unit) ? 1 : 0.001} /></label>

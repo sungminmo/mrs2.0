@@ -145,8 +145,8 @@ export function createAdminDataRepository(client: PrismaClient) {
       if (storage === 'RELEASED' ? fields.quantity !== 0 : fields.quantity <= 0) throw invalid('출고완료 수량은 0, 나머지 상태의 수량은 0보다 커야 합니다.')
       if ((fields.grade === 'F' || storage === 'PENDING') && sale !== 'PENDING' || sale === 'ON_SALE' && storage !== 'STORED') throw invalid('등급·보관 상태·판매 상태 조합을 확인해 주세요.')
       if (category && category !== previous.categoryId) {
-        const leaf = await transaction.materialCategory.findUnique({ where: { id: category }, include: { parent: { include: { parent: true } }, children: true } })
-        if (!leaf?.enabled || !leaf.parent?.enabled || !leaf.parent.parent?.enabled || leaf.parent.parent.parentId || leaf.children.length) throw invalid('사용 중인 3차 카테고리를 선택해 주세요.')
+        const selected = await transaction.materialCategory.findUnique({ where: { id: category }, include: { parent: { include: { parent: true } } } })
+        if (!selected?.enabled || selected.parent && !selected.parent.enabled || selected.parent?.parent && !selected.parent.parent.enabled) throw invalid('사용 중인 카테고리를 선택해 주세요.')
       }
       if (fields.locationId) {
         const location = await transaction.location.findUnique({ where: { id: fields.locationId } })
@@ -186,7 +186,7 @@ const itemUnit = z.enum(Object.values(unit) as [(typeof unit)[ItemUnit], ...(typ
 export const assetUpdateInput = z.object({
   expectedUpdatedAt: z.iso.datetime(), reason: z.string().trim().min(1).max(500),
   name: z.string().trim().min(1).max(160), specification: z.string().trim().max(500), brand: z.string().trim().max(160),
-  category: z.union([z.string().regex(/^\d{6}$/), z.literal('')]),
+  category: z.union([z.string().regex(/^\d{6}$/), z.literal('')]).default(''),
   quantity: z.number().min(0).max(1e9).refine((value) => Math.abs(value * 1000 - Math.round(value * 1000)) < 0.0001),
   grade: z.enum(['S', 'A', 'B', 'F']), locationId: z.string().max(20).transform((value) => value || null),
   status: z.enum(['입고대기', '보관중', '출고완료']), saleStatus: z.enum(['판매대기', '판매중', '판매완료']),

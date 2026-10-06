@@ -376,7 +376,7 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     const asset = await client.asset.create({ data: { id: '261006-8001', receivingId: 'EDIT-REQUEST', customerId: 'CUS-INSPECTION', name: '편집 대상', specification: '', grade: 'A', quantity: '2', unit: 'EA', storageStatus: 'STORED', saleStatus: 'PENDING', locationId: location.id, appraisal: '1234', images: { create: { id: randomUUID(), name: '기존 사진', url: '/legacy.jpg' } } } })
     const repository = createAdminDataRepository(client)
     const input = assetUpdateInput.parse({ expectedUpdatedAt: asset.updatedAt.toISOString(), reason: '수량 및 이름 정정', name: '저장된 자산', category: '', specification: '', brand: '브랜드', quantity: 3, grade: 'B', locationId: location.id, status: '보관중', saleStatus: '판매대기' })
-    for (const invalid of [{ ...input, category: '770100' }, { ...input, locationId: 'MISSING' }, { ...input, quantity: 1.5 }, { ...input, quantity: 0 }, { ...input, grade: 'F' as const, saleStatus: '판매중' as const }]) await assert.rejects(repository.updateAsset(asset.id, invalid))
+    for (const invalid of [{ ...input, category: '779999' }, { ...input, locationId: 'MISSING' }, { ...input, quantity: 1.5 }, { ...input, quantity: 0 }, { ...input, grade: 'F' as const, saleStatus: '판매중' as const }]) await assert.rejects(repository.updateAsset(asset.id, invalid))
     assert.equal(await client.assetChange.count({ where: { assetId: asset.id } }), 0)
     await repository.updateAsset(asset.id, input)
     const saved = await client.asset.findUniqueOrThrow({ where: { id: asset.id }, include: { images: true, history: true } })
@@ -397,6 +397,15 @@ test('customer migration and repositories on isolated MySQL', { skip: process.en
     const loaded = await repository.load(adminDataQuery.parse({ scope: 'assets', id: asset.id }))
     assert.ok(loaded.assets[0]!.updatedAt); assert.equal(loaded.assets[0]!.history.length, 2)
     assert.ok(loaded.locations.some((entry) => entry.id === location.id))
+    for (const category of ['770000', '770100', '770101', '']) {
+      const current = await client.asset.findUniqueOrThrow({ where: { id: asset.id } })
+      await repository.updateAsset(asset.id, { ...input, name: current.name, category, expectedUpdatedAt: current.updatedAt.toISOString() })
+      assert.equal((await client.asset.findUniqueOrThrow({ where: { id: asset.id } })).categoryId, category || null)
+    }
+    assert.equal(assetUpdateInput.parse({ ...input, category: undefined }).category, '')
+    await client.materialCategory.create({ data: { id: '780000', name: '미사용 분류', enabled: false } })
+    const current = await client.asset.findUniqueOrThrow({ where: { id: asset.id } })
+    await assert.rejects(repository.updateAsset(asset.id, { ...input, category: '780000', expectedUpdatedAt: current.updatedAt.toISOString() }), /사용 중인 카테고리/)
   })
   await context.test('real asset queries isolate detail, images, pagination and full-company totals', async () => {
     const other = await client.customer.create({ data: { id: 'OTHER', name: 'Other' } })
