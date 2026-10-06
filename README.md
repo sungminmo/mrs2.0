@@ -1,14 +1,25 @@
 # MRS
 
+건설자재의 입고, 검수, 보관 자산 및 판매 요청을 관리하는 고객·관리자 포털입니다.
+아래 구현 범위는 2026-10-06 현재 소스 기준이며, 환경별 배포 상태는 별도로 확인해야 합니다.
+
 ## 서비스 정책
 
 현재 구현된 업무 흐름, 상태값, 운영 제약 및 시제품 한계는 [SERVICE_POLICY.md](SERVICE_POLICY.md)를 참고하세요.
+
+| 환경 | 용도 | 데이터 |
+| --- | --- | --- |
+| 고객·관리자·백엔드 스테이징 | 실제 API와 업무 흐름 검증 | 인증 및 MySQL DB 저장 |
+| [공개 시연 사이트](https://sungminmo.github.io/mrs2.0/) | 고객 포털 목업 시연 | 예시 데이터, 브라우저 메모리 저장 |
+
+공개 시연 사이트는 실제 고객 DB에 연결하지 않습니다. 데모 로그인과 판매·견적·정산 예시는 실제 업무 접수가 아닙니다.
 
 ## Docker 백엔드 개발 환경
 
 Ubuntu 24.04 서버에서 외부 MySQL 8.4, Hono/Node.js, React/Nginx를 사용합니다.
 고객 포털, 관리자 포털, 백엔드는 private GHCR 이미지로 각각 빌드·배포됩니다.
-백엔드는 상태 확인, JWT 로그인, 회원가입 및 관리자 회원 승인 API를 제공합니다.
+백엔드는 상태 확인, JWT 인증, 고객사·회원 관리, 자산 조회·편집, 입고·검수,
+판매 요청 접수 및 관리자 조회, 로케이션·카테고리·품목·배너·사진 저장 API를 제공합니다.
 
 | 구성 | 역할 | 호스트 공개 포트 |
 | --- | --- | --- |
@@ -19,7 +30,7 @@ Ubuntu 24.04 서버에서 외부 MySQL 8.4, Hono/Node.js, React/Nginx를 사용�
 
 MySQL 보안 그룹은 배포 서버의 주소만 허용하고 일반 인터넷에 3306을 공개하지 않습니다.
 Nginx에서 DB에 직접 접근하지 않으며 비밀번호는 루트 `.env`에서만 관리합니다.
-이미지는 다중 아키텍처 다이제스트, npm 의존성은 lockfile로 고정했습니다.
+기본 컨테이너 이미지는 다이제스트, npm 의존성은 lockfile로 고정했습니다.
 보안 업데이트 적용 시 이미지 다이제스트도 검토하고 갱신해야 합니다.
 
 현재는 최초 연결을 위해 `dbmasteruser`를 마이그레이션과 런타임에 함께 사용합니다.
@@ -39,7 +50,7 @@ ss -ltn '( sport = :8080 )'
 
 Docker 데몬 접근 권한과 Git 저장소 접근 권한이 필요합니다. Docker 권한 오류는
 서버 관리자가 처리해야 하며, Docker 소켓을 누구나 쓰도록 권한을 변경하지 마세요.
-현재 이미지는 `amd64`와 `arm64`를 지원합니다. 8080이 사용 중이면 아래 `HTTP_PORT`를 변경합니다.
+배포 이미지가 서버 아키텍처와 호환되는지 확인하세요. 8080이 사용 중이면 아래 `HTTP_PORT`를 변경합니다.
 
 ```sh
 git clone <저장소_URL> MRS
@@ -165,9 +176,18 @@ docker compose -f compose.yaml -f compose.local.yaml run --rm --no-deps backend 
 `main` push 시 변경 경로에 따라 고객, 관리자, 백엔드 workflow가 각각 private GHCR 이미지를
 commit SHA 태그로 발행하고 스테이징 Lightsail에서 해당 서비스만 교체합니다. 고객 데모는 별도의 Pages
 workflow가 `npm run build:demo`로 목업 고객 포털을 빌드해 `dist/customer`만 배포합니다.
-Pages는 push 자동 배포 대상에서 제외하며 `pages-demo.yml`의 수동 실행만 유지합니다.
+Pages는 push 자동 배포 대상에서 제외하며 [deploy.yml](.github/workflows/deploy.yml)의 수동 실행만 유지합니다.
 데모의 `고객 포털로 계속` 버튼은 API 인증 없이 예시 자산·마켓·정산 화면으로 진입하며,
 변경 사항은 브라우저 메모리에만 저장됩니다. 실제 고객·관리자 인증과 DB에는 연결하지 않습니다.
+
+GitHub CLI 인증 후 공개 시연 사이트만 배포하려면 다음을 실행합니다. 원격 `main`에 반영된 소스를 빌드하므로 로컬 미커밋 변경은 포함하지 않습니다.
+
+```sh
+gh workflow run deploy.yml --repo sungminmo/mrs2.0 --ref main
+gh run list --repo sungminmo/mrs2.0 --workflow deploy.yml
+gh run watch <run-id> --repo sungminmo/mrs2.0 --exit-status
+```
+
 GitHub 저장소의 `staging` Environment에 아래
 secret을 등록하세요.
 
@@ -246,106 +266,122 @@ docker run --rm --env-file .env mysql:8.4.11 sh -c \
 고객·관리자 진입은 JWT 역할로 구분되지만 HTTPS, 계정별 DB 최소 권한, 비밀 관리, 자동 백업과
 모니터링은 운영 전에 별도로 구성해야 합니다.
 
-## Administrator Prototype
+## 현재 구현 범위
 
-Open `/admin/#/admin/dashboard`, or use the administrator link in the homepage footer or customer sidebar. The header links back to `/mrs2.0/`. Hash routes support direct entry, reload, history navigation, tabs, filters, and record detail links without server rewrites. Customer anchors such as `#services` remain unchanged.
+### 고객 포털
 
-This is an independent prototype with fictional data as of September 14, 2026 (KST). JWT login and the ADMIN role protect the entry point, while categories, master items, inventory and market operations still use temporary in-memory editing and other menus remain read-only. Operational persistence, real approval processing, email delivery, billing execution and customer-data synchronization are not implemented. Reloading resets the prototype edits, images and history.
+- `/mrs2.0/`에서 고객 인증과 승인된 고객사 소속을 확인합니다. 자산 소유권은 회원이 아닌 고객사 기준이며 타사 자산은 조회할 수 없습니다.
+- 실제 자산 현황·목록·상세와 검색·필터·페이지 조회를 제공합니다. 총평가액과 미평가를 구분하고 출고완료 자산은 보유 집계에서 제외합니다.
+- 자산 상세는 사진 갤러리, 현재 수량·관리 단위·위치 코드·등록일·등록 경과일과 CSV 내보내기를 제공합니다. 등록일은 `Asset.createdAt`이며 실제 입고일·보관료 기산일이 아닙니다.
+- 판매 가격·할인율 등 제공되지 않는 데이터는 미등록으로 표시합니다. 자산 메모 저장은 비활성화되어 있습니다.
+- VIEWER/MANAGER 모두 입고 신청 및 회사 전체 신청내역·확정 검수 결과를 조회할 수 있습니다. 검수 결과 확인과 폐기 대상 동의는 MANAGER만 가능합니다.
+- 마켓 등록 요청은 전체 자산 수량 기준 희망금액을 입력해 실제 DB에 접수합니다. 마켓 상품 목록 API는 아직 연결되지 않았으며 실제 고객 마켓은 빈 목록입니다.
 
-Menus: dashboard; receiving requests and schedules; inspections and disposal; master item management; category management; asset management with inventory and locations; sales requests, products, purchase quotes and campaigns; storage invoices, payouts and disposal invoices; customers, sites and inquiries; reference grades, units, rates and policies.
+### 관리자 포털
 
-### Three-Level Categories
+`/admin/#/admin/dashboard`에서 별도 관리자 인증을 사용합니다. 직접 진입·새로고침·탭·검색·필터·상세 링크는 해시 경로를 사용합니다.
 
-- `/admin/#/admin/categories?tab=tree` provides first-, second- and third-level browsing, creation, renaming, same-depth parent moves, numeric sibling ordering and active/inactive status. The old `#/admin/settings?tab=categories` route redirects here. Category codes are automatically assigned, immutable references; names are not relation keys. Physical deletion is not supported.
-- [src/categories.ts](src/categories.ts) owns the shared category seed, path resolution and hierarchy policies. Parent references must exist; cycles, fourth-level descendants, depth changes, blank names and duplicate sibling names are rejected. Same names in different branches are allowed. Tied order values use name/code ordering.
-- Master items and inventory must reference a third-level category. An inactive category or ancestor blocks new selections, including new assets linked to items in that branch. Existing references and records remain viewable/editable without forced recategorization. Re-enabling a parent preserves each child's own active/inactive setting.
-- Category names and parent moves update the displayed paths of all referencing admin items, assets, products and campaigns. Item recategorization still does not overwrite existing asset snapshots; an asset's category change is recorded with before/after paths and codes in its own history. Marketplace products derive their category from the linked asset.
-- Item, asset and admin product/campaign filters support all three levels. Selecting an ancestor includes its descendants; changing the parent clears lower selections. Campaign membership includes active descendant asset categories instead of matching category names. Disabled category products remain visible in administration but are excluded from campaign previews.
-- The member and guest markets use the same three-level seed and filters. Product details, basket CSV and quotation snapshots carry the full category path; campaign image selection uses stable root codes. Admin edits remain isolated temporary data and do not synchronize into the customer demo or backend.
-- Policy regression tests: `node --test tests/categories.test.mjs` (Node.js 24 recommended). Run with `npx tsc -b` and the existing source lint checks.
+| 메뉴 | 경로 | 실제 제공 기능 |
+| --- | --- | --- |
+| 기초 정보 / 품목 | `#/admin/basic?tab=items` | 개별·CSV 등록, 조회·편집, 대표 사진 저장 |
+| 기초 정보 / 카테고리 | `#/admin/basic?tab=categories` | 3단계 분류 생성·이름·순서·사용 여부 저장 |
+| 입고·검수·폐기 / 입고 신청 | `#/admin/receiving?tab=requests` | 신청 조회·승인·반려, 실제 입고 등록 |
+| 입고·검수·폐기 / 1차 검수 | `#/admin/receiving?tab=primary` | 초안·확정·제한된 정정, XLSX 가져오기, 검수 사진 |
+| 입고·검수·폐기 / 상세 검수 | `#/admin/receiving?tab=detailed` | 판매 요청 기반 대상 조회, 자산 상세화 링크 |
+| 입고·검수·폐기 / 폐기 관리 | `#/admin/receiving?tab=disposal` | 폐기 대상 및 동의·처리 상태 조회 |
+| 자산 관리 / 자산 목록 | `#/admin/inventory?tab=stock` | 실제 자산 조회·사유 기반 편집·사진 저장·변경 이력 |
+| 자산 관리 / 로케이션 | `#/admin/inventory?tab=locations` | 위치 등록·편집·사용 여부, 보관 자산 조회 |
+| 마켓 운영 / 판매 요청 | `#/admin/market?tab=sales` | 고객 판매 요청 목록·상세, 검색·상태·고객·월 필터 |
+| 마켓 운영 / 상품·기획전 | `#/admin/market?tab=products`, `#/admin/market?tab=campaigns` | DB 조회; 기존 화면의 임시 편집은 실제 운영 저장과 구분 |
+| 콘텐츠 관리 / 배너 | `#/admin/content?tab=banners` | 배너·이미지·링크·일정 저장 및 공개 배너 조회 |
+| 고객사·회원 관리 | `#/admin/customers?tab=companies`, `#/admin/members?tab=applications` | 고객사·회원 신청 및 승인·정지·권한 관리 |
+| 관리자 계정 | `#/admin/accounts?tab=list` | SYSTEM_ADMIN 전용 계정 생성·편집·비밀번호·상태 관리 |
 
-### Master Items And Assets
+실제 저장 기능은 서버 인증과 검증을 통과해야 하며 변경 이력을 DB에 남깁니다.
+구매 견적·청구·정산·문의 등 일부 메뉴는 예시 또는 미구현 화면입니다. 표시된 버튼이나 상태를 실제 업무 처리 완료로 해석하지 마세요.
 
-- Master items: `/admin/#/admin/items?tab=master`. Create, view, edit and switch between active/inactive. Codes are automatically assigned and immutable (`ITM-000001` onward). Inactive items cannot be linked to new assets; existing links remain valid. Physical deletion is not supported.
-- Each item represents a name/category/specification/brand/base-unit combination. Category, specification and brand provide defaults for new asset snapshots. Units use shared codes (EA, Box, kg, ton, m, m³, 본); old inventory `개` is normalized to EA. Units on items with linked assets cannot change; automatic unit conversion is out of scope.
-- Inbound, outbound and standard prices are KRW per base unit, VAT included. Blank means unknown, distinct from zero. These reference prices do not recalculate asset appraisals, marketplace prices or past settlement records.
-- Assets: `/admin/#/admin/inventory?tab=stock`. The former inventory/location menu is now asset management; old URLs still work. Administrators manually register/edit assets; this does not execute inspection approval or physical receipt. Customer and site come from the linked receiving request. Inventory IDs (`AST-001` onward), receiving references and item references are immutable after registration.
-- A record tracks a material batch with one owner, receipt request, item, grade and location. Quantity is the expected amount for pending receipt and current remainder for stored assets. Completed outbound records have zero current quantity; their prior quantity remains in change history. EA/Box/본 require integers; other units accept up to three decimal places. Partial shipment, batch splitting and multiple locations per record are out of scope.
-- Grade (S/A/B/F), storage (입고대기/보관중/출고완료) and sale status (판매대기/판매중/판매완료) are independent fields. F-grade and pending-receipt assets cannot be marked selling/sold; selling assets must be stored. Sale approval remains a separate existing request status. Editing these fields does not execute marketplace approval, disposal, shipment or billing.
-- Asset edits require a reason and retain timestamps (displayed in KST), changed fields and before/after values, including photos. Historical inspection quantities remain snapshots. Location occupancy and related inventory links use the current in-memory asset records; completed outbound records do not occupy locations.
-- Images: one representative item image, up to eight asset photos, JPG/PNG/WebP, up to 5 MB each. Files are decoded for validation and previewed locally; images can be replaced/removed. They are not uploaded to a server or persisted across reloads.
-- Lists support search, status filters, sorting and pagination; assets additionally filter by grade, sale status, item, location and customer. Detail/list navigation retains filter conditions. Barcode/QR rendering/scanning, ERP integration and server-side audit records are not implemented.
+### 코드·수량·분류 기준
 
-### Market Operations
+- 품목 코드는 관리자가 입력하는 6자리 숫자입니다. 변경 시 연결 자산·사진 참조가 함께 갱신되며 연결 자산이 있으면 품목 단위를 바꿀 수 없습니다.
+- 카테고리는 `[대분류 2자리][중분류 2자리][소분류 2자리]`의 6자리 코드입니다. 상위 분류는 하위 구간이 `00`이며 코드와 상위 분류는 등록 후 변경하지 않습니다. 물리 삭제는 제공하지 않습니다.
+- 자산 코드는 실제 입고일의 `YYMMDD-NNNN` 형식으로 검수 확정 시 생성합니다. 관리자 자산 편집에서 자산번호·품목·단위·소유 고객·입고 연결·평가금액은 변경하지 않습니다.
+- 자산 편집의 카테고리와 규격은 선택입니다. 미분류 또는 활성 1·2·3차 분류를 저장할 수 있으며 기존 미사용 분류는 유지할 수 있습니다. 1차 검수에 분류를 입력하는 경우의 검증은 별도 API 계약을 따릅니다.
+- 수량은 최대 10억, 소수점 셋째 자리까지이며 EA·Box·본은 정수만 허용합니다. 출고완료는 0, 그 외 상태는 양수이고 보관중은 위치가 필요합니다.
+- 등급·보관 상태·판매 상태는 별도 필드입니다. F등급 또는 입고대기 자산은 판매대기만 가능하고 판매중은 보관중이어야 합니다.
+- 품목 단가는 기준 단위당 원화 금액이고 자산 평가금액은 총액입니다. 미산정·미평가와 0원을 구분하며 품목 단가 변경은 과거 평가·정산에 소급하지 않습니다.
 
-- Sales requests (`#/admin/market?tab=sales`): change approval status to 승인 대기, 승인 완료 or 반려 in detail; use checkboxes and the bulk action on the list. Approval does not automatically create a product or start selling.
-- Products (`#/admin/market?tab=products`): individual and bulk changes support 판매대기, 판매 중, 재고 없음. 판매취소 is an action that stores 판매대기, not a fourth persisted state. Only 판매 중 products with active categories appear in campaign product previews.
-- Bulk selection covers the current page only and resets on search, filters, sort or page changes. A confirmation step shows the selected count and destination state. Cancel leaves all records unchanged.
-- Purchase quotes (`#/admin/market?tab=quotes`): detail supports 접수 대기, 견적 회신 and 출고 완료. Status changes do not send quotes, deduct inventory quantities, change asset statuses or execute settlement.
-- Campaigns (`#/admin/market?tab=campaigns`): add/edit title, description, category at any depth, KST start/end date and time, display order and exposure flag. Codes are automatically assigned and immutable. End must be later than start, order must be an integer from 0 to 9,999, and category/title/description are required. Inactive categories cannot be newly assigned or enabled; existing campaigns can be disabled while retaining their category.
-- Changes update admin lists, details, approval dashboard counts and related projections immediately. Customer banners remain independent; no backend persistence, publication or synchronization is performed. Exposure status still uses the fixed example reference date.
-- Policy tests: `node --test tests/adminMarket.test.mjs tests/categories.test.mjs`.
+### 입고·검수·폐기
 
-### Data Relationships
+- 입고 신청은 선택 사진 최대 5장과 동의 내용을 DB에 저장합니다. 관리자 승인·반려는 사유와 상태·처리자·시각을 원자 저장하며 승인만으로 자산을 생성하지 않습니다.
+- 실제 입고 등록 후 1차 검수 초안을 입력하거나 표준 XLSX를 가져옵니다. 최대 1000행·5MB이며 가져오기 오류 행을 제외하고 유효 행을 유지할 수 있습니다.
+- 검수 확정은 재사용 자산·검수 사진·폐기 대상을 생성합니다. F등급 재사용 수량은 0이며 폐기 수량은 자산 수량에 포함되지 않습니다.
+- 고객 확인·동의 또는 후속 업무 변경 전까지만 확정 결과 정정이 가능합니다. 재사용과 전량 폐기 간 정정 시 생성 자산 연결도 함께 반영하지만 행 추가·삭제·순서 변경은 제한됩니다.
+- 고객 검수 결과 확인과 폐기 대상 동의는 별개입니다. 폐기 동의는 자재·수량에 대한 동의이며 비용 청구 동의가 아닙니다.
+- 실제 폐기 실행·일정·증빙·비용 청구와 자동 완료는 제공하지 않습니다. 세부 계약은 [docs/RECEIVING_SCHEMA.md](docs/RECEIVING_SCHEMA.md)와 [docs/API_SPEC.md](docs/API_SPEC.md)를 참고하세요.
 
-- [src/admin/adminData.ts](src/admin/adminData.ts): independent typed seed entities, numeric quantities/money, ISO timestamps, explicit status unions and reference IDs.
-- Customer → site → receiving request → inspection → inventory → location. Vehicle-based receiving estimates are not converted into inventory quantities.
-- Inventory → sale request/product → purchase quote lines. Quote lines retain product-name and price snapshots. Requested total sale value and product unit price are distinct.
-- Invoices reference customers and optionally receipts or locations; historical payout examples do not deduct current inventory. Inquiries link customers to receiving requests, inspections or purchase quotes.
-- [src/admin/adminViews.ts](src/admin/adminViews.ts): list/detail projections and related-record links rebuilt from current in-memory categories, inventory, items and market records. Dashboard counts use the same live projections. Search, filters, sorting and pagination only affect views.
-- Inspection closure and physical disposal completion are separate. Three-day automatic closure is a reference policy, not an implemented scheduler. Unknown quantities and amounts remain `null`; they are not displayed as zero. Only issued invoices enter billing totals, excluding the 48,000 KRW disposal estimate.
-- Campaigns are category-based. Exposure uses the fixed example date, inclusive start and exclusive end. Location capacity and rate formulas are not established; no fictional utilization percentage or automatic fee calculation is shown.
-- Missing inspection photos/documents are shown as unregistered. Product reference photographs retain their original credits and are not disposal evidence.
+### 판매 요청과 마켓
 
-Source checks: `npx tsc -b` and `npx oxlint src`. `dist` is a local build artifact and is excluded from Git; GitHub Pages and Docker both build it from source during deployment.
+- 활성 고객사 소속 VIEWER/MANAGER는 보관중·판매대기·양수 수량의 S/A/B 자산에 판매 요청을 접수할 수 있습니다. 품목·분류·평가금액 미등록은 접수를 막지 않습니다.
+- 희망금액은 전체 수량 기준 1원~1조원 정수이며 상품 단가나 실제 정산액이 아닙니다. 조회한 수량과 현재 수량이 다르면 다시 확인해야 합니다.
+- 요청은 `승인 대기`·`상세 검수 대기`로 저장됩니다. 고객 상세에 요청번호·희망금액·상태를 표시하고 관리자 판매 요청 및 상세 검수에서 같은 요청을 조회합니다.
+- 자산별 중복 요청과 상품이 연결된 자산의 요청을 차단합니다. 접수 후 검수 정정 및 자산 수량·보관/판매 상태·F등급 변경을 제한합니다.
+- 상세 검수 완료·판매 승인/반려·취소·재요청 API와 승인 후 상품 생성·고객 마켓 자동 게시는 아직 구현되지 않았습니다. 접수만으로 상품 생성·판매 시작·재고 차감·정산을 실행하지 않습니다.
+- 상품·기획전 DB 구조는 [docs/MARKET_SCHEMA.md](docs/MARKET_SCHEMA.md)에 정리되어 있습니다. 관리자 기획전과 데모 기획전은 자동 동기화되지 않습니다.
 
-## Inspection And Disposal Prototype
+### 사진과 배너
 
-- My Assets includes asset overview and receipt-level inspection/disposal views. Sample receipts in `src/disposals.ts` are separate historical snapshots and do not subtract from live inventory or appraisal values.
-- Inspection detail separates accepted assets (including grade) from disposal candidates. Customer guidance shows receipt and inspection-completion dates, acknowledgement, and an inquiry modal. Acknowledgement does not grant disposal consent. Disposal processing/cost sections and consent controls are not shown in this view.
-- Inquiries are recorded locally, without an inline history. Guidance requests inquiries within two days after inspection completion and notes that disposal costs may be charged separately; the prototype does not enforce a submission deadline or deliver inquiries.
-- Processing and cost states are independent. Unknown amounts are `null`, never zero. Only billed disposal costs enter settlement totals, period filters, and CSV exports. The demo includes one 65,000 KRW invoice (tax included); the 48,000 KRW estimate is excluded.
-- Notification, inspection detail, and settlement links share the receipt ID. Read status and saved acknowledgement/consent/comments survive navigation but reset on reload. Unsaved drafts are local to the detail view.
-- Reports and processing evidence are examples. No real photos, email delivery, objection submission, payments, or backend persistence are connected. Production requires authenticated operator updates, actual evidence uploads, delivery logs, versioned consent and cost records, and server-side authorization/audit history.
+- 관리자는 JPG·PNG·WebP를 각 5MB 이하로 업로드합니다. 서버가 파일 내용·크기·픽셀 수를 검증하고 최대 2400px의 메타데이터 없는 WebP로 변환해 S3에 저장합니다.
+- 품목 대표 사진은 최대 1장, 자산 사진은 최대 8장입니다. 기존 자산·품목 사진 변경은 별도 저장 API로 변경 사유와 이력을 남깁니다.
+- 업로드에는 서버 AWS 자격 증명과 S3 쓰기 권한이 필요합니다. 객체 URL은 공개 접근 가능하므로 개인정보·민감한 사진을 첨부하지 마세요.
+- 콘텐츠 배너는 DB 기반 배치·순서·일정·노출 여부를 저장합니다. 데모 빌드는 API 배너 조회 대신 예시 배너를 사용합니다.
 
-## Market Campaign Configuration
+## 개발·검증 안내
 
-Customer market banners are configured in the `campaigns` array in [src/MarketCampaigns.tsx](src/MarketCampaigns.tsx). The administrator campaign editor operates on separate temporary demo data; customer banner configuration still requires deployment and has no backend persistence.
+Node.js 24, React 19, TypeScript, Vite, Hono, Prisma 7 및 MySQL 8.4를 사용합니다.
+React Compiler는 활성화하지 않았습니다. 루트와 백엔드의 의존성 및 빌드 명령은 별도입니다.
 
-- Keep `id` unique and stable. Edit `title` and `description` for campaign copy.
-- Set `category` to an existing catalog category. The CTA clears search and offer filters, selects that category, and focuses the product list. Images use the existing category reference photos and credits.
-- Use `enabled` to publish or hide a campaign, and `order` for ascending display priority.
-- Set `startsAt` and `endsAt` to ISO timestamps with an explicit timezone, for example `2026-10-01T00:00:00+09:00`. `null` means no boundary. Start is inclusive; end is exclusive. Visibility refreshes every 30 seconds using the device clock.
-- If the selected campaign expires, the first active campaign is shown. If none are active, the banner is hidden.
-- Members and guests share the campaigns. Guest banners contain no prices or discount amounts; existing login requirements remain in place.
-
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm run dev -- --config vite.customer.config.ts
+npm run dev -- --config vite.admin.config.ts
+npm run dev -- --config vite.customer.config.ts --mode demo
+npm run build:demo
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+API 통합 화면은 접근 가능한 DB·JWT 설정으로 백엔드를 별도 실행해야 합니다.
+개발 시 루트 환경변수를 사용한다면 연결 대상이 로컬인지 스테이징 외부 DB인지 먼저 확인하세요.
+데모 모드는 인증 API 없이 예시 화면을 검증하는 용도이며 실제 업무 저장 검증을 대신하지 않습니다.
+`dist/customer`, `dist/admin`은 Git에 포함하지 않는 빌드 산출물입니다.
+
+격리 MySQL 통합 테스트는 Docker가 필요하며 전용 컨테이너와 테스트 데이터베이스를 생성·정리합니다.
+아래 명령은 저장소 루트에서 실행합니다.
+
+```sh
+npm --prefix backend run db:generate
+npm --prefix backend run typecheck
+npm --prefix backend test
+RUN_CUSTOMER_SCHEMA_TEST=1 backend/node_modules/.bin/tsx --test backend/test/customer-schema.test.ts
+RUN_RECEIVING_SCHEMA_TEST=1 backend/node_modules/.bin/tsx --test backend/test/receiving-schema.test.ts
+backend/node_modules/.bin/tsx --test test/inspection-file.test.ts
+npm run build
+npm run lint
+git diff --check
+```
+
+## 주요 문서와 소스
+
+| 문서·소스 | 역할 |
+| --- | --- |
+| [docs/API_SPEC.md](docs/API_SPEC.md) | API 구현 계약; 실행 문서는 `/api/docs`, OpenAPI는 `/api/openapi.json` |
+| [docs/CUSTOMER_MANAGEMENT.md](docs/CUSTOMER_MANAGEMENT.md) | 고객사·회원 관리 및 운영 전환 절차 |
+| [backend/prisma/schema](backend/prisma/schema) | 도메인별 DB 모델 |
+| [backend/prisma/migrations](backend/prisma/migrations) | 버전별 마이그레이션; 배포된 SQL 수정 금지 |
+| [src/PortalEntry.tsx](src/PortalEntry.tsx) | 실제 고객 포털과 데모 모드 진입 분리 |
+| [src/CustomerWorkspace.tsx](src/CustomerWorkspace.tsx) | API 기반 고객 화면 |
+| [src/App.tsx](src/App.tsx) | 공개 시연용 예시 자산·마켓·정산 화면 |
+| [src/admin/AdminPortal.tsx](src/admin/AdminPortal.tsx) | 관리자 메뉴 및 API 데이터 조회 |
+| [src/admin/adminViews.ts](src/admin/adminViews.ts) | 관리자 목록·상세 표시 및 연결 링크 |
+| [src/MarketCampaigns.tsx](src/MarketCampaigns.tsx) | 데모 기획전 구성; 실제 관리자 데이터와 별개 |
+
+데모의 내 자산 메뉴와 고객 포털 진입은 이전 자산 상세 선택을 초기화합니다.
+데모 메모·판매 신청·견적·검수·정산·알림은 예시이며 새로고침 시 메모리 변경이 초기화됩니다.
+실제 업무 데이터의 저장 여부는 위 구현 범위와 해당 API 응답을 기준으로 확인하세요.
