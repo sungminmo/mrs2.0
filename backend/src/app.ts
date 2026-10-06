@@ -48,13 +48,17 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
   app.onError(handleError)
   if (market) {
     app.get('/api/market/products', listMarketProducts(market))
-    app.openAPIRegistry.registerPath({ method: 'get', path: '/api/market/products', tags: ['Market'], summary: '공개 마켓 판매 중 상품 조회 (고객사·신청자 정보 제외)', request: { query: marketQuery }, responses: { 200: { description: '페이지별 판매 가능 상품·단가·수량·공개 사진' }, 400: { description: '페이지·검색 입력 오류' } } })
+    app.openAPIRegistry.registerPath({ method: 'get', path: '/api/market/products', tags: ['Market'], summary: '비회원 마켓 상품·분류·실제 기획전 조회 (가격·고객사·신청자 정보 제외)', request: { query: marketQuery }, responses: { 200: { description: '가격 제외 판매 가능 상품·수량·공개 사진·기획전' }, 400: { description: '페이지·검색 입력 오류 또는 비회원 가격 정렬' } } })
   }
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'BearerAuth', { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
 
   if (auth) {
     const customerAuth = requireAuth(auth.repository, auth.secret, 'CUSTOMER')
+    if (market) {
+      app.get('/api/customer/market/products', customerAuth, listMarketProducts(market, true))
+      app.openAPIRegistry.registerPath({ method: 'get', path: '/api/customer/market/products', tags: ['Market'], summary: '활성 고객 회원 마켓 목록·가격·실제 기획전 조회', security: [{ BearerAuth: [] }], request: { query: marketQuery }, responses: { 200: { description: '가격 포함 상품 목록' }, 400: { description: '검색·페이지 입력 오류' }, 401: { description: '회원 인증 필요' }, 403: { description: '활성 고객사 필요' } } })
+    }
     const adminAuth = requireAuth(auth.repository, auth.secret, 'ADMIN')
     if (inspections) {
       const inspection = inspectionHandlers(inspections)

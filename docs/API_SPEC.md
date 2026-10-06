@@ -2,7 +2,11 @@
 
 `POST /api/admin/sale-requests/{id}/approve`는 활성 관리자만 사용할 수 있다. `{expectedUpdatedAt: 자산 updatedAt, unitPrice: 1~1000000000000 정수 원 단가, reason: 1~500자}`를 받는다. 검수 완료·승인 대기·활성 고객사·보관중·판매대기·상세 정보 등록·현재 수량 일치를 재검증한다. Serializable 트랜잭션으로 요청 `APPROVED`, 자산 `ON_SALE`, 상품 `AVAILABLE` 및 자산·고객·마켓 감사 이력을 저장한다. 상품 ID는 `PRD-{자산번호}`이며 할인율 0, 판매 수량은 요청 전체 수량, 최초 진열 시각을 기록한다. 최소 주문 수량은 1 또는 전체 수량이 1보다 작을 때 그 전체 수량이다. 성공은 `data.request = {id, status: "APPROVED", productId}`를 반환한다. 미완료 검수·중복 처리·상품 연결·버전 변경은 409, 정보 누락은 400, 요청 없음은 404이다. 실제 재고 차감·구매·출고·정산·고객 통지는 실행하지 않는다.
 
-`GET /api/market/products?page=1&size=20&q=상품명`은 공개 상품 목록이다. size는 최대 100, page는 최대 100000이다. `data`에 `products, page, size, total`을 반환한다. 판매 중·진열 시각 존재·보관중/판매중 S/A/B 자산·활성 고객사·양수 가용 수량 상품만 조회한다. 가용 수량은 판매 등록 수량에서 예약·판매 수량을 차감한다. 상품 ID·상품명·단가·분류·규격·브랜드·등급·수량·공개 사진만 반환하며 고객사·신청자·입고 내역은 공개하지 않는다.
+`GET /api/market/products?page=1&size=20&q=상품명`은 비회원용 공개 상품 목록이다. size는 최대 100, page는 최대 100000이다. `data`에 `products, categories, campaigns, page, size, total`을 반환한다. 판매 중·진열 시각 존재·보관중/판매중 S/A/B 자산·활성 고객사·양수 가용 수량 상품만 조회한다. 가용 수량은 판매 등록 수량에서 예약·판매 수량을 차감한다. 상품 ID·상품명·분류 경로·규격·브랜드·등급·수량·공개 사진을 반환하며 `unitPrice`, `originalUnitPrice` 및 고객사·신청자·입고 내역은 공개하지 않는다. 할인율은 공개한다.
+
+`GET /api/customer/market/products`는 활성 고객 회원 인증을 요구하며 같은 목록에 원 단가 `unitPrice`, 할인 전 단가 `originalUnitPrice`를 포함한다. 회원 가격은 화면뿐 아니라 API에서 보호하며 두 경로 모두 `Cache-Control: private, no-store`를 사용한다. 회원 가격 조회는 마켓 전체 상품 대상이며 자사 자산 조회와 별개다.
+
+두 경로 모두 `categoryId`(하위 분류 포함), `grade`(S/A/B), `campaignId`, `discountOnly=true`(40% 이상), `sort=latest|discount` 필터를 지원한다. 회원만 `sort=price`(할인 적용 단가 오름차순)를 사용할 수 있다. 검색·정렬·페이지 처리는 전체 DB 결과를 기준으로 적용한다. 실제 기획전은 enabled·시작 시각 포함·종료 시각 제외·상위 포함 카테고리 활성 조건으로 조회하며 기획전 필터는 해당 카테고리 및 활성 하위 분류에 적용한다. 없는/비노출 기획전은 빈 결과이다.
 
 ### 상세 검수 완료 API
 

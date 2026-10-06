@@ -1,0 +1,15 @@
+.public-market .sm-product-image img { object-fit: contain; }
+.public-market .public-market-no-image { display: grid; place-items: center; gap: 10px; color: #68726b; font-size: 12px; }
+.public-market .sm-product-name { color: inherit; }
+.public-market .sm-price strong, .public-market .sm-price del { overflow-wrap: anywhere; }
+.public-market .sm-product-body .sm-price { min-height: 56px; }
+.public-market .sm-product-body .sm-guest-price { min-height: 56px; margin-block: 11px 0; }
+.public-market .sm-quote-quantity { flex-wrap: wrap; }
+.public-market .sm-quote-quantity input { width: 88px; }
+.public-market button:disabled { cursor: not-allowed; }
+.public-market-loading { min-height: 100px; display: grid; place-items: center; }
+.public-market #public-market-catalog { scroll-margin-top: 76px; }
+.public-market .sm-detail-title h1 { letter-spacing: 0; }
+.public-market .sm-material-fields { min-width: 0; }
+.public-market .sa-heading h1 { outline: none; }
+.public-market .sm-product-actions > span { overflow-wrap: anywhere; }

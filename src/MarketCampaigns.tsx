@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, Layers } from 'lucide-react'
 import PageBanner from './PageBanner'
-import { categoryEnabled, materialCategories } from './categories'
+import { categoryEnabled, materialCategories, type MaterialCategory } from './categories'
 
 export type MarketCampaign = { id: string; title: string; description: string; category: string; enabled: boolean; order: number; startsAt: string | null; endsAt: string | null }
 export const marketCampaigns: MarketCampaign[] = [
@@ -10,14 +10,14 @@ export const marketCampaigns: MarketCampaign[] = [
   { id: 'device', title: '전기기구 기획전', description: '배선기구부터 조명과 배전함까지 현장에 필요한 전기기구를 한곳에서 확인하세요.', category: '030000', enabled: true, order: 3, startsAt: null, endsAt: null },
 ]
 
-export default function MarketCampaigns({ onSelect, renderImage }: { onSelect: (campaign: MarketCampaign) => void; renderImage: (category: string) => ReactNode }) {
+export default function MarketCampaigns({ onSelect, renderImage, campaigns = marketCampaigns, categories = materialCategories }: { onSelect: (campaign: MarketCampaign) => void; renderImage: (category: string) => ReactNode; campaigns?: MarketCampaign[]; categories?: MaterialCategory[] }) {
   const [selected, setSelected] = useState('conduit')
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30000)
     return () => window.clearInterval(timer)
   }, [])
-  const active = marketCampaigns.filter((campaign) => campaign.enabled && categoryEnabled(materialCategories, campaign.category) && (!campaign.startsAt || now >= Date.parse(campaign.startsAt)) && (!campaign.endsAt || now < Date.parse(campaign.endsAt))).sort((first, second) => first.order - second.order)
+  const active = campaigns.filter((campaign) => campaign.enabled && categoryEnabled(categories, campaign.category) && (!campaign.startsAt || now >= Date.parse(campaign.startsAt)) && (!campaign.endsAt || now < Date.parse(campaign.endsAt))).sort((first, second) => first.order - second.order)
   const campaign = active.find((item) => item.id === selected) ?? active[0]
   if (!campaign) return null
   const index = active.findIndex((item) => item.id === campaign.id)

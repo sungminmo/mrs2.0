@@ -32,7 +32,7 @@ async function fixture(role: AuthUser['role']) {
     completeSaleInspection: async (id: string, expectedUpdatedAt: string, actor: AuthUser) => { updated.push({ id, expectedUpdatedAt, actor: actor.id }); return { id, inspection: 'COMPLETED' } },
     approveSale: async (id: string, input: unknown, actor: AuthUser) => { updated.push({ id, input, actor: actor.id }); return { id, status: 'APPROVED', productId: 'PRD-261002-0002' } },
   }
-  const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret, expiresIn: '1h' }, adminData: adminData as never })
+  const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret, expiresIn: '1h' }, adminData: adminData as never, market: { list: async (query) => ({ products: [{ id: 'PRD-261002-0002', name: '상품', unitPrice: '23000', originalUnitPrice: '23000', discountRate: 0, quantity: '1', minimumOrderQuantity: '1', unit: 'EA', category: null, grade: 'S', brand: '뉴원', specification: '3회로', imageUrl: null, deliveryNotice: '' }], categories: [], campaigns: [], page: query.page, size: query.size, total: 1 }) } })
   const login = await app.request(role === 'ADMIN' ? '/api/admin/auth/login' : '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(role === 'ADMIN' ? { id: user.email, password: 'test-password' } : { email: user.email, password: 'test-password' }) })
   const token = (await login.json() as { data: { accessToken: string } }).data.accessToken
   return { app, token, data, created, savedCategories, updated }
@@ -69,10 +69,26 @@ test('detailed inspection completion requires admin, request UUID and current as
 
 test('public market endpoint allows guests and rejects invalid pagination', async () => {
   const calls: unknown[] = []
-  const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, market: { list: async (query) => { calls.push(query); return { products: [], page: query.page, size: query.size, total: 0 } } } })
+  const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, market: { list: async (query) => { calls.push(query); return { products: [], categories: [], campaigns: [], page: query.page, size: query.size, total: 0 } } } })
   assert.equal((await app.request('/api/market/products')).status, 200)
-  assert.deepEqual(calls, [{ page: 1, size: 20 }])
+  assert.deepEqual(calls, [{ page: 1, size: 20, sort: 'latest' }])
   for (const query of ['page=0', 'size=101', 'page=bad']) assert.equal((await app.request(`/api/market/products?${query}`)).status, 400)
+})
+
+test('market prices are omitted publicly and require active customer authentication', async () => {
+  const customer = await fixture('CUSTOMER')
+  const publicResponse = await customer.app.request('/api/market/products')
+  const publicProduct = (await publicResponse.json() as { data: { products: Record<string, unknown>[] } }).data.products[0]!
+  assert.equal('unitPrice' in publicProduct, false)
+  assert.equal('originalUnitPrice' in publicProduct, false)
+  assert.equal(publicResponse.headers.get('Cache-Control'), 'private, no-store')
+  assert.equal((await customer.app.request('/api/market/products?sort=price')).status, 400)
+  assert.equal((await customer.app.request('/api/customer/market/products')).status, 401)
+  const memberResponse = await customer.app.request('/api/customer/market/products', { headers: { Authorization: `Bearer ${customer.token}` } })
+  assert.equal(memberResponse.status, 200)
+  assert.equal((await memberResponse.json() as { data: { products: { unitPrice: string }[] } }).data.products[0]!.unitPrice, '23000')
+  const admin = await fixture('ADMIN')
+  assert.equal((await admin.app.request('/api/customer/market/products', { headers: { Authorization: `Bearer ${admin.token}` } })).status, 401)
 })
 
 test('sale approval requires administrator, current version, positive integer unit price and reason', async () => {
