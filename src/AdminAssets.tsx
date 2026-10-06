@@ -10,7 +10,6 @@ import { materialPhotos } from './assetPhotos'
 import { categoryChain, categoryMatches, materialCategories } from './categories'
 import CategorySelect from './CategorySelect'
 import PageBanner from './PageBanner'
-import { useHistoryState } from './useHistoryState'
 
 const amount = (value: string) => Number(value.replaceAll(',', ''))
 const number = (value: number) => value.toLocaleString('ko-KR')
@@ -113,7 +112,7 @@ function CategoryShare({ rows, label }: { rows: ReturnType<typeof categoryShares
   </>
 }
 
-export default function AdminAssets({ assets: inventory, onAssetsChange: setInventory, navigation, onValuesObserved, inspectionActive, onInspectionView, inspectionContent, inspectionCount, onFaq }: { assets: Asset[]; onAssetsChange: Dispatch<SetStateAction<Asset[]>>; navigation: ReactNode; onValuesObserved: ObserveAssetValues; inspectionActive: boolean; onInspectionView: (active: boolean) => void; inspectionContent: ReactNode; inspectionCount: number; onFaq: () => void }) {
+export default function AdminAssets({ detailCode, setDetailCode, closeDetail, assets: inventory, onAssetsChange: setInventory, navigation, onValuesObserved, inspectionActive, onInspectionView, inspectionContent, inspectionCount, onFaq }: { detailCode: string | null; setDetailCode: (code: string | null) => void; closeDetail: () => void; assets: Asset[]; onAssetsChange: Dispatch<SetStateAction<Asset[]>>; navigation: ReactNode; onValuesObserved: ObserveAssetValues; inspectionActive: boolean; onInspectionView: (active: boolean) => void; inspectionContent: ReactNode; inspectionCount: number; onFaq: () => void }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<string>('전체')
   const [location, setLocation] = useState('전체 위치')
@@ -134,7 +133,6 @@ export default function AdminAssets({ assets: inventory, onAssetsChange: setInve
   const [sort, setSort] = useState('newest')
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
-  const [detailCode, setDetailCode, closeDetail] = useHistoryState<string | null>('asset-detail', null)
   const detail = inventory.find((asset) => asset.code === detailCode) ?? null
   const [assetListActive, setAssetListActive] = useState(false)
   const overview = useAssetValueMotion(inventory, detail !== null || inspectionActive, onValuesObserved)

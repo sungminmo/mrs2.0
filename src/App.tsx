@@ -40,6 +40,7 @@ export type Asset = typeof assets[number]
 export default function App() {
   const [access, setAccess] = useState<'login' | 'member' | 'guest'>(() => import.meta.env.MODE !== 'demo' && readAuthSession() ? 'member' : 'login')
   const [tab, setTab] = useHistoryState<Tab>('customer-tab', 'assets')
+  const [detailCode, setDetailCode, closeDetail] = useHistoryState<string | null>('asset-detail', null)
   const [inventory, setInventory] = useState(() => prepareAssets(assets))
   const assetValueSnapshot = useRef<AssetValueSnapshot | null>(null)
   const observeAssetValues = useCallback((snapshot: AssetValueSnapshot) => {
@@ -55,16 +56,17 @@ export default function App() {
   const [inspectionActive, setInspectionActive] = useState(false)
   const [inspectionId, setInspectionId] = useState<string | null>(null)
   const [settlementKind, setSettlementKind] = useState('전체')
+  const openAssets = () => { setDetailCode(null); setInspectionActive(false); setInspectionId(null); setTab('assets') }
   const openInspection = (id: string) => { setInspectionId(id); setInspectionActive(true); setTab('assets') }
   const changeDisposal = (id: string, action: DisposalAction) => setDisposals((current) => current.map((record) => record.id === id ? updateDisposal(record, action) : record))
   if (access === 'login') return <ReceivingRequestProvider contact={contact}><LoginPage onLogin={async (email, password) => {
     if (import.meta.env.MODE !== 'demo') await signIn(email, password)
     setAccess('member')
-    setTab('assets')
-  }} onBrowse={() => { setAccess('guest'); setTab('market') }} onCustomerAccess={() => { setAccess('member'); setTab('assets') }} /></ReceivingRequestProvider>
+    openAssets()
+  }} onBrowse={() => { setAccess('guest'); setTab('market') }} onCustomerAccess={() => { setAccess('member'); openAssets() }} /></ReceivingRequestProvider>
   if (access === 'guest') return <ShopifyMarket products={products} navigation={<><Nav active icon={<ShoppingCart />} label="마켓" onClick={() => setTab('market')} /><Nav active={false} icon={<UserRound />} label="로그인" onClick={() => setAccess('login')} /></>} basket={{}} onBasketChange={setMarketBasket} isGuest onLogin={() => setAccess('login')} />
   const navigation = <>
-    <Nav active={tab === 'assets'} icon={<Archive />} label="내 자산" onClick={() => setTab('assets')} />
+    <Nav active={tab === 'assets'} icon={<Archive />} label="내 자산" onClick={openAssets} />
     <Nav active={tab === 'market'} icon={<ShoppingCart />} label="마켓" onClick={() => setTab('market')} />
     <Nav active={tab === 'settlements'} icon={<ReceiptText />} label="정산 관리" onClick={() => { setSettlementKind('전체'); setTab('settlements') }} />
     <Nav active={tab === 'faq'} icon={<CircleHelp />} label="F&Q" onClick={() => setTab('faq')} />
@@ -98,7 +100,7 @@ export default function App() {
   const notifications = notificationRecords.sort((first, second) => second.date.localeCompare(first.date)).map((item) => ({ ...item, read: readNotificationIds.includes(item.id) }))
   const unread = notifications.filter((item) => !item.read).length
   const markRead = (ids: string[]) => setReadNotificationIds((current) => [...new Set([...current, ...ids])])
-  const page = tab === 'assets' ? <AdminAssets assets={inventory} onAssetsChange={setInventory} navigation={navigation} onValuesObserved={observeAssetValues} inspectionActive={inspectionActive} onInspectionView={(active) => { setInspectionActive(active); setInspectionId(null) }} inspectionCount={disposals.filter((record) => record.status === '고객 확인 대기').length} inspectionContent={<InspectionDisposals records={disposals} selectedId={inspectionId} onSelect={setInspectionId} onUpdate={changeDisposal} />} onFaq={() => setTab('faq')} />
+  const page = tab === 'assets' ? <AdminAssets detailCode={detailCode} setDetailCode={setDetailCode} closeDetail={closeDetail} assets={inventory} onAssetsChange={setInventory} navigation={navigation} onValuesObserved={observeAssetValues} inspectionActive={inspectionActive} onInspectionView={(active) => { setInspectionActive(active); setInspectionId(null) }} inspectionCount={disposals.filter((record) => record.status === '고객 확인 대기').length} inspectionContent={<InspectionDisposals records={disposals} selectedId={inspectionId} onSelect={setInspectionId} onUpdate={changeDisposal} />} onFaq={() => setTab('faq')} />
     : tab === 'market' ? <ShopifyMarket products={products} navigation={navigation} basket={marketBasket} onBasketChange={setMarketBasket} onQuoteSubmitted={(record) => setQuoteRequests((current) => [record, ...current])} />
     : tab === 'settlements' ? <Settlements key={settlementKind} navigation={navigation} transactions={transactions} assets={inventory} disposals={disposals} onInspection={openInspection} initialKind={settlementKind} />
     : tab === 'faq' ? <Faq navigation={navigation} />
