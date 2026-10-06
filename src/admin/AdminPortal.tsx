@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
-import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronRight, ClipboardCheck, Images, ImageOff, LayoutDashboard, ListChecks, LoaderCircle, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronRight, ClipboardCheck, Images, ImageOff, LayoutDashboard, ListChecks, LoaderCircle, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UserRoundCog, UsersRound, X } from 'lucide-react'
 import { adminAccountRequest, adminAuthenticatedFetch, adminSignOut, showAdminToast } from '../adminAuthSession'
 import { appraisalMoney, appraisalTotal } from '../appraisal'
 import { dateText, invoiceAmount, invoices, money, receivingStatuses, referenceDate, type Campaign, type Inspection, type Inventory, type Location, type MasterItem, type MemberAccount, type Product, type Receiving, type SaleRequest } from './adminData'
@@ -25,7 +25,7 @@ import AdminPagination, { LoadingTable, type Pagination } from './AdminPaginatio
 import AdminToast from './AdminToast'
 import InspectionEditor, { ReceiveCompletion } from './InspectionEditor'
 
-const icons = { dashboard: LayoutDashboard, basic: ListChecks, receiving: ClipboardCheck, inventory: Archive, market: ShoppingCart, content: Images, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2, accounts: UsersRound }
+const icons = { dashboard: LayoutDashboard, basic: ListChecks, receiving: ClipboardCheck, inventory: Archive, market: ShoppingCart, content: Images, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2, accounts: UserRoundCog }
 const authenticatedFetch = adminAuthenticatedFetch
 const rowOptions = [10, 25, 50, 100] as const
 type AdminDatabaseData = { sales: SaleRequest[]; categories: MaterialCategory[]; items: MasterItem[]; assets: Inventory[]; locations: Location[]; receivings: Receiving[]; inspections: Inspection[]; products: Product[]; campaigns: Campaign[]; customers: CustomerAccount[]; pagination: Pagination; metrics?: Record<string, number>; categoryCounts?: { items: number; assets: number } }
