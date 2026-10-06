@@ -6,6 +6,21 @@ enum ProductStatus {
   OUT_OF_STOCK @map("재고없음")
 }
 
+model SaleRequest {
+  id            String   @id @db.VarChar(36)
+  assetId       String   @unique @db.VarChar(11)
+  actorUserId   String   @db.VarChar(36)
+  quantity      Decimal  @db.Decimal(18, 3)
+  desiredAmount Decimal  @db.Decimal(19, 0)
+  status        String   @default("PENDING") @db.VarChar(20)
+  inspection    String   @default("PENDING") @db.VarChar(20)
+  createdAt     DateTime @default(now())
+  asset         Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([status, createdAt])
+  @@map("sale_requests")
+}
+
 /// 마켓 상품 또는 기획전 변경 이력의 대상 유형
 enum MarketEntityType {
   PRODUCT

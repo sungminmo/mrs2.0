@@ -10,11 +10,12 @@ import { ReceivingRequestButton, ReceivingRequestProvider } from './ReceivingReq
 import { submitReceiving } from './receivings'
 import CustomerReceivings from './CustomerReceivings'
 import CustomerInspections from './CustomerInspections'
+import SaleRegistration from './SaleRegistration'
 import './App.css'
 import './ShopifyAssetDetail.css'
 import './CustomerWorkspace.css'
 
-type AssetRecord = { id: string; name: string; itemId: string | null; receivingId: string; category: { id: string; name: string; path: string } | null; specification: string; brand: string; grade: string; quantity: string; unit: string; appraisalValue: string | null; storageStatus: string; saleStatus: string; locationId: string | null; thumbnailUrl?: string | null; createdAt: string; images?: Array<{ id: string; name: string; url: string }> }
+type AssetRecord = { canRequestSale?: boolean; saleRequest?: { id: string; status: string; desiredAmount: string; createdAt: string } | null; id: string; name: string; itemId: string | null; receivingId: string; category: { id: string; name: string; path: string } | null; specification: string; brand: string; grade: string; quantity: string; unit: string; appraisalValue: string | null; storageStatus: string; saleStatus: string; locationId: string | null; thumbnailUrl?: string | null; createdAt: string; images?: Array<{ id: string; name: string; url: string }> }
 type Summary = { total: number; appraisalValue: string | null; unappraised: number; groups: Array<{ storageStatus: string; saleStatus: string; count: number }>; quantities: Array<{ unit: string; quantity: string }> }
 type Page = { data: AssetRecord[]; meta: { page: number; size: number; totalElements: number; totalPages: number } }
 const storageLabels: Record<string, string> = { PENDING: '입고 대기', STORED: '보관 중', RELEASED: '출고 완료' }
@@ -124,6 +125,9 @@ function AssetDetails({ asset, records, onBack, onNavigate, onRefresh }: { asset
   const [failedImages, setFailedImages] = useState<string[]>([])
   const [message, setMessage] = useState('')
   const [now] = useState(() => Date.now())
+  const [saleOpen, setSaleOpen] = useState(false)
+  const [submittedSale, setSubmittedSale] = useState<AssetRecord['saleRequest']>(null)
+  const request = submittedSale ?? asset.saleRequest
   const heading = useRef<HTMLHeadingElement>(null)
   const images = asset.images ?? []
   const image = images[imageIndex]
@@ -142,6 +146,7 @@ function AssetDetails({ asset, records, onBack, onNavigate, onRefresh }: { asset
     setMessage('자산 정보를 CSV로 내보냈습니다.')
   }
   return <div className="shopify-detail customer-asset-detail">
+    {saleOpen && <SaleRegistration persistent asset={{ name: asset.name, grade: asset.grade, quantity: asset.quantity, unit: asset.unit, salePrice: '' }} onClose={() => setSaleOpen(false)} onRegister={async (price) => { const desiredAmount = Number(price.replaceAll(',', '')); const result = await accountRequest<{ request: { id: string } }>(`/api/assets/${asset.id}/sale-requests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ desiredAmount, expectedQuantity: asset.quantity }) }); setSubmittedSale({ id: result.request.id, status: 'PENDING', desiredAmount: String(desiredAmount), createdAt: new Date().toISOString() }) }} />}
     <div className="sd-breadcrumb"><button onClick={onBack}>내 자산</button><ChevronRight size={12} /><span>{asset.id}</span></div>
     <div className="sd-heading"><button className="sd-icon" title="자산 목록으로" aria-label="자산 목록으로" onClick={onBack}><ArrowLeft size={18} /></button><div className="sd-title"><h1 tabIndex={-1} ref={heading}>{asset.name}</h1><span className={`sd-badge ${state}`}><i />{status}</span></div><div className="sd-paging"><button className="sd-icon" title="이전 자산" aria-label="이전 자산" disabled={!previous} onClick={() => previous && onNavigate(previous.id)}><ChevronLeft size={17} /></button><button className="sd-icon" title="다음 자산" aria-label="다음 자산" disabled={!next} onClick={() => next && onNavigate(next.id)}><ChevronRight size={17} /></button></div></div>
     <div className="sd-actions"><span>등록일 {date(asset.createdAt)} <i>·</i> 등록 경과 {days.toLocaleString('ko-KR')}일</span><div><button className="sd-icon" title="새로고침" aria-label="새로고침" onClick={onRefresh}><RefreshCw size={15} /></button><button className="sd-button" onClick={exportAsset}><ArrowDownToLine size={14} />내보내기</button></div></div>
@@ -151,7 +156,7 @@ function AssetDetails({ asset, records, onBack, onNavigate, onRefresh }: { asset
       <section className="sd-section"><div className="sd-section-heading"><h2>평가 및 판매</h2><span>KRW</span></div><dl className="sd-fields sd-prices"><div><dt>평가 가치</dt><dd>{money(asset.appraisalValue)}</dd></div><div><dt>판매 가격</dt><dd className="customer-value-missing">미등록</dd><small className="sd-price-rule">기준 판매가 미등록 · 등급 할인율 미등록</small></div></dl><div className="sd-price-summary"><span>평가 가치 대비 할인 적용 판매 가격</span><b>미등록</b></div></section>
       <section className="sd-section"><div className="sd-section-heading"><h2>재고 정보</h2><span><MapPin size={13} />{asset.locationId ?? '미지정'}</span></div><div className="sd-stock"><div><span>현재 수량</span><strong>{Number(asset.quantity).toLocaleString('ko-KR', { maximumFractionDigits: 3 })}<small>{asset.unit}</small></strong></div><dl><div><dt>관리 단위</dt><dd>{asset.unit}</dd></div><div><dt>등록일</dt><dd>{date(asset.createdAt)}</dd></div></dl></div></section>
     </div><aside className="sd-secondary-column" aria-label="자산 관리">
-      <section className="sd-section"><div className="sd-section-heading"><h2>자산 상태</h2><span className={`sd-badge ${state}`}><i />{status}</span></div><dl className="sd-side-fields"><div><dt>보관 상태</dt><dd>{storageLabels[asset.storageStatus]}</dd></div><div><dt>판매 상태</dt><dd>{saleLabels[asset.saleStatus]}</dd></div></dl><button className="sd-button customer-market-unavailable" disabled title="마켓 등록 신청은 현재 지원하지 않습니다"><ShoppingCart size={15} />마켓에 등록하기</button></section>
+      <section className="sd-section"><div className="sd-section-heading"><h2>자산 상태</h2><span className={`sd-badge ${state}`}><i />{status}</span></div><dl className="sd-side-fields"><div><dt>보관 상태</dt><dd>{storageLabels[asset.storageStatus]}</dd></div><div><dt>판매 상태</dt><dd>{saleLabels[asset.saleStatus]}</dd></div>{request && <><div><dt>판매 요청번호</dt><dd>{request.id}</dd></div><div><dt>승인 상태</dt><dd>{{ PENDING: '승인 대기', APPROVED: '승인 완료', REJECTED: '반려' }[request.status] ?? request.status}</dd></div><div><dt>판매 희망금액</dt><dd>{money(request.desiredAmount)}</dd></div></>}</dl><button className="sd-button customer-market-unavailable" disabled={!asset.canRequestSale || !!request} onClick={() => setSaleOpen(true)}><ShoppingCart size={15} />{request ? '판매 요청 접수됨' : '마켓에 등록하기'}</button></section>
       <section className="sd-section"><div className="sd-section-heading"><h2>보관 정보</h2><Warehouse size={16} /></div><dl className="sd-side-fields"><div><dt>보관 위치 코드</dt><dd>{asset.locationId ?? '미지정'}</dd></div><div><dt>등록 경과일</dt><dd>{days.toLocaleString('ko-KR')}일</dd></div><div><dt>등록일</dt><dd>{date(asset.createdAt)}</dd></div></dl></section>
       <section className="sd-section"><div className="sd-section-heading"><h2>자산 분류</h2><Box size={16} /></div><dl className="sd-side-fields"><div><dt>카테고리</dt><dd>{asset.category?.path ?? '미분류'}</dd></div><div><dt>브랜드</dt><dd>{asset.brand || '미등록'}</dd></div><div><dt>품질 등급</dt><dd><span className="sd-grade">{asset.grade}</span></dd></div><div><dt>관리 단위</dt><dd>{asset.unit}</dd></div></dl></section>
       <section className="sd-section"><div className="sd-section-heading"><h2><label htmlFor="customer-asset-note">자산 메모</label></h2><span>미등록</span></div><textarea id="customer-asset-note" value="" readOnly disabled rows={6} aria-label="자산 메모" title="자산 메모 저장은 현재 지원하지 않습니다" /></section>

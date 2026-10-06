@@ -48,6 +48,7 @@ model Asset {
   images         AssetImage[]
   history        AssetChange[] // 수동 수정 감사 이력
   product        Product?
+  saleRequest    SaleRequest?
   inspectionItem InspectionItem?
 
   @@index([itemId])

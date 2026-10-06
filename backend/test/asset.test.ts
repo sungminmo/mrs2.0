@@ -27,7 +27,9 @@ async function fixture(customerId: string | null = 'TEST-CUST-001') {
     approveMember: async () => null,
   }
   let captured: { customerId: string; query: AssetListQuery; now: Date } | undefined
+  const saleCalls: unknown[] = []
   const assets: AssetRepository = {
+    requestSale: async (actor, id, input) => { saleCalls.push({ actor: actor.id, id, input }); return { id: 'test-sale-request' } },
     list: async (ownerId, query, now) => {
       captured = { customerId: ownerId, query, now }
       return {
@@ -58,8 +60,21 @@ async function fixture(customerId: string | null = 'TEST-CUST-001') {
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret, expiresIn: '1h' }, assets })
   const login = await app.request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email, password: 'customer-password' }) })
   const token = (await login.json() as { data?: { accessToken: string } }).data?.accessToken ?? ''
-  return { app, token, loginStatus: login.status, captured: () => captured }
+  return { app, token, loginStatus: login.status, captured: () => captured, saleCalls }
 }
+
+test('asset sale requests require authentication and validated amount and quantity', async () => {
+  const { app, token, saleCalls } = await fixture()
+  const path = '/api/assets/261006-9001/sale-requests'
+  assert.equal((await app.request(path, { method: 'POST' })).status, 401)
+  for (const input of [{ desiredAmount: 0, expectedQuantity: '2' }, { desiredAmount: 1.5, expectedQuantity: '2' }, { desiredAmount: 1e12 + 1, expectedQuantity: '2' }, { desiredAmount: 100, expectedQuantity: '-1' }, { desiredAmount: 100, expectedQuantity: '2', customerId: 'other' }]) {
+    assert.equal((await app.request(path, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(input) })).status, 400)
+  }
+  assert.equal(saleCalls.length, 0)
+  const response = await app.request(path, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ desiredAmount: 100000, expectedQuantity: '2.500' }) })
+  assert.equal(response.status, 201)
+  assert.equal(saleCalls.length, 1)
+})
 
 test('asset list requires authentication and a linked customer', async () => {
   const linked = await fixture()
@@ -138,6 +153,7 @@ test('OpenAPI document and Scalar reference expose the asset endpoint', async ()
   const document = await documentResponse.json() as { openapi: string; paths: Record<string, unknown>; components: { securitySchemes: Record<string, unknown> } }
   assert.equal(document.openapi, '3.1.0')
   assert.ok(document.paths['/api/assets'])
+  assert.ok(document.paths['/api/assets/{id}/sale-requests'])
   assert.ok(document.components.securitySchemes.BearerAuth)
 
   const referenceResponse = await app.request('/api/docs')

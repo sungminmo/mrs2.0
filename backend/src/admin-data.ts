@@ -21,7 +21,7 @@ const disposalStatus = { UNPROCESSED: '미처리', SCHEDULED: '처리 예정', C
 const itemBatchSize = 1000
 
 export const adminDataQuery = z.object({
-  scope: z.enum(['items', 'assets', 'locations', 'receivings', 'inspections', 'disposals', 'products', 'campaigns', 'categories', 'dashboard']).default('items'),
+  scope: z.enum(['items', 'assets', 'locations', 'receivings', 'inspections', 'disposals', 'sales', 'products', 'campaigns', 'categories', 'dashboard']).default('items'),
   page: z.coerce.number().int().min(1).max(100000).default(1),
   rows: z.coerce.number().int().min(1).max(100).default(25),
   id: z.string().max(80).optional(), q: z.string().max(160).default(''),
@@ -54,6 +54,9 @@ export function createAdminDataRepository(client: PrismaClient) {
       const productWhere: Prisma.ProductWhereInput = id ? { id } : { ...search, ...(status ? { status: enumKey(productStatus, status) ?? 'DRAFT' } : {}), ...(category || customer ? { asset: { ...categoryWhere, ...(customer ? { customerId: customer } : {}) } } : {}) }
       const campaignWhere: Prisma.CampaignWhereInput = id ? { id } : { ...search, ...categoryWhere, ...(dates ? { startsAt: dates } : {}), ...(status ? status === '중지' ? { enabled: false } : { enabled: true, ...(status === '예약' ? { startsAt: { gt: new Date('2026-09-14T00:00:00+09:00') } } : status === '종료' ? { endsAt: { lte: new Date('2026-09-14T00:00:00+09:00') } } : { startsAt: { lte: new Date('2026-09-14T00:00:00+09:00') }, endsAt: { gt: new Date('2026-09-14T00:00:00+09:00') } }) } : {}) }
       const paging = { skip: id ? 0 : (page - 1) * rows, take: id ? 1 : rows }
+      const saleLabels = { PENDING: '승인 대기', APPROVED: '승인 완료', REJECTED: '반려' } as const
+      const salesWhere: Prisma.SaleRequestWhereInput = id ? { id } : { ...(q.trim() ? { OR: [{ id: { contains: q.trim() } }, { asset: { name: { contains: q.trim() } } }] } : {}), ...(status ? { status: enumKey(saleLabels, status) ?? 'PENDING' } : {}), ...(customer ? { asset: { customerId: customer } } : {}), ...(dates ? { createdAt: dates } : {}) }
+      const sales = scope === 'sales' ? await client.saleRequest.findMany({ where: salesWhere, ...paging, orderBy: query.sort === 'name' ? [{ asset: { name: 'asc' } }, { id: 'asc' }] : [{ createdAt: 'desc' }, { id: 'asc' }] }) : []
       const locationAssets = scope === 'locations' && id ? await client.asset.findMany({ where: { locationId: id, storageStatus: 'STORED', quantity: { gt: 0 } }, skip: (page - 1) * rows, take: rows, include: { images: { take: 0 }, history: { take: 0 } }, orderBy: { id: 'asc' } }) : []
       const locationWhere = id ? { id } : { ...search, ...(status ? { enabled: status === '사용' } : {}) }
       const locations = scope === 'locations' || scope === 'assets' && id ? await client.location.findMany({ where: scope === 'locations' ? locationWhere : { OR: [{ enabled: true }, { assets: { some: { id } } }] }, ...(scope === 'locations' ? paging : {}), include: { _count: { select: { assets: { where: { storageStatus: 'STORED', quantity: { gt: 0 } } } } } }, orderBy: { id: 'asc' } }) : []
@@ -65,7 +68,7 @@ export function createAdminDataRepository(client: PrismaClient) {
         scope === 'products' ? client.product.findMany({ where: productWhere, ...paging, include: { asset: true }, orderBy: query.sort === 'name' ? [{ name: 'asc' }, { id: 'asc' }] : { id: 'asc' } }) : [],
         scope === 'campaigns' || scope === 'dashboard' ? client.campaign.findMany({ where: campaignWhere, ...(scope === 'dashboard' ? { skip: 0, take: 5 } : paging), orderBy: query.sort === 'name' ? [{ name: 'asc' }, { id: 'asc' }] : [{ sortOrder: 'asc' }, { id: 'asc' }] }) : [],
       ])
-      const assets = scope === 'products' ? await client.asset.findMany({ where: { id: { in: products.map((product) => product.assetId) } }, include: { images: { take: 0 }, history: { take: 0 } } }) : scope === 'locations' ? locationAssets : pageAssets
+      const assets = scope === 'products' || scope === 'sales' ? await client.asset.findMany({ where: { id: { in: scope === 'sales' ? sales.map((request) => request.assetId) : products.map((product) => product.assetId) } }, include: { images: { take: 0 }, history: { take: 0 } } }) : scope === 'locations' ? locationAssets : pageAssets
       const receivings = scope === 'inspections' || scope === 'disposals' ? await client.receiving.findMany({ where: { id: { in: inspections.map((inspection) => inspection.receivingId) } }, include: { images: { take: 0 }, history: { take: 0 } } }) : pageReceivings
       const customerIds = [...new Set([...assets.map((asset) => asset.customerId), ...receivings.map((receiving) => receiving.customerId)])]
       const customers = customerIds.length ? await client.customer.findMany({ where: { id: { in: customerIds } }, select: { id: true, name: true, representativeName: true, phone: true, status: true } }) : []
@@ -73,7 +76,7 @@ export function createAdminDataRepository(client: PrismaClient) {
         'receiving/requests': await client.receiving.count({ where: { status: 'REQUESTED' } }),
         'receiving/primary': await client.inspection.count({ where: { status: 'PENDING' } }),
       } : undefined
-      const total = await (scope === 'locations' ? client.location.count({ where: locationWhere }) : scope === 'items' ? client.masterItem.count({ where: itemWhere }) : scope === 'assets' ? client.asset.count({ where: assetWhere }) : scope === 'receivings' ? client.receiving.count({ where: receivingWhere }) : scope === 'inspections' || scope === 'disposals' ? client.inspection.count({ where: inspectionWhere }) : scope === 'products' ? client.product.count({ where: productWhere }) : scope === 'campaigns' ? client.campaign.count({ where: campaignWhere }) : Promise.resolve(categories.length))
+      const total = await (scope === 'sales' ? client.saleRequest.count({ where: salesWhere }) : scope === 'locations' ? client.location.count({ where: locationWhere }) : scope === 'items' ? client.masterItem.count({ where: itemWhere }) : scope === 'assets' ? client.asset.count({ where: assetWhere }) : scope === 'receivings' ? client.receiving.count({ where: receivingWhere }) : scope === 'inspections' || scope === 'disposals' ? client.inspection.count({ where: inspectionWhere }) : scope === 'products' ? client.product.count({ where: productWhere }) : scope === 'campaigns' ? client.campaign.count({ where: campaignWhere }) : Promise.resolve(categories.length))
       const categoryIds = scope === 'categories' && id ? [id] : []
       for (let index = 0; index < categoryIds.length; index++) for (const entry of categories) if (entry.parentId === categoryIds[index] && !categoryIds.includes(entry.id)) categoryIds.push(entry.id)
       const categoryCounts = categoryIds.length ? { items: await client.masterItem.count({ where: { categoryId: { in: categoryIds } } }), assets: await client.asset.count({ where: { categoryId: { in: categoryIds } } }) } : undefined
@@ -85,6 +88,7 @@ export function createAdminDataRepository(client: PrismaClient) {
       const inspectionCounts = new Map(await Promise.all(inspections.map(async (inspection) => [inspection.id, await client.asset.count({ where: { receiptId: inspection.id } })] as const)))
       const receivingInspections = receivings.length ? await client.inspection.findMany({ where: { receivingId: { in: receivings.map((entry) => entry.id) } }, select: { id: true, receivingId: true } }) : []
       const payload = {
+        sales: sales.map((request) => ({ id: request.id, assetId: request.assetId, date: request.createdAt.toISOString(), quantity: Number(request.quantity), desiredAmount: Number(request.desiredAmount), status: saleLabels[request.status as keyof typeof saleLabels], inspection: request.inspection === 'COMPLETED' ? '판매용 정밀 검수 완료' : '판매용 정밀 검수 대기' })),
         pagination: { page, rows, total },
         customers, metrics, categoryCounts,
         locations: locations.map(({ _count, ...entry }) => ({ ...entry, assetCount: _count.assets, status: _count.assets ? '사용 중' : '비어 있음', rate: null })),
@@ -134,7 +138,7 @@ export function createAdminDataRepository(client: PrismaClient) {
       return itemPayload(saved)
     }),
     updateAsset: (id: string, input: z.output<typeof assetUpdateInput>) => customerTransaction(client, async (transaction) => {
-      const previous = await transaction.asset.findUnique({ where: { id }, include: { product: true } })
+      const previous = await transaction.asset.findUnique({ where: { id }, include: { product: true, saleRequest: true } })
       if (!previous) throw new AppError(404, ErrorCode.NOT_FOUND, '자산을 찾을 수 없습니다.')
       if (previous.updatedAt.toISOString() !== input.expectedUpdatedAt) throw new AppError(409, ErrorCode.CONFLICT, '자산이 변경되었습니다. 새로고침 후 다시 수정해 주세요.')
       const { expectedUpdatedAt, reason, category, status, saleStatus: saleLabel, ...fields } = input
@@ -153,6 +157,7 @@ export function createAdminDataRepository(client: PrismaClient) {
         if (!location || !location.enabled && previous.locationId !== fields.locationId) throw invalid('사용 중인 로케이션을 선택해 주세요.')
       } else if (storage === 'STORED') throw invalid('보관중 자산의 로케이션을 선택해 주세요.')
       if (previous.product && (Number(previous.quantity) !== fields.quantity || previous.grade !== fields.grade || previous.storageStatus !== storage || previous.saleStatus !== sale)) throw new AppError(409, ErrorCode.CONFLICT, '연결 상품이 있는 자산의 수량·등급·상태는 마켓 업무에서 변경해 주세요.')
+      if (previous.saleRequest && (Number(previous.quantity) !== fields.quantity || previous.storageStatus !== storage || previous.saleStatus !== sale || fields.grade === 'F')) throw new AppError(409, ErrorCode.CONFLICT, '판매 요청된 자산의 수량·보관/판매 상태 및 F등급 변경은 제한됩니다.')
       const data = { ...fields, categoryId: category || null, storageStatus: storage, saleStatus: sale }
       const labels: Record<string, string> = { name: '자산명', specification: '규격', brand: '브랜드', quantity: '현재 수량', grade: '등급', locationId: '로케이션', categoryId: '카테고리', storageStatus: '보관 상태', saleStatus: '판매 상태' }
       const display = (key: string, value: unknown) => key === 'storageStatus' ? storageStatus[value as keyof typeof storageStatus] ?? '미등록' : key === 'saleStatus' ? saleStatus[value as keyof typeof saleStatus] ?? '미등록' : String(value ?? '') || '미등록'

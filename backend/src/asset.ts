@@ -1,4 +1,6 @@
 import { publicImageUrl } from './admin-images.js'
+import { randomUUID } from 'node:crypto'
+import { customerTransaction } from './customer.js'
 import { createRoute, z } from '@hono/zod-openapi'
 import type { Context } from 'hono'
 import type { AuthUser } from './auth.js'
@@ -46,10 +48,11 @@ type AssetListRecord = {
   updatedAt: Date
 }
 
-type AssetDetail = { id: string; name: string; itemId: string | null; receivingId: string; specification: string; brand: string; grade: string; quantity: string; unit: string; appraisalValue: string | null; storageStatus: string; saleStatus: string; locationId: string | null; category: { id: string; name: string; path: string } | null; createdAt: Date; images: Array<{ id: string; name: string; url: string }> }
+type AssetDetail = { canRequestSale?: boolean; saleRequest?: { id: string; status: string; desiredAmount: string; createdAt: string } | null; id: string; name: string; itemId: string | null; receivingId: string; specification: string; brand: string; grade: string; quantity: string; unit: string; appraisalValue: string | null; storageStatus: string; saleStatus: string; locationId: string | null; category: { id: string; name: string; path: string } | null; createdAt: Date; images: Array<{ id: string; name: string; url: string }> }
 type AssetSummary = { total: number; appraisalValue: string | null; unappraised: number; groups: Array<{ storageStatus: string; saleStatus: string; count: number }>; quantities: Array<{ unit: string; quantity: string }> }
 
 export type AssetRepository = {
+  requestSale?: (user: AuthUser, id: string, input: { desiredAmount: number; expectedQuantity: string }) => Promise<{ id: string }>
   list: (customerId: string, query: AssetListQuery, now: Date) => Promise<{ records: AssetListRecord[]; totalElements: number }>
   detail?: (customerId: string, id: string) => Promise<AssetDetail | null>
   summary?: (customerId: string) => Promise<AssetSummary>
@@ -93,7 +96,7 @@ const errorSchema = z.object({
 }).openapi('ErrorResponse')
 
 const readResponses = { 401: { description: '인증 필요' }, 403: { description: '고객 권한 필요' }, 404: { description: '자산 없음' }, 503: { description: '자산 귀속 확인 필요' } }
-export const assetDetailRoute = createRoute({ method: 'get', path: '/api/assets/{id}', tags: ['Assets'], summary: '자사 자산 상세 조회', security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string().regex(/^\d{6}-\d{4}$/) }) }, responses: { ...readResponses, 200: { description: '고객 공개 필드 및 보호된 저장 이미지', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ asset: assetSchema.omit({ thumbnailUrl: true, receivedAt: true, storageDays: true, updatedAt: true }).extend({ images: z.array(z.object({ id: z.string(), name: z.string(), url: z.string() })) }) }) }) } } } } })
+export const assetDetailRoute = createRoute({ method: 'get', path: '/api/assets/{id}', tags: ['Assets'], summary: '자사 자산 상세 조회', security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string().regex(/^\d{6}-\d{4}$/) }) }, responses: { ...readResponses, 200: { description: '고객 공개 필드 및 보호된 저장 이미지', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ asset: assetSchema.omit({ thumbnailUrl: true, receivedAt: true, storageDays: true, updatedAt: true }).extend({ canRequestSale: z.boolean(), saleRequest: z.object({ id: z.string(), status: z.enum(['PENDING', 'APPROVED', 'REJECTED']), desiredAmount: z.string(), createdAt: z.iso.datetime() }).nullable(), images: z.array(z.object({ id: z.string(), name: z.string(), url: z.string() })) }) }) }) } } } } })
 export const assetSummaryRoute = createRoute({ method: 'get', path: '/api/assets/summary', tags: ['Assets'], summary: '자사 전체 보유 자산 집계 (출고완료 제외)', security: [{ BearerAuth: [] }], responses: { ...readResponses, 200: { description: '페이지와 무관한 전체 집계. 평가금액은 자산 총평가액의 합.', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ total: z.number(), appraisalValue: z.string().nullable(), unappraised: z.number(), groups: z.array(z.object({ storageStatus: z.string(), saleStatus: z.string(), count: z.number() })), quantities: z.array(z.object({ unit: z.string(), quantity: z.string() })) }) }) } } } } })
 
 function assetOwner(context: Context) {
@@ -109,6 +112,17 @@ export function assetDetail(repository: AssetRepository) {
     const asset = await repository.detail(owner, context.req.param('id')!)
     if (!asset) throw new AppError(404, ErrorCode.NOT_FOUND, '자산을 찾을 수 없습니다.')
     return context.json({ success: true as const, data: { asset } })
+  }
+}
+
+export const saleRequestInput = z.object({ desiredAmount: z.number().int().min(1).max(1e12), expectedQuantity: z.string().max(32).regex(/^\d+(\.\d{1,3})?$/) }).strict()
+export const saleRequestRoute = createRoute({ method: 'post', path: '/api/assets/{id}/sale-requests', tags: ['Assets'], summary: '자사 자산 전체 수량 판매 요청', security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string().regex(/^\d{6}-\d{4}$/) }), body: { content: { 'application/json': { schema: saleRequestInput } } } }, responses: { 201: { description: '승인 대기·상세 검수 대기로 접수', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ request: z.object({ id: z.string() }) }) }) } } }, 400: { description: '잘못된 입력' }, 401: { description: '인증 필요' }, 403: { description: '활성 고객사 소속 필요' }, 404: { description: '자산 없음' }, 409: { description: '중복 요청·수량 변경·판매 불가 상태' } } })
+export function requestAssetSale(repository: AssetRepository) {
+  return async (context: Context) => {
+    assetOwner(context)
+    if (!repository.requestSale) throw new AppError(503, ErrorCode.SERVICE_UNAVAILABLE, '판매 요청을 사용할 수 없습니다.')
+    const id = z.string().regex(/^\d{6}-\d{4}$/).parse(context.req.param('id'))
+    return context.json({ success: true, data: { request: await repository.requestSale(context.get('authUser') as AuthUser, id, saleRequestInput.parse(await context.req.json())) } }, 201)
   }
 }
 
@@ -288,11 +302,24 @@ export function createAssetRepository(client: PrismaClient): AssetRepository {
     },
     detail: async (customerId, id) => {
       await assertOwnerConsistency(client, customerId)
-      const record = await client.asset.findFirst({ where: { id, customerId }, include: { category: true, images: { orderBy: { sortOrder: 'asc' } } } })
+      const record = await client.asset.findFirst({ where: { id, customerId }, include: { category: true, saleRequest: true, product: true, images: { orderBy: { sortOrder: 'asc' } } } })
       if (!record) return null
       const categories = await client.materialCategory.findMany({ select: { id: true, parentId: true, name: true } })
-      return { id: record.id, itemId: record.itemId, receivingId: record.receivingId, name: record.name, specification: record.specification, brand: record.brand, grade: record.grade, quantity: record.quantity.toString(), unit: record.unit, appraisalValue: record.appraisal?.toString() ?? null, storageStatus: record.storageStatus, saleStatus: record.saleStatus, locationId: record.locationId, createdAt: record.createdAt, category: record.category ? { id: record.category.id, name: record.category.name, path: categoryPath(categories, record.category.id) } : null, images: record.images.flatMap((image) => { const url = privateImage(image.url); return url ? [{ id: image.id, name: image.name, url }] : [] }) }
+      return { saleRequest: record.saleRequest ? { id: record.saleRequest.id, status: record.saleRequest.status, desiredAmount: record.saleRequest.desiredAmount.toString(), createdAt: record.saleRequest.createdAt.toISOString() } : null, canRequestSale: record.storageStatus === 'STORED' && record.saleStatus === 'PENDING' && record.grade !== 'F' && record.quantity.gt(0) && !record.saleRequest && !record.product, id: record.id, itemId: record.itemId, receivingId: record.receivingId, name: record.name, specification: record.specification, brand: record.brand, grade: record.grade, quantity: record.quantity.toString(), unit: record.unit, appraisalValue: record.appraisal?.toString() ?? null, storageStatus: record.storageStatus, saleStatus: record.saleStatus, locationId: record.locationId, createdAt: record.createdAt, category: record.category ? { id: record.category.id, name: record.category.name, path: categoryPath(categories, record.category.id) } : null, images: record.images.flatMap((image) => { const url = privateImage(image.url); return url ? [{ id: image.id, name: image.name, url }] : [] }) }
     },
+    requestSale: (user, id, input) => customerTransaction(client, async (transaction) => {
+      const actor = await transaction.user.findUnique({ where: { id: user.id }, include: { customer: true } })
+      if (!actor || actor.role !== 'CUSTOMER' || actor.status !== 'ACTIVE' || !actor.customerId || actor.customerId !== user.customerId || actor.customer?.status !== 'ACTIVE' || actor.sessionVersion !== (user.sessionVersion ?? 0) || actor.customer.accessVersion !== user.customer?.accessVersion) throw new AppError(403, ErrorCode.FORBIDDEN, '활성 고객사 소속 계정이 필요합니다.')
+      const asset = await transaction.asset.findFirst({ where: { id, customerId: actor.customerId }, include: { saleRequest: true, product: true } })
+      if (!asset) throw new AppError(404, ErrorCode.NOT_FOUND, '자산을 찾을 수 없습니다.')
+      if (asset.saleRequest || asset.product) throw new AppError(409, ErrorCode.CONFLICT, '이미 판매 요청되었거나 상품이 연결된 자산입니다.')
+      if (asset.storageStatus !== 'STORED' || asset.saleStatus !== 'PENDING' || asset.grade === 'F' || !asset.quantity.gt(0)) throw new AppError(409, ErrorCode.CONFLICT, '보관중·판매대기 상태의 재사용 자산만 요청할 수 있습니다.')
+      if (!asset.quantity.equals(input.expectedQuantity)) throw new AppError(409, ErrorCode.CONFLICT, '자산 수량이 변경되었습니다. 새로고침 후 다시 요청해 주세요.')
+      const request = await transaction.saleRequest.create({ data: { id: randomUUID(), assetId: id, actorUserId: actor.id, quantity: asset.quantity, desiredAmount: input.desiredAmount } })
+      await transaction.assetChange.create({ data: { id: randomUUID(), assetId: id, reason: '고객 마켓 판매 등록 요청', changes: [['판매 요청', '요청 없음', request.id]] } })
+      await transaction.customerChange.create({ data: { customerId: actor.customerId, actorUserId: actor.id, action: 'sale.request', reason: '고객 마켓 판매 등록 요청', changes: { requestId: request.id, assetId: id, quantity: request.quantity.toString(), desiredAmount: request.desiredAmount.toString(), status: request.status, inspection: request.inspection } } })
+      return { id: request.id }
+    }),
     summary: async (customerId) => {
       await assertOwnerConsistency(client, customerId)
       const where: Prisma.AssetWhereInput = { customerId, storageStatus: { not: 'RELEASED' } }

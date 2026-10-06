@@ -1,6 +1,6 @@
 import { OpenAPIHono, z } from '@hono/zod-openapi'
 import { Scalar } from '@scalar/hono-api-reference'
-import { assetDetail, assetDetailRoute, assetSummary, assetSummaryRoute, assetListRoute, listAssets, type AssetRepository } from './asset.js'
+import { assetDetail, assetDetailRoute, assetSummary, assetSummaryRoute, assetListRoute, listAssets, requestAssetSale, saleRequestRoute, type AssetRepository } from './asset.js'
 import { adminLogin, adminLoginSchema, approveMember, currentUser, customerLogin, listMembers, register, registrationSchema, requireAdmin, requireAuth, updateMember, type AuthRepository } from './auth.js'
 import { businessNumberSchema, customerFieldsSchema, customerHandlers, decisionSchema, memberDecisionSchema, type CustomerRepository } from './customer.js'
 import { getConnInfo } from '@hono/node-server/conninfo'
@@ -177,6 +177,7 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
       app.use('/api/assets/*', customerAuth)
       app.openapi(assetSummaryRoute, assetSummary(assets))
       app.openapi(assetDetailRoute, assetDetail(assets))
+      app.openapi(saleRequestRoute, requestAssetSale(assets))
       app.openapi(assetListRoute, listAssets(assets))
     }
     if (banners) {
