@@ -43,6 +43,12 @@
 .customer-asset-code { display: block; color: #69716c; }
 .customer-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 20px 0; }
 .customer-empty { padding: 30px 0; text-align: center; color: #68726b; }
+.customer-market-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: 24px; }
+.customer-market-grid article { min-width: 0; padding-bottom: 16px; border-bottom: 1px solid #d6dcd8; overflow-wrap: anywhere; }
+.customer-market-grid article p { color: #68726b; font-size: 13px; }
+.customer-market-image { width: 100%; max-width: 640px; aspect-ratio: 4 / 3; display: grid; place-items: center; background: #e9edeb; margin-bottom: 14px; }
+.customer-market-image img { width: 100%; height: 100%; object-fit: contain; }
+.customer-market-image span { display: grid; justify-items: center; gap: 12px; color: #68726b; }
 .customer-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-top: 24px; }
 .customer-photos figure { margin: 0; min-width: 0; }
 .customer-photos img { width: 100%; height: 260px; object-fit: contain; background: #e9edeb; border-radius: 6px; }

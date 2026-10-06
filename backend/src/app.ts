@@ -6,7 +6,7 @@ import { businessNumberSchema, customerFieldsSchema, customerHandlers, decisionS
 import { getConnInfo } from '@hono/node-server/conninfo'
 import { listAdminBanners, listPublicBanners, saveBanner, type BannerRepository } from './banner.js'
 import { ErrorCode, failure, handleError, success } from './http.js'
-import { completeAdminSaleInspection, saleInspectionCompleteInput, createAdminItems, updateAdminItem, updateAdminAsset, assetUpdateInput, itemUpdateInput, loadAdminData, saveAdminCategory, type AdminDataRepository } from './admin-data.js'
+import { approveAdminSale, saleApprovalInput, completeAdminSaleInspection, saleInspectionCompleteInput, createAdminItems, updateAdminItem, updateAdminAsset, assetUpdateInput, itemUpdateInput, loadAdminData, saveAdminCategory, type AdminDataRepository } from './admin-data.js'
 import { adminAccountCreate, adminAccountUpdate, adminAccountHandlers, requireSystemAdmin, type AdminAccountRepository } from './admin-accounts.js'
 import { bodyLimit } from 'hono/body-limit'
 import type { Context } from 'hono'
@@ -14,6 +14,7 @@ import { uploadAdminImage, saveAdminImages, replaceImagesSchema, type ImageStora
 import { receivingDecision, receivingHandlers, receivingInput, receivingQuery, type ReceivingRepository } from './receiving.js'
 import { inspectionHandlers, inspectionWrite, inspectionVersion, receiveInput, inspectionListQuery, type InspectionRepository } from './inspection.js'
 import { locationHandlers, locationInput, locationUpdate, locationQuery, type LocationRepository } from './location.js'
+import { listMarketProducts, marketQuery, type MarketRepository } from './market.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -29,9 +30,10 @@ type Dependencies = {
   receivings?: ReceivingRepository
   inspections?: InspectionRepository
   locations?: LocationRepository
+  market?: MarketRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations, market }: Dependencies) {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (result.success) return
@@ -44,6 +46,10 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
   })
 
   app.onError(handleError)
+  if (market) {
+    app.get('/api/market/products', listMarketProducts(market))
+    app.openAPIRegistry.registerPath({ method: 'get', path: '/api/market/products', tags: ['Market'], summary: '공개 마켓 판매 중 상품 조회 (고객사·신청자 정보 제외)', request: { query: marketQuery }, responses: { 200: { description: '페이지별 판매 가능 상품·단가·수량·공개 사진' }, 400: { description: '페이지·검색 입력 오류' } } })
+  }
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'BearerAuth', { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
 
@@ -98,6 +104,10 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
     if (imageStorage) {
       app.post('/api/admin/images/:kind', adminAuth, requireAdmin, bodyLimit({ maxSize: 6 * 1024 * 1024, onError: (context) => failure(context, 413, ErrorCode.VALIDATION_ERROR, '이미지 파일은 5MB 이하로 업로드해 주세요.') }), async (context: Context, next) => { if (customers) await customers.throttle('image-upload', (context.get('authUser') as { id: string }).id, 100); await next() }, uploadAdminImage(imageStorage))
       app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/images/{kind}', summary: '관리자 이미지 파일 S3 업로드', tags: ['Images'], security: [{ BearerAuth: [] }], request: { params: z.object({ kind: z.enum(['items', 'assets', 'banners', 'inspections']) }), body: { required: true, content: { 'multipart/form-data': { schema: z.object({ file: z.string().openapi({ type: 'string', format: 'binary' }) }) } } } }, responses: { 201: { description: 'S3 이미지 id/name/url' }, 400: { description: '잘못된 이미지' }, 401: { description: '관리자 인증 필요' }, 413: { description: '크기 초과' }, 429: { description: '업로드 요청 제한' }, 503: { description: 'S3 저장 실패' } } })
+    }
+    if (adminData) {
+      app.post('/api/admin/sale-requests/:id/approve', adminAuth, requireAdmin, approveAdminSale(adminData))
+      app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/sale-requests/{id}/approve', tags: ['Admin'], summary: '상세 검수 완료 판매 요청 승인 및 마켓 상품 진열', security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.uuid() }), body: { required: true, content: { 'application/json': { schema: saleApprovalInput } } } }, responses: { 200: { description: '승인 완료 및 판매 중 상품 생성' }, 400: { description: '판매 단가·사유·자산 조건 오류' }, 401: { description: '관리자 인증 필요' }, 403: { description: '관리자 권한 필요' }, 404: { description: '요청 없음' }, 409: { description: '검수 미완료·이미 처리·버전 충돌' } } })
     }
     if (adminImages) for (const kind of ['items', 'assets'] as const) {
       app.put(`/api/admin/${kind}/:id/images`, adminAuth, requireAdmin, saveAdminImages(adminImages, kind))

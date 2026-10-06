@@ -12,6 +12,7 @@ import { createImageStorage, createAdminImageRepository } from './admin-images.j
 import { createReceivingRepository } from './receiving.js'
 import { createInspectionRepository } from './inspection.js'
 import { createLocationRepository } from './location.js'
+import { createMarketRepository } from './market.js'
 
 const config = readConfig()
 const database = createDatabase(config.database)
@@ -27,7 +28,7 @@ const bannerRepository = {
     return { ...placement, items: await transaction.bannerItem.findMany({ where: { placementId: id }, orderBy: { sortOrder: 'asc' } }) }
   }),
 }
-const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt }, assets: createAssetRepository(database.client), banners: bannerRepository, adminData: createAdminDataRepository(database.client), customers: createCustomerRepository(database.client), adminAccounts: createAdminAccountRepository(database.client), imageStorage: createImageStorage(), adminImages: createAdminImageRepository(database.client), receivings: createReceivingRepository(database.client), inspections: createInspectionRepository(database.client), locations: createLocationRepository(database.client) })
+const app = createApp({ checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt }, assets: createAssetRepository(database.client), banners: bannerRepository, adminData: createAdminDataRepository(database.client), customers: createCustomerRepository(database.client), adminAccounts: createAdminAccountRepository(database.client), imageStorage: createImageStorage(), adminImages: createAdminImageRepository(database.client), receivings: createReceivingRepository(database.client), inspections: createInspectionRepository(database.client), locations: createLocationRepository(database.client), market: createMarketRepository(database.client) })
 const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: config.port }, (info) => {
   console.info(`Backend listening on port ${info.port}`)
 })

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Archive, ArrowDownToLine, ArrowLeft, Box, ChevronLeft, ChevronRight, ClipboardCheck, LayoutDashboard, MapPin, RefreshCw, Save, Search, ShoppingCart, UserRound, Warehouse } from 'lucide-react'
 import AdminShell from './AdminShell'
 import LoginPage from './LoginPage'
-import ShopifyMarket from './ShopifyMarket'
+import PublicMarket from './PublicMarket'
 import { authenticatedFetch, readAuthSession, signIn, type AuthSession } from './authSession'
 import { accountRequest } from './customerAccounts'
 import { useHistoryState } from './useHistoryState'
@@ -47,7 +47,7 @@ export default function CustomerWorkspace() {
   }, [revision])
   if (checking) return <main className="customer-session" role="status">계정 확인 중...</main>
   if (session) return <MemberWorkspace key={`${session.user.id}/${session.user.customerId}/${session.accessToken}`} session={session} />
-  if (guest) return <ShopifyMarket products={[]} navigation={<button className="nav-button" onClick={() => setGuest(false)}><UserRound />로그인</button>} basket={{}} onBasketChange={() => {}} isGuest onLogin={() => setGuest(false)} />
+  if (guest) return <AdminShell navigation={<button className="nav-button" onClick={() => setGuest(false)}><UserRound />로그인</button>} customerName="게스트" readOnly className="customer-workspace"><main className="sa-main"><div className="sa-heading"><h1>마켓</h1></div><PublicMarket /></main></AdminShell>
   return <>{error && <div className="customer-session" role="alert">{error}<button className="sa-button" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={16} />다시 확인</button></div>}<LoginPage onLogin={async (email, password) => {
     const next = await signIn(email, password)
     setSession(next)
@@ -103,7 +103,7 @@ function MemberWorkspace({ session }: { session: AuthSession }) {
     {!['receivings', 'inspections'].includes(view) && loading && <p role="status">불러오는 중...</p>}
     {view === 'inspections' ? <CustomerInspections historyKey={`${session.user.id}:${session.user.customerId}`} manager={session.user.customerRole === 'MANAGER'} revision={revision} onAsset={(id) => { setView('assets'); selectId(id) }} /> : view === 'receivings' ? <CustomerReceivings revision={revision} parameters={receivingParameters} setParameters={setReceivingParameters} selected={receivingId} select={selectReceiving} back={backReceiving} /> : selectedId ? <>{(loading || !detail) && <div className="customer-heading-actions"><button className="sa-button" onClick={back}><ArrowLeft size={16} />목록으로</button><button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div>}{!loading && detail && <AssetDetails key={detail.id} asset={detail} records={loadedPage?.data ?? []} onBack={back} onNavigate={selectId} onRefresh={() => setRevision((value) => value + 1)} />}</>
       : view === 'profile' ? <section className="customer-section"><dl className="customer-data">{[['고객사', company?.name ?? session.user.companyName], ['사업자등록번호', company?.businessNumber ?? '미확인'], ['대표자', company?.representativeName ?? ''], ['사업장 주소', company?.address ?? ''], ['대표 연락처', company?.phone ?? ''], ['담당자', session.user.managerName], ['이메일', session.user.email], ['담당자 연락처', session.user.managerPhone ?? ''], ['권한', session.user.customerRole === 'MANAGER' ? '고객사 관리자' : '조회자']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '미등록'}</dd></div>)}</dl></section>
-        : view === 'market' ? <section className="customer-section"><p>현재 조회 가능한 상품이 없습니다.</p></section>
+        : view === 'market' ? <PublicMarket />
           : view === 'overview' ? !loading && summary && <>
             <section className="customer-summary"><div><span>보유 자산 평가금액</span><strong>{money(summary.appraisalValue)}</strong><small>미평가 {summary.unappraised.toLocaleString()}건</small></div><div><span>보유 자산</span><strong>{summary.total.toLocaleString()}건</strong><small>출고 완료 제외</small></div></section>
             <section className="customer-section"><h2>보관 상태</h2><div className="customer-status-grid">{(['PENDING', 'STORED'] as const).map((status) => <button key={status} onClick={() => { setParameters({ page: '1', size: '20', sort: 'updatedDesc', storageStatus: status }); setView('assets') }}><span>{storageLabels[status]}</span><strong>{summary.groups.filter((group) => group.storageStatus === status).reduce((total, group) => total + group.count, 0)}건</strong><ChevronRight size={18} /></button>)}</div></section>

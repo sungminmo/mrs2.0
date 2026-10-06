@@ -30,6 +30,7 @@ async function fixture(role: AuthUser['role']) {
     updateItem: async (id: string, item: unknown, actor: string) => { updated.push({ id, item, actor }); return item },
     updateAsset: async (id: string, input: unknown) => { updated.push({ id, input }); data.assets = [{ id, ...(input as object) }] as never },
     completeSaleInspection: async (id: string, expectedUpdatedAt: string, actor: AuthUser) => { updated.push({ id, expectedUpdatedAt, actor: actor.id }); return { id, inspection: 'COMPLETED' } },
+    approveSale: async (id: string, input: unknown, actor: AuthUser) => { updated.push({ id, input, actor: actor.id }); return { id, status: 'APPROVED', productId: 'PRD-261002-0002' } },
   }
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret, expiresIn: '1h' }, adminData: adminData as never })
   const login = await app.request(role === 'ADMIN' ? '/api/admin/auth/login' : '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(role === 'ADMIN' ? { id: user.email, password: 'test-password' } : { email: user.email, password: 'test-password' }) })
@@ -64,6 +65,27 @@ test('detailed inspection completion requires admin, request UUID and current as
   assert.equal(admin.updated.length, 1)
   const customer = await fixture('CUSTOMER')
   assert.equal((await customer.app.request(path, { method: 'POST', headers: { Authorization: `Bearer ${customer.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).status, 401)
+})
+
+test('public market endpoint allows guests and rejects invalid pagination', async () => {
+  const calls: unknown[] = []
+  const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, market: { list: async (query) => { calls.push(query); return { products: [], page: query.page, size: query.size, total: 0 } } } })
+  assert.equal((await app.request('/api/market/products')).status, 200)
+  assert.deepEqual(calls, [{ page: 1, size: 20 }])
+  for (const query of ['page=0', 'size=101', 'page=bad']) assert.equal((await app.request(`/api/market/products?${query}`)).status, 400)
+})
+
+test('sale approval requires administrator, current version, positive integer unit price and reason', async () => {
+  const admin = await fixture('ADMIN')
+  const path = '/api/admin/sale-requests/11111111-1111-4111-8111-111111111111/approve'
+  const body = { expectedUpdatedAt: '2026-10-07T00:00:00.000Z', unitPrice: 23000, reason: '판매 승인' }
+  const request = (input: unknown, token = admin.token) => admin.app.request(path, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(input) })
+  assert.equal((await admin.app.request(path, { method: 'POST' })).status, 401)
+  for (const input of [{}, { ...body, reason: ' ' }, { ...body, unitPrice: 0 }, { ...body, unitPrice: 1.5 }, { ...body, status: 'APPROVED' }]) assert.equal((await request(input)).status, 400)
+  assert.equal((await request(body)).status, 200)
+  assert.equal(admin.updated.length, 1)
+  const customer = await fixture('CUSTOMER')
+  assert.equal((await request(body, customer.token)).status, 401)
 })
 
 test('admin item pages query only the selected table with bounded paging and matching count filters', async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { ArrowLeft, ArrowUpRight, Archive, Building2, Check, ChevronRight, ClipboardCheck, Images, ImageOff, LayoutDashboard, ListChecks, LoaderCircle, LogOut, Menu, Pencil, Plus, ReceiptText, Search, Settings2, ShoppingCart, UsersRound, X } from 'lucide-react'
 import { adminAccountRequest, adminAuthenticatedFetch, adminSignOut, showAdminToast } from '../adminAuthSession'
+import { appraisalMoney, appraisalTotal } from '../appraisal'
 import { dateText, invoiceAmount, invoices, money, receivingStatuses, referenceDate, type Campaign, type Inspection, type Inventory, type Location, type MasterItem, type MemberAccount, type Product, type Receiving, type SaleRequest } from './adminData'
 import { adminHref, createAdminViews, dashboardMetrics, menus, type AdminLink, type AdminRow, type AdminView } from './adminViews'
 import { materialPhotos } from '../assetPhotos'
@@ -176,10 +177,33 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
       {!pending && row && menu.id === 'receiving' && tab?.id === 'requests' && row.status === '입고 승인' && <ReceiveCompletion key={row.id} id={row.id} />}
       {!pending && row && menu.id === 'receiving' && tab?.id === 'detailed' && assets.filter((asset) => asset.id === market.sales.find((request) => request.id === row.id)?.assetId).map((asset) => <AssetAppraisalEditor key={`${asset.id}/${asset.updatedAt}`} asset={asset} onSaved={() => setAccountRevision((value) => value + 1)} />)}
       {!pending && row && menu.id === 'receiving' && tab?.id === 'detailed' && market.sales.filter((request) => request.id === row.id).map((request) => { const asset = assets.find((entry) => entry.id === request.assetId); return asset ? <DetailedInspectionCompletion key={`${request.id}/${request.inspection}/${asset.updatedAt}`} request={request} asset={asset} onChanged={() => setAccountRevision((value) => value + 1)} /> : null })}
+      {!pending && row && (menu.id === 'market' && tab?.id === 'sales' || menu.id === 'receiving' && tab?.id === 'detailed') && market.sales.filter((request) => request.id === row.id).map((request) => { const asset = assets.find((entry) => entry.id === request.assetId); return asset ? <SaleApproval key={`${request.id}/${request.status}/${asset.updatedAt}`} request={request} asset={asset} onChanged={() => setAccountRevision((value) => value + 1)} /> : null })}
       {!pending && row && !editing && (itemManagement || menu.id === 'inventory' && tab?.id === 'stock') && <ImagePicker key={`${menu.id}/${row.id}`} kind={itemManagement ? 'items' : 'assets'} recordId={row.id} images={(itemManagement ? items.find((entry) => entry.id === row.id) : assets.find((entry) => entry.id === row.id))?.images ?? []} limit={itemManagement ? 1 : 8} label={itemManagement ? '대표 이미지' : '자산 이미지'} onChange={(images) => { if (itemManagement) setItems((current) => current.map((entry) => entry.id === row.id ? { ...entry, images } : entry)); else setAssets((current) => current.map((entry) => entry.id === row.id ? { ...entry, images } : entry)) }} />}
       <footer className="adm-footer">MRS 스테이징 환경 · 실제 서비스 운영 환경 아님</footer>
     </main>
   </div>
+}
+
+function SaleApproval({ request, asset, onChanged }: { request: SaleRequest; asset: Inventory; onChanged: () => void }) {
+  const [price, setPrice] = useState(asset.appraisal === null ? '' : String(asset.appraisal))
+  const [reason, setReason] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
+  const working = useRef(false)
+  const ready = request.status === '승인 대기' && detailedInspectionStatus(request) === '상세 검수 완료' && saleInspectionReady(asset, request) && !!asset.updatedAt
+  const validPrice = /^\d+$/.test(price) && Number(price) >= 1 && Number(price) <= 1000000000000
+  return <section className="adm-receiving-review adm-sale-approval" aria-label="판매 요청 승인"><h2>판매 요청 승인</h2>{done || request.status === '승인 완료' ? <p role="status">승인 완료 · 마켓 진열 완료</p> : <form onSubmit={async (event) => {
+    event.preventDefault()
+    if (working.current || !ready || !validPrice || !reason.trim() || !confirmed) return
+    working.current = true; setBusy(true); setError('')
+    try {
+      await adminAccountRequest(`/api/admin/sale-requests/${request.id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedUpdatedAt: asset.updatedAt, unitPrice: Number(price), reason }) })
+      setDone(true); onChanged()
+    } catch (failure) { setError(failure instanceof Error ? failure.message : '판매 요청 승인에 실패했습니다.') }
+    finally { working.current = false; setBusy(false) }
+  }}><label>판매 단가 (원·VAT 포함)<input type="number" required min={1} max={1000000000000} step={1} value={price} disabled={busy || !ready} onChange={(event) => setPrice(event.target.value)} /></label><p>판매 등록 수량 {request.quantity} {asset.unit} · 판매 총액 {appraisalMoney(appraisalTotal(price || null, String(request.quantity)))}</p><label>승인 사유<textarea required maxLength={500} value={reason} disabled={busy || !ready} onChange={(event) => setReason(event.target.value)} /></label><label><input type="checkbox" checked={confirmed} disabled={busy || !ready} onChange={(event) => setConfirmed(event.target.checked)} />판매 단가와 수량을 확인했으며 승인 후 마켓에 진열합니다.</label>{error && <p className="adm-form-error" role="alert">{error}</p>}<button className="adm-button adm-primary" disabled={busy || !ready || !validPrice || !reason.trim() || !confirmed}>{busy ? <LoaderCircle size={16} /> : <Check size={16} />}{busy ? '처리 중' : '승인 및 마켓 진열'}</button></form>}</section>
 }
 
 function ReceivingReview({ id, onChanged }: { id: string; onChanged: () => void }) {

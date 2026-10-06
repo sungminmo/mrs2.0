@@ -181,6 +181,23 @@ export function createAdminDataRepository(client: PrismaClient) {
       await transaction.customerChange.create({ data: { actorUserId: actor.id, customerId: asset.customerId, action: 'sale.inspection.complete', reason: '판매 요청 상세 검수 완료', changes: { requestId: id, assetId: asset.id, quantity: request.quantity.toString(), appraisal: asset.appraisal.toString(), before: 'PENDING', after: 'COMPLETED' } } })
       return { id, inspection: 'COMPLETED' }
     }),
+    approveSale: (id: string, input: z.output<typeof saleApprovalInput>, user: { id: string; sessionVersion?: number }) => customerTransaction(client, async (transaction) => {
+      const actor = await transaction.user.findUnique({ where: { id: user.id } })
+      if (!actor || actor.role !== 'ADMIN' || actor.status !== 'ACTIVE' || actor.sessionVersion !== (user.sessionVersion ?? 0)) throw new AppError(403, ErrorCode.FORBIDDEN, '활성 관리자 권한이 필요합니다.')
+      const request = await transaction.saleRequest.findUnique({ where: { id }, include: { asset: { include: { product: true, customer: true } } } })
+      if (!request) throw new AppError(404, ErrorCode.NOT_FOUND, '판매 요청을 찾을 수 없습니다.')
+      const asset = request.asset
+      if (request.status !== 'PENDING' || request.inspection !== 'COMPLETED' || asset.product || asset.updatedAt.toISOString() !== input.expectedUpdatedAt) throw new AppError(409, ErrorCode.CONFLICT, '상세 검수 완료·승인 대기 상태와 최신 자산을 확인해 주세요.')
+      if (asset.customer.status !== 'ACTIVE' || !asset.itemId || !asset.categoryId || !asset.specification.trim() || !asset.brand.trim() || !['S', 'A', 'B'].includes(asset.grade) || asset.appraisal === null || asset.storageStatus !== 'STORED' || asset.saleStatus !== 'PENDING' || !request.quantity.gt(0) || !request.quantity.equals(asset.quantity)) throw new AppError(400, ErrorCode.VALIDATION_ERROR, '고객사 상태·자산 상세화 정보·판매 가능 수량을 확인해 주세요.')
+      const changed = await transaction.saleRequest.updateMany({ where: { id, status: 'PENDING', inspection: 'COMPLETED' }, data: { status: 'APPROVED' } })
+      if (changed.count !== 1) throw new AppError(409, ErrorCode.CONFLICT, '판매 요청 상태가 변경되었습니다.')
+      const product = await transaction.product.create({ data: { id: `PRD-${asset.id}`, assetId: asset.id, name: asset.name, originalUnitPrice: input.unitPrice, listedQuantity: request.quantity, minimumOrderQuantity: request.quantity.lt(1) ? request.quantity : 1, status: 'AVAILABLE', publishedAt: new Date() } })
+      await transaction.asset.update({ where: { id: asset.id }, data: { saleStatus: 'ON_SALE' } })
+      await transaction.assetChange.create({ data: { id: randomUUID(), assetId: asset.id, reason: input.reason, changes: [['판매 요청 승인 상태', '승인 대기', '승인 완료'], ['판매 상태', '판매대기', '판매중'], ['마켓 상품', '미등록', product.id]] } })
+      await transaction.marketChange.create({ data: { id: randomUUID(), entityType: 'PRODUCT', entityId: product.id, actorUserId: actor.id, reason: input.reason, changes: { requestId: id, status: { before: null, after: 'AVAILABLE' }, unitPrice: input.unitPrice, listedQuantity: request.quantity.toString() } } })
+      await transaction.customerChange.create({ data: { actorUserId: actor.id, customerId: asset.customerId, action: 'sale.approve', reason: input.reason, changes: { requestId: id, productId: product.id, before: 'PENDING', after: 'APPROVED' } } })
+      return { id, status: 'APPROVED', productId: product.id }
+    }),
     saveCategory: (category: AdminCategoryInput) => client.$transaction(async (transaction) => {
       const categories = await transaction.materialCategory.findMany({ select: { id: true, parentId: true, name: true, enabled: true, sortOrder: true } })
       validateCategory(category, categories)
@@ -296,6 +313,13 @@ export function updateAdminAsset(repository: AdminDataRepository) {
 }
 
 export const saleInspectionCompleteInput = z.object({ expectedUpdatedAt: z.iso.datetime() }).strict()
+export const saleApprovalInput = z.object({ expectedUpdatedAt: z.iso.datetime(), unitPrice: z.number().int().min(1).max(1000000000000), reason: z.string().trim().min(1).max(500) }).strict()
+export function approveAdminSale(repository: AdminDataRepository) {
+  return async (context: Context) => {
+    const id = z.uuid().parse(context.req.param('id'))
+    return success(context, { request: await repository.approveSale(id, saleApprovalInput.parse(await context.req.json()), context.get('authUser')) })
+  }
+}
 export function completeAdminSaleInspection(repository: AdminDataRepository) {
   return async (context: Context) => {
     const id = z.uuid().parse(context.req.param('id'))
