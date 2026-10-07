@@ -47,6 +47,7 @@ model User {
   inspections      Inspection[]
   disposalComments DisposalComment[]
   receivingChanges ReceivingChange[]
+  cart Cart?
 
   @@index([customerId])
   @@index([status, createdAt]) // 승인 대기 목록 등 상태별 조회

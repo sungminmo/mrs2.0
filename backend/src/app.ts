@@ -15,6 +15,7 @@ import { receivingDecision, receivingHandlers, receivingInput, receivingQuery, t
 import { inspectionHandlers, inspectionWrite, inspectionVersion, receiveInput, inspectionListQuery, type InspectionRepository } from './inspection.js'
 import { locationHandlers, locationInput, locationUpdate, locationQuery, type LocationRepository } from './location.js'
 import { listMarketProducts, marketQuery, type MarketRepository } from './market.js'
+import { cartAdd, cartSync, cartUpdate, cartRemove, cartHandlers, type CartRepository } from './cart.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -31,9 +32,10 @@ type Dependencies = {
   inspections?: InspectionRepository
   locations?: LocationRepository
   market?: MarketRepository
+  cart?: CartRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations, market }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations, market, cart }: Dependencies) {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (result.success) return
@@ -55,6 +57,17 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
 
   if (auth) {
     const customerAuth = requireAuth(auth.repository, auth.secret, 'CUSTOMER')
+    if (cart) {
+      const handlers = cartHandlers(cart)
+      app.use('/api/cart/*', bodyLimit({ maxSize: 32768, onError: context => failure(context, 413, ErrorCode.VALIDATION_ERROR, '장바구니 요청이 너무 큽니다.') }))
+      app.get('/api/cart', customerAuth, handlers.list)
+      app.post('/api/cart/items', customerAuth, handlers.add)
+      app.patch('/api/cart/items/:id', customerAuth, handlers.update)
+      app.delete('/api/cart/items/:id', customerAuth, handlers.removeOne)
+      app.delete('/api/cart/items', customerAuth, handlers.remove)
+      app.post('/api/cart/sync', customerAuth, handlers.sync)
+      for (const [method, path] of [['get', '/api/cart'], ['post', '/api/cart/items'], ['patch', '/api/cart/items/{id}'], ['delete', '/api/cart/items/{id}'], ['delete', '/api/cart/items'], ['post', '/api/cart/sync']] as const) app.openAPIRegistry.registerPath({ method, path, tags: ['Cart'], summary: '개인 장바구니 (최신 상품 검증, 재고 예약 없음)', security: [{ BearerAuth: [] }], request: method === 'get' ? undefined : { ...(path.endsWith('{id}') ? { params: z.object({ id: z.uuid() }) } : {}), ...(method === 'delete' && path.endsWith('{id}') ? { query: z.object({ version: z.coerce.number().int().nonnegative() }) } : { body: { required: true, content: { 'application/json': { schema: method === 'patch' ? cartUpdate : path.endsWith('/sync') ? cartSync : method === 'post' ? cartAdd : cartRemove } } } }) }, responses: { 200: { description: '최신 개인 장바구니' }, 400: { description: '입력 오류' }, 401: { description: '인증 필요' }, 403: { description: '활성 고객사 필요' }, 404: { description: '상품 없음' }, 409: { description: '버전 또는 요청 ID 충돌' } } })
+    }
     if (market) {
       app.get('/api/customer/market/products', customerAuth, listMarketProducts(market, true))
       app.openAPIRegistry.registerPath({ method: 'get', path: '/api/customer/market/products', tags: ['Market'], summary: '활성 고객 회원 마켓 목록·가격·실제 기획전 조회', security: [{ BearerAuth: [] }], request: { query: marketQuery }, responses: { 200: { description: '가격 포함 상품 목록' }, 400: { description: '검색·페이지 입력 오류' }, 401: { description: '회원 인증 필요' }, 403: { description: '활성 고객사 필요' } } })

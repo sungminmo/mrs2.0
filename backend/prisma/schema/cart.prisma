@@ -1,0 +1,65 @@
+/// 개인 계정별 회원 장바구니. 비회원 데이터는 브라우저에만 보관한다.
+/// 상품 가격·재고는 복제하지 않고 조회 시 최신 Product/Asset에서 검증한다.
+model Cart {
+  /// 서버에서 생성하는 장바구니 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// 소유 계정. unique로 계정당 하나를 보장하며 고객사 구성원 간 공유하지 않는다.
+  userId String @unique @db.VarChar(36)
+  /// 항목 추가·수정·삭제 성공 시 증가한다. 클라이언트의 오래된 응답 적용을 방지한다.
+  version Int @default(0)
+  /// 최초 장바구니 생성 시각. UTC 기준.
+  createdAt DateTime @default(now())
+  /// 마지막 장바구니 변경 시각. UTC 기준.
+  updatedAt DateTime @updatedAt
+  /// 계정 삭제 시 장바구니도 삭제한다. API 소유자는 인증 계정에서 결정한다.
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 담긴 상품 목록. 최대 100종 제한은 API에서 검증한다.
+  items CartItem[]
+  /// 추가·로그인 병합의 중복 처리 방지 기록. 장바구니 수명 동안 유지한다.
+  operations CartOperation[]
+  @@map("carts")
+}
+
+/// 상품별 요청 수량. 담기 자체는 재고 예약·차감이나 구매 확정을 의미하지 않는다.
+/// 재고 부족·판매 중단이어도 수량을 유지하고 조회 응답에서 유효성 경고를 제공한다.
+model CartItem {
+  /// 수정·삭제 API가 식별하는 항목 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// 항목이 속한 개인 장바구니 UUID.
+  cartId String @db.VarChar(36)
+  /// 담은 상품 ID. 상품명 대신 불변 ID로 동일 상품을 식별한다.
+  productId String @db.VarChar(20)
+  /// 요청 수량. SQL CHECK로 0 초과~10억 이하, API로 소수 3자리·단위별 정수 규칙을 검증한다.
+  quantity Decimal @db.Decimal(18, 3)
+  /// 수량 변경 시 증가한다. PATCH/DELETE의 expectedVersion으로 동시 수정 충돌을 감지한다.
+  version Int @default(0)
+  /// 해당 상품을 처음 담은 시각. UTC 기준.
+  createdAt DateTime @default(now())
+  /// 요청 수량을 마지막으로 변경한 시각. UTC 기준.
+  updatedAt DateTime @updatedAt
+  /// 장바구니 삭제 시 소속 항목도 함께 삭제한다.
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  /// 최신 가격·판매 상태·자산 정보를 조회한다. 참조 중인 상품의 물리 삭제는 제한한다.
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// 같은 장바구니에는 동일 상품을 한 행만 저장하고 추가·병합 시 수량을 합산한다.
+  @@unique([cartId, productId])
+  @@map("cart_items")
+}
+
+/// ADD/SYNC 요청의 중복 처리 방지 기록. 수량 변경과 같은 트랜잭션에서 저장한다.
+/// 동일 요청 ID·입력의 재시도는 재합산하지 않으며 다른 입력·소유자의 ID 재사용은 거부한다.
+model CartOperation {
+  /// 클라이언트가 생성한 operationId UUID. 전체 요청 기록에서 고유하다.
+  id String @id @db.VarChar(36)
+  /// 요청이 처리된 장바구니. 소유 계정 확인에도 사용한다.
+  cartId String @db.VarChar(36)
+  /// 작업 종류와 정규화·정렬한 상품 ID/수량 목록의 SHA-256. 같은 입력인지 검증한다.
+  payloadHash String @db.Char(64)
+  /// 요청이 처음 성공적으로 처리된 시각. UTC 기준.
+  createdAt DateTime @default(now())
+  /// 장바구니 삭제 시 더 이상 필요 없는 요청 기록도 삭제한다.
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  /// 장바구니별 요청 기록 조회·삭제를 위한 인덱스.
+  @@index([cartId])
+  @@map("cart_operations")
+}

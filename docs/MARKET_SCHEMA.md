@@ -1,5 +1,21 @@
 # 마켓 상품·기획전 DB 설계
 
+## 개인 장바구니 (2026-10-07)
+
+신규 `cart.prisma`, 마이그레이션 `20261007000000_add_cart`:
+
+| 테이블 | 소유·제약 | 저장 내용 |
+| --- | --- | --- |
+| `carts` | `userId` unique, User FK | UUID, version, 생성·변경 시각 |
+| `cart_items` | `(cartId, productId)` unique, Cart/Product FK | UUID, quantity DECIMAL(18,3), 항목 version, 생성·변경 시각 |
+| `cart_operations` | 요청 UUID PK, Cart FK | 정규화한 ADD/SYNC payload SHA-256, 처리 시각 |
+
+Cart 삭제는 항목·처리 기록에 cascade, 참조 중인 Product 삭제는 restrict이다. 가격·재고는 복제하지 않고 최신 Product/Asset을 조회한다. 수량은 SQL CHECK로 0 초과~10억 이하, version은 0 이상을 강제한다. 개인 최대 100종, 소수 최대 3자리 및 거래 단위 검증은 API가 수행한다. 장바구니는 재고를 예약하지 않는다.
+
+Serializable 트랜잭션에서 활성 계정·고객사·세션을 재확인한다. ADD/SYNC 요청 ID와 변경을 함께 저장하며 같은 ID·같은 정규화 입력 재시도는 다시 합산하지 않는다. 다른 입력 또는 다른 소유자의 요청 ID 재사용은 409이다. PATCH/DELETE는 항목 version 조건으로 충돌을 감지하며 성공 시 cart version도 증가한다. 처리 기록은 장바구니 수명 동안 보관한다.
+
+비회원 데이터는 DB에 저장하지 않는다. 브라우저에는 가격 없는 상품 스냅샷·수량과 미완료 병합 묶음만 보관한다. Web Locks로 다중 탭 병합을 직렬화하며 미지원 브라우저는 자동 병합을 보류한다. 로그인 합산은 재고 초과·판매 중단 항목을 삭제하거나 자동 감량하지 않는다. 경고와 함께 보관하고 유효한 항목만 선택 금액에 반영한다.
+
 - 기준일: 2026-09-28
 - 구현: `backend/prisma/schema/market.prisma`
 - migration: `20260928002000_add_market_products_campaigns`

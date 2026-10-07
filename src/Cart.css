@@ -1,0 +1,16 @@
+.cart-dialog { max-width: min(1100px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
+.cart-heading-actions { display: flex; gap: 8px; }
+.cart-warning { color: #a33b20; display: block; font-size: 12px; line-height: 1.5; }
+.cart-dialog .sm-basket-product { min-width: 0; text-align: left; }
+.cart-dialog .sm-basket-product b, .cart-dialog .sm-basket-product small { overflow-wrap: anywhere; }
+.cart-dialog .sa-thumbnail img { width: 100%; height: 100%; object-fit: contain; }
+.cart-dialog .sm-basket-row-controls { flex-wrap: wrap; }
+.cart-dialog .sm-quantity { flex-shrink: 0; }
+.cart-dialog .sm-quantity input { width: 82px; min-width: 0; }
+.cart-dialog .sm-basket-summary > button { width: 100%; }
+@media (max-width: 600px) {
+  .cart-dialog { width: calc(100vw - 24px); max-width: none; padding: 16px; }
+  .cart-dialog .sm-basket-page-row { grid-template-columns: 20px minmax(0, 1fr); }
+  .cart-dialog .sm-basket-row-controls { grid-column: 2; justify-content: flex-start; }
+  .cart-dialog .sm-basket-layout { grid-template-columns: minmax(0, 1fr); }
+}

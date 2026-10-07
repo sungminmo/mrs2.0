@@ -45,6 +45,7 @@ model Product {
   updatedAt            DateTime            @updatedAt
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  cartItems CartItem[]
 
   @@index([status, createdAt])
   @@map("products")

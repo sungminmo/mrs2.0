@@ -67,7 +67,8 @@ export async function authenticatedFetch(path: string, init: RequestInit = {}) {
   return response
 }
 
-export function signOut(destination = '/mrs2.0/') {
+export function signOut(destination = '/mrs2.0/', force = false) {
+  if (!force && !window.dispatchEvent(new CustomEvent('mrs-before-signout', { cancelable: true, detail: { destination } }))) return
   window.sessionStorage.removeItem(sessionKey)
   window.location.replace(destination)
 }

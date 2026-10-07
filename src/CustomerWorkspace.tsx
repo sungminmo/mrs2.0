@@ -14,6 +14,8 @@ import SaleRegistration from './SaleRegistration'
 import './App.css'
 import './ShopifyAssetDetail.css'
 import './CustomerWorkspace.css'
+import { CartProvider, CartQueryProvider } from './CartProvider'
+import Cart from './Cart'
 
 import { appraisalMoney, appraisalTotal } from './appraisal'
 
@@ -26,6 +28,10 @@ const money = appraisalMoney
 const date = (value: string) => new Date(value).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
 
 export default function CustomerWorkspace() {
+  return <CartQueryProvider><CustomerWorkspaceContent /></CartQueryProvider>
+}
+
+function CustomerWorkspaceContent() {
   const [session, setSession] = useState<AuthSession | null>(null)
   const [checking, setChecking] = useState(!!readAuthSession())
   const [guest, setGuest] = useState(false)
@@ -46,8 +52,8 @@ export default function CustomerWorkspace() {
     return () => { controller.abort(); window.removeEventListener('mrs-auth-expired', expired) }
   }, [revision])
   if (checking) return <main className="customer-session" role="status">계정 확인 중...</main>
-  if (session) return <MemberWorkspace key={`${session.user.id}/${session.user.customerId}/${session.accessToken}`} session={session} />
-  if (guest) return <AdminShell navigation={<button className="nav-button" onClick={() => setGuest(false)}><UserRound />로그인</button>} customerName="게스트" isGuest readOnly className="customer-workspace sm-market"><main className="sa-main"><PublicMarket onLogin={() => setGuest(false)} /></main></AdminShell>
+  if (session) return <CartProvider key={`${session.user.id}/${session.user.customerId}/${session.accessToken}`} session={session}><MemberWorkspace session={session} /><Cart onLogin={() => {}} /></CartProvider>
+  if (guest) return <CartProvider session={null}><AdminShell navigation={<button className="nav-button" onClick={() => setGuest(false)}><UserRound />로그인</button>} customerName="게스트" isGuest readOnly className="customer-workspace sm-market"><main className="sa-main"><PublicMarket onLogin={() => setGuest(false)} /></main><Cart onLogin={() => setGuest(false)} /></AdminShell></CartProvider>
   return <>{error && <div className="customer-session" role="alert">{error}<button className="sa-button" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={16} />다시 확인</button></div>}<LoginPage onLogin={async (email, password) => {
     const next = await signIn(email, password)
     setSession(next)
