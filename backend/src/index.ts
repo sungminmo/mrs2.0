@@ -16,6 +16,7 @@ import { createMarketRepository } from './market.js'
 import { createCartRepository } from './cart.js'
 import { createQuoteRepository } from './quote.js'
 import { createCampaignRepository } from './campaign.js'
+import { createOutboundRepository } from './outbound.js'
 
 const config = readConfig()
 const database = createDatabase(config.database)
@@ -31,7 +32,7 @@ const bannerRepository = {
     return { ...placement, items: await transaction.bannerItem.findMany({ where: { placementId: id }, orderBy: { sortOrder: 'asc' } }) }
   }),
 }
-const app = createApp({ campaigns: createCampaignRepository(database.client), quotes: createQuoteRepository(database.client), cart: createCartRepository(database.client), checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt }, assets: createAssetRepository(database.client), banners: bannerRepository, adminData: createAdminDataRepository(database.client), customers: createCustomerRepository(database.client), adminAccounts: createAdminAccountRepository(database.client), imageStorage: createImageStorage(), adminImages: createAdminImageRepository(database.client), receivings: createReceivingRepository(database.client), inspections: createInspectionRepository(database.client), locations: createLocationRepository(database.client), market: createMarketRepository(database.client) })
+const app = createApp({ outbound: createOutboundRepository(database.client), campaigns: createCampaignRepository(database.client), quotes: createQuoteRepository(database.client), cart: createCartRepository(database.client), checkDatabase: database.check, readinessTimeoutMs: config.readinessTimeoutMs, auth: { repository: authRepository, ...config.jwt }, assets: createAssetRepository(database.client), banners: bannerRepository, adminData: createAdminDataRepository(database.client), customers: createCustomerRepository(database.client), adminAccounts: createAdminAccountRepository(database.client), imageStorage: createImageStorage(), adminImages: createAdminImageRepository(database.client), receivings: createReceivingRepository(database.client), inspections: createInspectionRepository(database.client), locations: createLocationRepository(database.client), market: createMarketRepository(database.client) })
 const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: config.port }, (info) => {
   console.info(`Backend listening on port ${info.port}`)
 })

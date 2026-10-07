@@ -22,6 +22,7 @@ import {
 } from './purchaseQuotes'
 import './QuoteHistory.css'
 import './CustomerQuotes.css'
+import { CustomerOfferPanel } from './OutboundWorkspace'
 
 function Items({ data }: { data: QuotePreview | PurchaseQuote }) {
   return (
@@ -64,7 +65,7 @@ function Items({ data }: { data: QuotePreview | PurchaseQuote }) {
     </section>
   )
 }
-function Detail({ quote, back }: { quote: PurchaseQuote; back: () => void }) {
+function Detail({ quote, back, session }: { quote: PurchaseQuote; back: () => void; session: AuthSession }) {
   return (
     <article className="qh-detail">
       <div className="qh-detail-heading">
@@ -89,6 +90,7 @@ function Detail({ quote, back }: { quote: PurchaseQuote; back: () => void }) {
         </button>
       </div>
       <div className="qh-detail-grid">
+        <CustomerOfferPanel quoteId={quote.id} manager={session.user.customerRole === 'MANAGER'} owner={`${session.user.id}/${session.user.customerId}`} />
         <Items data={quote} />
         <section className="qh-requester">
           <h3>요청 정보</h3>
@@ -412,7 +414,7 @@ export default function CustomerQuotes({
           </p>
         )}
         {detail.data ? (
-          <Detail quote={detail.data} back={() => select(null)} />
+          <Detail quote={detail.data} back={() => select(null)} session={session} />
         ) : (
           <>
             <button className="sa-button" onClick={() => select(null)}>

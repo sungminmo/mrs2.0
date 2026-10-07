@@ -24,6 +24,7 @@ import './AdminPortal.css'
 import AdminPagination, { LoadingTable, type Pagination } from './AdminPagination'
 import AdminToast from './AdminToast'
 import InspectionEditor, { ReceiveCompletion } from './InspectionEditor'
+import AdminOrders, { AdminQuotePanel } from './AdminOutbound'
 
 const icons = { dashboard: LayoutDashboard, basic: ListChecks, receiving: ClipboardCheck, inventory: Archive, market: ShoppingCart, content: Images, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2, accounts: UserRoundCog }
 const authenticatedFetch = adminAuthenticatedFetch
@@ -171,6 +172,7 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
       {pending ? null : menu.id === 'accounts' ? adminRole === 'SYSTEM_ADMIN' ? <AdminAccountManager params={url.searchParams} /> : <p role="alert">시스템 관리자만 관리자 계정을 관리할 수 있습니다.</p> : menu.id === 'dashboard' ? <Dashboard views={views} metrics={metrics} /> : <>
         <nav className="adm-tabs" aria-label={`${menu.label} 보기`}>{menu.tabs.map((item) => <a key={item.id} href={adminHref({ label: item.label, menu: menu.id, tab: item.id })} aria-current={item.id === tab?.id ? 'page' : undefined}>{item.label}</a>)}</nav>
         {bannerManagement && <nav className="adm-tabs" aria-label="배너 타입"><a href="#/admin/content?tab=banners&type=campaign" aria-current={campaignEditing ? 'page' : undefined}>기획전 타입</a><a href="#/admin/content?tab=banners&type=image" aria-current={!campaignEditing ? 'page' : undefined}>이미지 타입</a></nav>}
+        {menu.id === 'market' && tab?.id === 'outbound' && <AdminOrders />}
         {menu.id === 'members' || menu.id === 'customers' && ['companies', 'applications'].includes(tab?.id ?? '') ? <CustomerManager key={`${menu.id}/${tab?.id}`} params={url.searchParams} membersOnly={menu.id === 'members'} onChanged={() => setAccountRevision((value) => value + 1)} /> : bannerManagement && !campaignEditing ? <BannerManager params={url.searchParams} /> : categoryManagement ? <CategoryManager counts={categoryCounts} categories={categories} items={items} assets={assets} params={url.searchParams} onSave={async (category) => { const savedCategory = await saveAdminCategory(category, !categories.some((entry) => entry.id === category.id)); setCategories((current) => current.some((entry) => entry.id === savedCategory.id) ? current.map((entry) => entry.id === savedCategory.id ? savedCategory : entry) : [...current, savedCategory]); window.location.hash = `/admin/basic?tab=categories&id=${savedCategory.id}` }} /> : <>
         {notice.scope === noticeScope && !editing && !discountEditing && <p className="adm-note" role="status">{notice.text}</p>}
         {menu.id === 'receiving' && ['primary', 'disposal'].includes(tab?.id ?? '') && id ? <><a className="adm-button adm-back" href={listHref}><ArrowLeft size={15} />목록으로</a><InspectionEditor key={id} id={id} categories={categories} readOnly={tab?.id === 'disposal'} onChanged={() => setAccountRevision((value) => value + 1)} /></> : <>
@@ -183,6 +185,7 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
         </>}
       </>}
       {!pending && row && menu.id === 'receiving' && tab?.id === 'requests' && row.status === '입고 신청' && <ReceivingReview key={row.id} id={row.id} onChanged={() => setAccountRevision((value) => value + 1)} />}
+      {!pending && row && menu.id === 'market' && tab?.id === 'quotes' && <AdminQuotePanel key={row.id} quoteId={row.id} />}
       {!pending && row && menu.id === 'receiving' && tab?.id === 'requests' && row.status === '입고 승인' && <ReceiveCompletion key={row.id} id={row.id} />}
       {!pending && row && menu.id === 'receiving' && tab?.id === 'detailed' && assets.filter((asset) => asset.id === market.sales.find((request) => request.id === row.id)?.assetId).map((asset) => <AssetAppraisalEditor key={`${asset.id}/${asset.updatedAt}`} asset={asset} onSaved={() => setAccountRevision((value) => value + 1)} />)}
       {!pending && row && menu.id === 'receiving' && tab?.id === 'detailed' && market.sales.filter((request) => request.id === row.id).map((request) => { const asset = assets.find((entry) => entry.id === request.assetId); return asset ? <DetailedInspectionCompletion key={`${request.id}/${request.inspection}/${asset.updatedAt}`} request={request} asset={asset} onChanged={() => setAccountRevision((value) => value + 1)} /> : null })}
