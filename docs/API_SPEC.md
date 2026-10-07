@@ -1,6 +1,10 @@
 ### 개인 장바구니
 
-`GET /api/cart`, `POST /api/cart/items`, `PATCH /api/cart/items/{id}`, 단일·선택 `DELETE /api/cart/items`, `POST /api/cart/sync`는 활성 고객 회원의 개인 계정별 장바구니 API다. [요청·응답 및 동기화 계약](CART_API.md)을 참고한다. 비회원은 가격 없는 localStorage 데이터만 편집하며 로그인 시 수량을 합산한다. 최신 가격·재고·판매 상태를 매 조회마다 검증하지만 장바구니 자체는 재고를 예약하지 않는다. 견적 제출·결제는 제공하지 않는다.
+`GET /api/cart`, `POST /api/cart/items`, `PATCH /api/cart/items/{id}`, 단일·선택 `DELETE /api/cart/items`, `POST /api/cart/sync`는 활성 고객 회원의 개인 계정별 장바구니 API다. [요청·응답 및 동기화 계약](CART_API.md)을 참고한다. 비회원은 가격 없는 localStorage 데이터만 편집하며 로그인 시 수량을 합산한다. 최신 가격·재고·판매 상태를 매 조회마다 검증하지만 장바구니 자체는 재고를 예약하지 않는다. 선택 상품의 구매 견적 요청은 아래 별도 API를 사용하며 결제는 제공하지 않는다.
+
+### 구매 견적 요청
+
+`POST /api/customer/quotes/preview`, `POST /api/customer/quotes`, `GET /api/customer/quotes`, `GET /api/customer/quotes/{id}`를 제공한다. 고객사 공유 내역, 서버 가격 재검증·변경 재확인, 멱등 접수와 선택 장바구니 삭제, 관리자 `scope=quotes` 조회 계약은 [PURCHASE_QUOTES.md](PURCHASE_QUOTES.md)를 참고한다. 접수는 재고 예약이나 확정 견적을 의미하지 않는다.
 
 ### 판매 승인 및 마켓 진열
 

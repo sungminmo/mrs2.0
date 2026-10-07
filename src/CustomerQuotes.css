@@ -1,0 +1,13 @@
+.customer-quotes { min-width: 0; }
+.customer-quotes .sm-request-item > div { min-width: 0; overflow-wrap: anywhere; }
+.customer-quotes .sa-thumbnail img { width: 100%; height: 100%; object-fit: contain; }
+.customer-quotes dd { white-space: pre-wrap; overflow-wrap: anywhere; }
+.customer-quote-search { display: flex; gap: 8px; margin-bottom: 20px; }
+.customer-quote-search input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; }
+.customer-quotes .quote-confirm { display: flex; align-items: flex-start; gap: 8px; padding: 12px; background: #edf6ef; }
+.customer-quotes .quote-confirm input { width: 18px; height: 18px; flex-shrink: 0; margin: 0; }
+@media (max-width: 600px) {
+  .customer-quotes .sm-request-item { flex-wrap: wrap; }
+  .customer-quotes .sm-request-item > strong { margin-left: auto; }
+  .customer-quotes .qh-detail-heading { flex-wrap: wrap; }
+}

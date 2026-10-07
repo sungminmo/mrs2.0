@@ -1,5 +1,9 @@
 # 마켓 상품·기획전 DB 설계
 
+## 구매 견적 요청 (2026-10-07)
+
+`quote.prisma`의 `PurchaseQuote`·`PurchaseQuoteItem` 및 `20261007001000_add_purchase_quotes` 마이그레이션을 추가한다. 고객사별 공유, 행위자 기록, 가격·상품 스냅샷, 고유 접수 operationId, 선택 장바구니 삭제를 원자 저장한다. 기존 상품 재고·예약 수량은 변경하지 않는다. [상세 스키마·API·정책](PURCHASE_QUOTES.md)을 참고한다.
+
 ## 개인 장바구니 (2026-10-07)
 
 신규 `cart.prisma`, 마이그레이션 `20261007000000_add_cart`:

@@ -34,6 +34,7 @@ import './ShopifyMarket.css'
 import './PublicMarket.css'
 import { useCart } from './cartContext'
 import { CartButton } from './Cart'
+import type { QuoteDraft } from './purchaseQuotes'
 
 type Product = {
   id: string
@@ -104,10 +105,12 @@ function cartItem(product: Product, quantity = product.minimumOrderQuantity) {
 
 export default function PublicMarket({
   member = false,
-  onLogin = () => {}
+  onLogin = () => {},
+  onRequestQuote
 }: {
   member?: boolean
   onLogin?: () => void
+  onRequestQuote?: (draft: QuoteDraft) => void
 }) {
   const cart = useCart()
   const [filters, setFilters] = useState(emptyFilters)
@@ -203,6 +206,7 @@ export default function PublicMarket({
               member={member}
               onBack={back}
               onLogin={onLogin}
+              onRequestQuote={onRequestQuote}
             />
           )}
           {!loading && !error && !product && (
@@ -688,12 +692,14 @@ function MarketProductDetail({
   product,
   member,
   onBack,
-  onLogin
+  onLogin,
+  onRequestQuote
 }: {
   product: Product
   member: boolean
   onBack: () => void
   onLogin: () => void
+  onRequestQuote?: (draft: QuoteDraft) => void
 }) {
   const cart = useCart()
   const [quantity, setQuantity] = useState(product.minimumOrderQuantity)
@@ -887,8 +893,8 @@ function MarketProductDetail({
                 </button>
                 <button
                   className="sa-button sa-primary"
-                  disabled
-                  title="견적 요청 기능 준비 중"
+                  disabled={!valid || cart.busy || !onRequestQuote}
+                  onClick={() => onRequestQuote?.({ source: 'product', items: [{ productId: product.id, quantity }] })}
                 >
                   <FileText size={17} />
                   견적 요청

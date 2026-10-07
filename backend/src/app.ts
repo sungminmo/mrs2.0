@@ -16,6 +16,7 @@ import { inspectionHandlers, inspectionWrite, inspectionVersion, receiveInput, i
 import { locationHandlers, locationInput, locationUpdate, locationQuery, type LocationRepository } from './location.js'
 import { listMarketProducts, marketQuery, type MarketRepository } from './market.js'
 import { cartAdd, cartSync, cartUpdate, cartRemove, cartHandlers, type CartRepository } from './cart.js'
+import { quoteHandlers, quoteCreateInput, quotePreviewInput, quoteListQuery, type QuoteRepository } from './quote.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -33,9 +34,10 @@ type Dependencies = {
   locations?: LocationRepository
   market?: MarketRepository
   cart?: CartRepository
+  quotes?: QuoteRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations, market, cart }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations, market, cart, quotes }: Dependencies) {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (result.success) return
@@ -57,6 +59,15 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
 
   if (auth) {
     const customerAuth = requireAuth(auth.repository, auth.secret, 'CUSTOMER')
+    if (quotes) {
+      const handlers = quoteHandlers(quotes)
+      app.use('/api/customer/quotes/*', bodyLimit({ maxSize: 65536, onError: context => failure(context, 413, ErrorCode.VALIDATION_ERROR, '견적 요청이 너무 큽니다.') }))
+      app.post('/api/customer/quotes/preview', customerAuth, handlers.preview)
+      app.post('/api/customer/quotes', customerAuth, bodyLimit({ maxSize: 65536 }), handlers.create)
+      app.get('/api/customer/quotes', customerAuth, handlers.list)
+      app.get('/api/customer/quotes/:id', customerAuth, handlers.detail)
+      for (const [method, path, schema] of [['post', '/api/customer/quotes/preview', quotePreviewInput], ['post', '/api/customer/quotes', quoteCreateInput], ['get', '/api/customer/quotes', null], ['get', '/api/customer/quotes/{id}', null]] as const) app.openAPIRegistry.registerPath({ method, path, tags: ['Purchase quotes'], summary: '고객사 공유 구매 견적 요청 (VAT 포함 예상 금액, 재고 예약 없음)', security: [{ BearerAuth: [] }], request: schema ? { body: { required: true, content: { 'application/json': { schema } } } } : path.endsWith('{id}') ? { params: z.object({ id: z.uuid() }) } : { query: quoteListQuery }, responses: { 200: { description: '미리보기·조회·동일 요청 재시도' }, 201: { description: '접수 완료 및 선택 장바구니 항목 삭제' }, 400: { description: '입력 오류' }, 401: { description: '로그인 필요' }, 403: { description: '활성 고객사 필요' }, 404: { description: '요청 없음 또는 타 고객사' }, 409: { description: '가격 변경 재확인 또는 재고·장바구니 충돌' } } })
+    }
     if (cart) {
       const handlers = cartHandlers(cart)
       app.use('/api/cart/*', bodyLimit({ maxSize: 32768, onError: context => failure(context, 413, ErrorCode.VALIDATION_ERROR, '장바구니 요청이 너무 큽니다.') }))

@@ -15,6 +15,7 @@ import { useCart } from './cartContext'
 import { useCartStore, validQuantity, type CartItem } from './cartStore'
 import { appraisalMoney, appraisalTotal } from './appraisal'
 import './Cart.css'
+import type { QuoteDraft } from './purchaseQuotes'
 
 function Quantity({
   item,
@@ -120,7 +121,7 @@ export function CartButton() {
     </button>
   )
 }
-export default function Cart({ onLogin }: { onLogin: () => void }) {
+export default function Cart({ onLogin, onRequestQuote }: { onLogin: () => void; onRequestQuote?: (draft: QuoteDraft) => void }) {
   const cart = useCart()
   const open = useCartStore((state) => state.open)
   const selected = useCartStore((state) => state.selected)
@@ -132,6 +133,19 @@ export default function Cart({ onLogin }: { onLogin: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const all = useRef<HTMLInputElement>(null)
   const previous = useRef<string[]>([])
+  const [preparing, setPreparing] = useState(false)
+  const requestQuote = async () => {
+    if (!onRequestQuote || preparing) return
+    setPreparing(true)
+    try {
+      const data = await cart.prepareQuote()
+      const items = data.items.filter(item => selected.includes(item.id))
+      if (items.length !== selected.length || !items.length || items.some(item => item.issues.length)) throw new Error('선택 상품의 판매 상태와 수량을 다시 확인해 주세요.')
+      cart.close()
+      onRequestQuote({ source: 'cart', items: items.map(item => ({ productId: item.productId, quantity: item.quantity, cartItemId: item.id, expectedVersion: item.version })) })
+    } catch (failure) { useCartStore.getState().message(failure instanceof Error ? failure.message : '상품 정보를 확인하지 못했습니다.', 'error') }
+    finally { setPreparing(false) }
+  }
   const rows = cart.data.items.map((item) => ({
     ...item,
     issues: [
@@ -308,7 +322,7 @@ export default function Cart({ onLogin }: { onLogin: () => void }) {
               </button>
             </div>
           </div>
-          {notice && noticeKind !== 'error' && <p role="status">{notice}</p>}
+          {notice && (noticeKind !== 'error' || !cart.error) && <p role={noticeKind === 'error' ? 'alert' : 'status'} className={noticeKind === 'error' ? 'cart-warning' : undefined}>{notice}</p>}
           {cart.error && (
             <div className="customer-error" role="alert">
               {cart.error}
@@ -498,11 +512,11 @@ export default function Cart({ onLogin }: { onLogin: () => void }) {
                     )}
                     <button
                       className="sa-button sa-primary"
-                      disabled
-                      title="견적 요청 기능 준비 중"
+                      disabled={!selectedRows.length || selectedRows.some(item => item.issues.length) || cart.busy || preparing || !onRequestQuote}
+                      onClick={() => void requestQuote()}
                     >
                       <FileText size={15} />
-                      선택 상품 견적 요청
+                      {preparing ? '수량 확인 중...' : '선택 상품 견적 요청'}
                     </button>
                   </>
                 ) : (

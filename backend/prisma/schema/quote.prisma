@@ -1,0 +1,100 @@
+/// 구매 견적 요청의 접수 상태. 확정 견적·주문·출고 상태와 구별한다.
+enum PurchaseQuoteStatus {
+  RECEIVED
+}
+
+/// 고객사 공유 구매 견적 요청서. 금액은 접수 시점의 VAT 포함 예상 금액이며 재고를 예약하지 않는다.
+model PurchaseQuote {
+  /// 내부 식별 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// 고객·관리자 화면에 표시하는 고유 접수번호.
+  code String @unique @db.VarChar(30)
+  /// 조회 권한의 기준 고객사.
+  customerId String @db.VarChar(20)
+  /// 실제 요청 계정. 같은 고객사 구성원이 내역을 공유한다.
+  actorUserId String @db.VarChar(36)
+  /// 접수 완료 상태. 이번 구현은 관리자 읽기 전용이다.
+  status PurchaseQuoteStatus @default(RECEIVED)
+  /// 네트워크 재시도의 중복 생성을 막는 요청 UUID.
+  operationId String @unique @db.VarChar(36)
+  /// 정규화된 제출 본문의 SHA-256. 다른 본문으로 요청 ID를 재사용할 수 없다.
+  payloadHash String @db.Char(64)
+  /// 접수 시점 고객사명.
+  company String @db.VarChar(160)
+  /// 요청 담당자명.
+  contactName String @db.VarChar(80)
+  /// 요청 연락처.
+  phone String @db.VarChar(40)
+  /// 선택 회신 이메일. 미입력은 빈 문자열.
+  email String @default("") @db.VarChar(254)
+  /// 선택 납품 주소.
+  address String @default("") @db.VarChar(300)
+  /// 선택 희망 납기일. 한국 달력 날짜이며 시간은 저장하지 않는다.
+  deliveryDate DateTime? @db.Date
+  /// 고객 요청사항 원문.
+  note String @default("") @db.VarChar(1000)
+  /// 할인 전 상품 금액 합계. KRW 정수, VAT 포함.
+  originalTotal Decimal @db.Decimal(24, 0)
+  /// 할인 적용 상품 금액 합계. 라인별 원 단위 반올림 후 합산, 배송비 제외.
+  total Decimal @db.Decimal(24, 0)
+  /// 접수 시각. UTC 저장.
+  createdAt DateTime @default(now())
+  /// 요청서 보존을 위해 고객사 물리 삭제를 제한한다.
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// 요청자 변경 이력을 보존한다.
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  /// 최대 100종의 변경 불가능한 상품 스냅샷.
+  items PurchaseQuoteItem[]
+  /// 고객사 내역의 최신순 페이지 조회 인덱스.
+  @@index([customerId, createdAt, id])
+  /// 관리자 접수 상태·일자 조회 인덱스.
+  @@index([status, createdAt])
+  @@map("purchase_quotes")
+}
+
+/// 구매 견적 요청 상품 스냅샷. 접수 이후 상품명·가격·분류가 변경되어도 원 요청서를 유지한다.
+model PurchaseQuoteItem {
+  /// 내부 항목 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// 소속 구매 견적 UUID.
+  quoteId String @db.VarChar(36)
+  /// 원 상품 ID. 물리 삭제를 제한하되 현재 상품 정보로 스냅샷을 덮어쓰지 않는다.
+  productId String @db.VarChar(20)
+  /// 요청 상품 표시 순서.
+  sortOrder Int
+  /// 접수 시 상품명.
+  name String @db.VarChar(160)
+  /// 접수 시 카테고리 전체 경로.
+  category String @db.VarChar(500)
+  /// 접수 시 품질 등급.
+  grade String @db.VarChar(10)
+  /// 접수 시 거래 단위 코드.
+  unit String @db.VarChar(20)
+  /// 접수 시 규격.
+  specification String @db.VarChar(500)
+  /// 접수 시 브랜드.
+  brand String @db.VarChar(160)
+  /// 공개 상품 사진 URL 스냅샷. 사진이 없으면 null.
+  imageUrl String? @db.Text
+  /// 요청 수량. 0 초과~10억, 소수 3자리; 정수 단위는 API에서 검증한다.
+  quantity Decimal @db.Decimal(18, 3)
+  /// 접수 시 할인 전 VAT 포함 단가.
+  originalUnitPrice Decimal @db.Decimal(19, 0)
+  /// 접수 시 할인율. 0~100 정수.
+  discountRate Int
+  /// 접수 시 할인 적용 VAT 포함 단가. 원 단위 반올림.
+  unitPrice Decimal @db.Decimal(19, 0)
+  /// 할인 전 라인 금액. 원 단위 반올림.
+  originalTotal Decimal @db.Decimal(24, 0)
+  /// 할인 적용 라인 금액. 원 단위 반올림, 배송비 제외.
+  total Decimal @db.Decimal(24, 0)
+  /// 요청서 삭제 시 소속 항목도 삭제한다. 삭제 API는 제공하지 않는다.
+  quote PurchaseQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  /// 원 상품의 참조 무결성을 유지한다.
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// 동일 요청서에 같은 상품을 중복 저장하지 않는다.
+  @@unique([quoteId, productId])
+  /// 표시 순서는 요청서 내부에서 고유하다.
+  @@unique([quoteId, sortOrder])
+  @@map("purchase_quote_items")
+}

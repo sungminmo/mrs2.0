@@ -28,7 +28,7 @@ import InspectionEditor, { ReceiveCompletion } from './InspectionEditor'
 const icons = { dashboard: LayoutDashboard, basic: ListChecks, receiving: ClipboardCheck, inventory: Archive, market: ShoppingCart, content: Images, billing: ReceiptText, customers: Building2, members: UsersRound, settings: Settings2, accounts: UserRoundCog }
 const authenticatedFetch = adminAuthenticatedFetch
 const rowOptions = [10, 25, 50, 100] as const
-type AdminDatabaseData = { sales: SaleRequest[]; categories: MaterialCategory[]; items: MasterItem[]; assets: Inventory[]; locations: Location[]; receivings: Receiving[]; inspections: Inspection[]; products: Product[]; campaigns: Campaign[]; customers: CustomerAccount[]; pagination: Pagination; metrics?: Record<string, number>; categoryCounts?: { items: number; assets: number } }
+type AdminDatabaseData = { quotes?: MarketData['quotes']; sales: SaleRequest[]; categories: MaterialCategory[]; items: MasterItem[]; assets: Inventory[]; locations: Location[]; receivings: Receiving[]; inspections: Inspection[]; products: Product[]; campaigns: Campaign[]; customers: CustomerAccount[]; pagination: Pagination; metrics?: Record<string, number>; categoryCounts?: { items: number; assets: number } }
 
 export default function AdminPortal({ hash, adminRole }: { hash: string; adminRole: AdminRole | null }) {
   const availableMenus = menus.filter((menu) => menu.id !== 'accounts' || adminRole === 'SYSTEM_ADMIN')
@@ -60,7 +60,7 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
   const route = legacyRoute?.menu ?? rawRoute
   const menu = menus.find((item) => item.id === route) ?? menus[0]
   const tab = menu.tabs.find((item) => item.id === (legacyRoute?.tab ?? url.searchParams.get('tab'))) ?? menu.tabs[0]
-  const scope = menu.id === 'basic' ? tab?.id : menu.id === 'inventory' ? tab?.id === 'stock' ? 'assets' : 'locations' : menu.id === 'receiving' ? tab?.id === 'requests' ? 'receivings' : tab?.id === 'primary' ? 'inspections' : tab?.id === 'disposal' ? 'disposals' : tab?.id === 'detailed' ? 'sales' : null : menu.id === 'market' && ['sales', 'products', 'campaigns'].includes(tab?.id ?? '') ? tab?.id : menu.id === 'dashboard' ? 'dashboard' : null
+  const scope = menu.id === 'basic' ? tab?.id : menu.id === 'inventory' ? tab?.id === 'stock' ? 'assets' : 'locations' : menu.id === 'receiving' ? tab?.id === 'requests' ? 'receivings' : tab?.id === 'primary' ? 'inspections' : tab?.id === 'disposal' ? 'disposals' : tab?.id === 'detailed' ? 'sales' : null : menu.id === 'market' && ['sales', 'products', 'quotes', 'campaigns'].includes(tab?.id ?? '') ? tab?.id : menu.id === 'dashboard' ? 'dashboard' : null
   const requestParams = new URLSearchParams(url.searchParams)
   requestParams.delete('tab'); requestParams.delete('mode')
   if (scope) requestParams.set('scope', scope)
@@ -75,7 +75,7 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
       if (controller.signal.aborted) return
       setAssets(data.assets); setItems(data.items); setCategories(data.categories)
       setCustomerRecords(data.customers ?? []); setReceivingRecords(data.receivings); setInspectionRecords(data.inspections)
-      setMarket({ sales: data.sales ?? [], quotes: [], products: data.products, campaigns: data.campaigns })
+      setMarket({ sales: data.sales ?? [], quotes: data.quotes ?? [], products: data.products, campaigns: data.campaigns })
       setPagination(data.pagination); setMetrics(data.metrics ?? {}); setCategoryCounts(data.categoryCounts)
       setLocationRecords(data.locations ?? [])
       setNoticeState({ scope: '', text: '' })
@@ -94,7 +94,7 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
   const assetEditing = menu.id === 'inventory' && tab?.id === 'stock'
   const editable = itemManagement || menu.id === 'inventory' && (locationEditing || assetEditing && !!row) || campaignEditing
   const recordKind = campaignEditing ? '기획전' : locationEditing ? '로케이션' : itemManagement ? '품목' : '자산'
-  const statusTab = menu.id === 'market' && tab && tab.id !== 'sales' && Object.hasOwn(marketStatusOptions, tab.id) ? tab.id as MarketStatusTab : undefined
+  const statusTab = menu.id === 'market' && tab && tab.id !== 'sales' && tab.id !== 'quotes' && Object.hasOwn(marketStatusOptions, tab.id) ? tab.id as MarketStatusTab : undefined
   const inspectionStage = menu.id === 'receiving' && tab?.id !== 'requests' ? tab?.id : undefined
   const memberApplication = menu.id === 'members' && tab?.id === 'applications' && row?.status === '가입 승인 대기'
   const noticeScope = `${menu.id}/${tab?.id}/${id ?? ''}`
@@ -281,7 +281,7 @@ function RecordList({ view, params, path, categories, statusTab, onStatusChange 
   const extraFilters = view.rows.some((row) => row.itemId) || path === 'inventory' && (params.get('tab') ?? 'stock') === 'stock'
     ? ([['grade', '등급'], ['saleStatus', '판매 상태'], ['itemId', '품목코드'], ['locationId', '로케이션']] as const) : []
   const serverStatuses = path === 'basic' || path === 'inventory' && params.get('tab') === 'locations' ? ['사용', '미사용'] : path === 'inventory' ? ['입고대기', '보관중', '출고완료'] : path === 'receiving' ? params.get('tab') === 'requests' ? receivingStatuses : params.get('tab') === 'disposal' ? ['미처리', '처리 예정', '폐기 완료'] : ['검수 대기', '결과 확인 대기', '검수 종료'] : path === 'market' && params.get('tab') === 'campaigns' ? ['중지', '예약', '진행 중', '종료'] : []
-  const statuses: string[] = path === 'market' && params.get('tab') === 'sales' ? ['승인 대기', '승인 완료', '반려'] : statusTab ? marketStatusOptions[statusTab].filter((value) => value !== '판매취소') : view.pagination ? [...serverStatuses] : [...new Set(view.rows.map((row) => row.status))]
+  const statuses: string[] = path === 'market' && params.get('tab') === 'quotes' ? ['접수 완료'] : path === 'market' && params.get('tab') === 'sales' ? ['승인 대기', '승인 완료', '반려'] : statusTab ? marketStatusOptions[statusTab].filter((value) => value !== '판매취소') : view.pagination ? [...serverStatuses] : [...new Set(view.rows.map((row) => row.status))]
   const availableCustomers = customers.filter((item) => view.rows.some((row) => row.customerId === item.id))
   const periods = [...new Set(view.rows.flatMap((row) => {
     const invoice = path === 'billing' ? invoices.find((item) => item.id === row.id) : null
@@ -309,7 +309,7 @@ function RecordList({ view, params, path, categories, statusTab, onStatusChange 
   const detailHref = (id: string) => { const next = new URLSearchParams(params); next.set('id', id); return `#/admin/${path}?${next}` }
   const billed = invoices.filter((invoice) => filtered.some((row) => row.id === invoice.id) && invoice.status !== '미청구')
   return <>
-    {(categories.length > 0 || view.rows.some((row) => row.categoryId) || categoryId) && <div className="adm-category-filter"><CategorySelect categories={categories} value={categoryId} onChange={(value) => update('category', value)} /></div>}
+    {!(path === 'market' && params.get('tab') === 'quotes') && (categories.length > 0 || view.rows.some((row) => row.categoryId) || categoryId) && <div className="adm-category-filter"><CategorySelect categories={categories} value={categoryId} onChange={(value) => update('category', value)} /></div>}
     <div className="adm-filterbar">
       <label className="adm-search"><span>검색</span><div><Search size={16} /><input type="search" value={search.text} onChange={(event) => setSearch({ scope, text: event.target.value })} placeholder="번호, 이름, 고객사" /></div></label><button className="adm-button adm-primary adm-search-button" type="button" aria-busy={searching} disabled={searching} onClick={submitSearch}>{searching ? <LoaderCircle className="adm-spinner" size={16} /> : <Search size={16} />}{searching ? '검색 중' : '검색'}</button>
       <label><span>{path === 'basic' ? '사용 구분' : extraFilters.length ? '보관 상태' : '상태'}</span><select value={status} onChange={(event) => update('status', event.target.value)}><option value="">전체 상태</option>{status && !statuses.includes(status) && <option value={status}>{status}</option>}{statuses.map((value) => <option key={value}>{value}</option>)}</select></label>

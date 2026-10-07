@@ -46,6 +46,8 @@ model Product {
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   cartItems CartItem[]
+  /// 접수 당시 정보를 보존하는 구매 견적 상품 스냅샷.
+  quoteItems PurchaseQuoteItem[]
 
   @@index([status, createdAt])
   @@map("products")

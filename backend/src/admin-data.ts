@@ -21,7 +21,7 @@ const disposalStatus = { UNPROCESSED: '미처리', SCHEDULED: '처리 예정', C
 const itemBatchSize = 1000
 
 export const adminDataQuery = z.object({
-  scope: z.enum(['items', 'assets', 'locations', 'receivings', 'inspections', 'disposals', 'sales', 'products', 'campaigns', 'categories', 'dashboard']).default('items'),
+  scope: z.enum(['items', 'assets', 'locations', 'receivings', 'inspections', 'disposals', 'sales', 'products', 'quotes', 'campaigns', 'categories', 'dashboard']).default('items'),
   page: z.coerce.number().int().min(1).max(100000).default(1),
   rows: z.coerce.number().int().min(1).max(100).default(25),
   id: z.string().max(80).optional(), q: z.string().max(160).default(''),
@@ -47,6 +47,12 @@ export function createAdminDataRepository(client: PrismaClient) {
       const categoryWhere = category ? { categoryId: { in: descendants } } : {}
       const search = q.trim() ? { OR: [{ id: { contains: q.trim() } }, { name: { contains: q.trim() } }] } : {}
       const dates = query.period ? { gte: new Date(`${query.period}-01T00:00:00Z`), lt: new Date(Date.UTC(Number(query.period.slice(0, 4)), Number(query.period.slice(5)), 1)) } : undefined
+      if (scope === 'quotes') {
+        const where: Prisma.PurchaseQuoteWhereInput = id ? { id } : { ...(customer ? { customerId: customer } : {}), ...(dates ? { createdAt: dates } : {}), ...(status && status !== '접수 완료' ? { id: 'no-matching-status' } : {}), ...(q.trim() ? { OR: [{ code: { contains: q.trim() } }, { company: { contains: q.trim() } }, { contactName: { contains: q.trim() } }, { items: { some: { name: { contains: q.trim() } } } }] } : {}) }
+        const records = await client.purchaseQuote.findMany({ where, skip: id ? 0 : (page - 1) * rows, take: id ? 1 : rows, include: { items: { orderBy: { sortOrder: 'asc' }, take: id ? 100 : 0 }, _count: { select: { items: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] })
+        const customers = await client.customer.findMany({ where: { id: { in: records.map(record => record.customerId) } }, select: { id: true, name: true, representativeName: true, phone: true, status: true } })
+        return { categories: categories.map(category => ({ id: category.id, parentId: category.parentId, name: category.name, enabled: category.enabled, order: category.sortOrder })), items: [], assets: [], receivings: [], inspections: [], products: [], campaigns: [], sales: [], locations: [], customers, pagination: { page, rows, total: await client.purchaseQuote.count({ where }) }, quotes: records.map(record => ({ id: record.id, code: record.code, customerId: record.customerId, company: record.company, contactName: record.contactName, phone: record.phone, email: record.email, actorUserId: record.actorUserId, date: record.createdAt.toISOString(), dueAt: record.deliveryDate?.toISOString().slice(0, 10) ?? '', status: '접수 완료', itemCount: record._count.items, total: record.total.toString(), address: record.address, note: record.note, lines: record.items.map(item => ({ productId: item.productId, name: item.name, quantity: item.quantity.toString(), unit: item.unit, unitPrice: item.unitPrice.toString(), total: item.total.toString(), category: item.category, grade: item.grade, specification: item.specification })) })) }
+      }
       const itemWhere: Prisma.MasterItemWhereInput = id ? { id } : { ...search, ...categoryWhere, ...(status ? { enabled: status === '사용' } : {}) }
       const assetWhere: Prisma.AssetWhereInput = id ? { id } : { ...search, ...categoryWhere, ...(customer ? { customerId: customer } : {}), ...(status ? { storageStatus: enumKey(storageStatus, status) ?? 'PENDING' } : {}), ...(query.saleStatus ? { saleStatus: enumKey(saleStatus, query.saleStatus) ?? 'PENDING' } : {}), ...(query.grade ? { grade: query.grade } : {}), ...(query.itemId ? { itemId: query.itemId } : {}), ...(query.locationId ? { locationId: query.locationId } : {}), ...(dates ? { createdAt: dates } : {}) }
       const receivingWhere: Prisma.ReceivingWhereInput = id ? { id } : { ...(q.trim() ? { OR: [{ id: { contains: q.trim() } }, { summary: { contains: q.trim() } }, { siteName: { contains: q.trim() } }] } : {}), ...(customer ? { customerId: customer } : {}), ...(status ? { status: enumKey(receivingStatus, status) ?? 'REQUESTED' } : {}), ...(dates ? { requestedAt: dates } : {}) }

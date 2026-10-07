@@ -88,11 +88,19 @@ export function CartProvider({ session, children }: { session: AuthSession | nul
     window.addEventListener('beforeunload', beforeUnload)
     const signout = (event: Event) => beforeSignOut(event)
     window.addEventListener('mrs-before-signout', signout)
-    return () => { active.current = false; queue.stop(); client.removeQueries({ queryKey: ['cart', owner] }); useCartStore.getState().resetUI(); window.removeEventListener('storage', storage); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('mrs-before-signout', signout) }
+    return () => { active.current = false; queue.stop(); client.removeQueries({ queryKey: ['cart', owner] }); client.removeQueries({ queryKey: ['purchase-quotes', owner] }); client.removeQueries({ queryKey: ['quote-preview'] }); useCartStore.getState().resetUI(); window.removeEventListener('storage', storage); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('mrs-before-signout', signout) }
   }, [client, owner, queue])
   useEffect(() => { if (open) refetchOnOpen() }, [open])
   const run = (work: () => Promise<void>) => { void queue.enqueue(work).catch(failure => { if (active.current) { const message = failure instanceof Error ? failure.message : '장바구니 처리에 실패했습니다. 다시 시도해 주세요.'; setError(message); useCartStore.getState().message(message, 'error'); useCartStore.getState().setOpen(true) } }) }
   const data = session ? query.data ?? { id: null, version: 0, items: [] } : { id: null, version: 0, items: guest }
+  const prepareQuote = async () => {
+    if (!session || useCartStore.getState().batch) throw new Error('로그인과 장바구니 병합을 먼저 완료해 주세요.')
+    await queue.flush()
+    if (Object.keys(useCartStore.getState().intents).length) throw new Error('저장하지 못한 수량이 있습니다. 장바구니에서 다시 시도해 주세요.')
+    const result = await query.refetch()
+    if (result.error || !result.data) throw result.error ?? new Error('장바구니를 확인하지 못했습니다.')
+    return result.data
+  }
   return <CartContext value={{ member: !!session, data: { ...data, items: data.items.map(item => ({ ...item, quantity: intents[item.id] && !intents[item.id].error ? intents[item.id].quantity : item.quantity })) }, loading: !!session && query.isPending, refreshing: !!session && query.isFetching, busy: mutation.isPending || (!!session && !!useCartStore.getState().batch), error: error || (query.error?.message ?? ''), refresh: () => { setError(''); if (retryAdd.current) run(async () => { accept(await mutation.mutateAsync(retryAdd.current!)); retryAdd.current = null; useCartStore.getState().message('장바구니에 담았습니다.') }); else void query.refetch() }, merge: () => run(merge), close: () => { void queue.flush().catch(() => {}); useCartStore.getState().setOpen(false) }, add: item => {
     if (!session) { try { useCartStore.getState().addGuest(item); setError(''); useCartStore.getState().message('장바구니에 담았습니다.') } catch (failure) { const message = failure instanceof Error ? failure.message : '장바구니에 담지 못했습니다. 다시 시도해 주세요.'; setError(message); useCartStore.getState().message(message, 'error') } return }
     run(async () => { const body = { operationId: createUuid(), productId: item.productId, quantity: item.quantity }; if (useCartStore.getState().batch) throw new Error('비회원 장바구니 병합을 먼저 완료해 주세요.'); retryAdd.current = { path: '/api/cart/items', method: 'POST', body }; accept(await mutation.mutateAsync(retryAdd.current)); retryAdd.current = null; setError(''); useCartStore.getState().message('장바구니에 담았습니다.') })
@@ -100,5 +108,5 @@ export function CartProvider({ session, children }: { session: AuthSession | nul
     if (!session) { useCartStore.getState().removeGuest(ids); return }
     for (const id of ids) { queue.cancel(id); const intent = useCartStore.getState().intents[id]; if (intent) useCartStore.getState().settle(id, intent.sequence) }
     run(async () => { const items = client.getQueryData<CartData>(key)?.items.filter(item => ids.includes(item.id)).map(item => ({ id: item.id, expectedVersion: item.version })) ?? []; if (!items.length) return; accept(await mutation.mutateAsync({ path: '/api/cart/items', method: 'DELETE', body: { items } })); setError('') })
-  } }}>{children}</CartContext>
+  }, prepareQuote }}>{children}</CartContext>
 }
