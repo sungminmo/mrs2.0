@@ -48,6 +48,10 @@ model Product {
   cartItems CartItem[]
   /// 접수 당시 정보를 보존하는 구매 견적 상품 스냅샷.
   quoteItems PurchaseQuoteItem[]
+  /// 확정 회신 상품 참조. 회신 자체는 재고를 예약하지 않는다.
+  offerItems QuoteOfferItem[]
+  /// 고객 승인 거래의 예약 및 출고 대상.
+  orderItems PurchaseOrderItem[]
   /// 상품을 직접 선택해 편성한 기획전 연결. 여러 기획전에 중복 편성 가능하다.
   campaignItems CampaignProduct[]
 

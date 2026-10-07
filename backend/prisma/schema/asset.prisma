@@ -50,6 +50,8 @@ model Asset {
   product        Product?
   saleRequest    SaleRequest?
   inspectionItem InspectionItem?
+  /// 확정 회신의 공급 자산 참조. 실제 출고 시에만 보관 수량을 차감한다.
+  offerItems QuoteOfferItem[]
 
   @@index([itemId])
   @@index([categoryId])

@@ -1,5 +1,9 @@
 # 마켓 상품·기획전 DB 설계
 
+## 견적 기반 출고 설계 (2026-10-07)
+
+[DB 설계](OUTBOUND_SCHEMA.md)의 회신·승인 거래·분할 출고 스키마를 추가한다. Product listedQuantity는 등록 원수량, reservedQuantity는 승인 거래 미출고 예약, soldQuantity는 실제 출고 누계다. 원 요청·회신은 미예약이고 승인 API는 아직 미구현이다. 수량 규칙은 [출고 정책](OUTBOUND_POLICY.md)을 따른다.
+
 ## 구매 견적 요청 (2026-10-07)
 
 `quote.prisma`의 `PurchaseQuote`·`PurchaseQuoteItem` 및 `20261007001000_add_purchase_quotes` 마이그레이션을 추가한다. 고객사별 공유, 행위자 기록, 가격·상품 스냅샷, 고유 접수 operationId, 선택 장바구니 삭제를 원자 저장한다. 기존 상품 재고·예약 수량은 변경하지 않는다. [상세 스키마·API·정책](PURCHASE_QUOTES.md)을 참고한다.

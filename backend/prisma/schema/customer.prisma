@@ -36,6 +36,10 @@ model Customer {
   changes      CustomerChange[]
   /// 고객사 구성원이 공유하는 구매 견적 요청 내역.
   purchaseQuotes PurchaseQuote[]
+  /// 구매 고객사의 승인 거래.
+  purchaseOrders PurchaseOrder[] @relation("OrderBuyer")
+  /// 판매자 자산을 참조하는 확정 회신 항목.
+  offerItems QuoteOfferItem[] @relation("OfferSeller")
 
   @@index([status, name])
   @@map("customers")

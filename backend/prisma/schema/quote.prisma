@@ -45,6 +45,12 @@ model PurchaseQuote {
   actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
   /// 최대 100종의 변경 불가능한 상품 스냅샷.
   items PurchaseQuoteItem[]
+  /// 원 요청과 분리한 확정 견적 버전.
+  offers QuoteOffer[]
+  /// 승인 거래는 요청당 최대 하나.
+  order PurchaseOrder?
+  /// 회신과 거래의 감사 이력.
+  fulfillmentChanges FulfillmentChange[]
   /// 고객사 내역의 최신순 페이지 조회 인덱스.
   @@index([customerId, createdAt, id])
   /// 관리자 접수 상태·일자 조회 인덱스.
@@ -92,6 +98,8 @@ model PurchaseQuoteItem {
   quote PurchaseQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   /// 원 상품의 참조 무결성을 유지한다.
   product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// 확정 회신에서 대응시킨 원 요청 항목.
+  offerItems QuoteOfferItem[]
   /// 동일 요청서에 같은 상품을 중복 저장하지 않는다.
   @@unique([quoteId, productId])
   /// 표시 순서는 요청서 내부에서 고유하다.
