@@ -13,7 +13,7 @@ export const menus: { id: MenuId; label: string; tabs: { id: string; label: stri
   { id: 'basic', label: '기초 정보 관리', tabs: [{ id: 'items', label: '품목 관리' }, { id: 'categories', label: '카테고리 관리' }] },
   { id: 'receiving', label: '입고·검수·폐기', tabs: [{ id: 'requests', label: '입고 신청' }, { id: 'primary', label: '1차 검수' }, { id: 'detailed', label: '상세 검수' }, { id: 'disposal', label: '폐기 관리' }] },
   { id: 'inventory', label: '자산 관리', tabs: [{ id: 'stock', label: '자산 목록' }, { id: 'locations', label: '로케이션' }] },
-  { id: 'market', label: '마켓 운영', tabs: [{ id: 'sales', label: '판매 요청' }, { id: 'products', label: '상품' }, { id: 'quotes', label: '구매 견적' }, { id: 'campaigns', label: '기획전' }] },
+  { id: 'market', label: '마켓 운영', tabs: [{ id: 'sales', label: '판매 요청' }, { id: 'products', label: '상품' }, { id: 'quotes', label: '구매 견적' }] },
   { id: 'content', label: '콘텐츠 관리', tabs: [{ id: 'banners', label: '배너 관리' }] },
   { id: 'billing', label: '보관료·정산', tabs: [{ id: 'storage', label: '보관료' }, { id: 'payouts', label: '판매 정산' }, { id: 'disposal', label: '폐기 청구' }] },
   { id: 'customers', label: '고객사 관리', tabs: [{ id: 'companies', label: '고객사' }, { id: 'applications', label: '고객사 등록 신청' }, { id: 'sites', label: '현장' }, { id: 'inquiries', label: '문의' }] },
@@ -26,6 +26,11 @@ export const adminHref = (link: AdminLink) => {
   if (link.id) params.set('id', link.id)
   if (link.status) params.set('status', link.status)
   if (link.customer) params.set('customer', link.customer)
+  if (link.menu === 'market' && link.tab === 'campaigns') {
+    params.set('tab', 'banners')
+    params.set('type', 'campaign')
+    return `#/admin/content?${params}`
+  }
   return `#/admin/${link.menu}?${params}`
 }
 const receiptLink = (id: string): AdminLink => ({ label: id, menu: 'receiving', tab: 'primary', id })
@@ -153,7 +158,7 @@ return {
   'market/sales': { title: '판매 요청', headers: ['요청번호', '요청일', '자재', '고객사', '수량', '희망금액 (총액)', '상세 검수', '승인 상태'], rows: saleRows },
   'market/products': { title: '상품', headers: ['상품번호', '상품명', '카테고리', '등급', '판매 단가', '할인율', '할인 적용 단가', '상태'], rows: productRows },
   'market/quotes': { title: '구매 견적', headers: ['견적번호', '신청일', '구매 고객', '품목 수', '희망 납기', '상태'], rows: quoteRows },
-  'market/campaigns': { title: '기획전', headers: ['기획전', '순서', '노출 기간', '편성 상품', '노출 가능 상품', '상태'], rows: campaignRows, note: '노출 기간은 한국 시간 기준이며 종료일은 포함하지 않습니다.' },
+  'content/banners': { title: '기획전 배너', headers: ['배너', '순서', '노출 기간', '편성 상품', '노출 가능 상품', '상태'], rows: campaignRows, note: '노출 기간은 한국 시간 기준이며 종료일은 포함하지 않습니다.' },
   ...Object.fromEntries((['보관료', '판매 정산', '폐기 비용'] as const).map((type) => [`billing/${invoiceTab(type)}`, { title: type, headers: ['명세번호', '기록일', '고객사', '대상 기간', '청구·정산 금액', '상태'], rows: invoiceRows.filter((row) => invoices.find((invoice) => invoice.id === row.id)!.type === type) }])),
   'customers/companies': { title: '고객사', headers: ['고객번호', '고객사', '담당자', '연락처', '상태'], rows: customerRows },
   'customers/sites': { title: '현장', headers: ['현장번호', '현장명', '고객사', '주소', '상태'], rows: siteRows },

@@ -93,13 +93,13 @@ export default function CampaignEditor({ campaign, cancelHref, onSave }: { campa
   }} onInput={() => setError('')}>
     <fieldset disabled={saving} className="campaign-fields">
     <div className="adm-edit-fields">
-      <label>기획전 번호<input value={campaign?.id ?? '저장 시 자동 생성'} readOnly /></label>
-      <label>기획전 제목<input name="name" defaultValue={campaign?.name} required maxLength={120} /></label>
+      <label>기획전 배너 번호<input value={campaign?.id ?? '저장 시 자동 생성'} readOnly /></label>
+      <label>배너 제목<input name="name" defaultValue={campaign?.name} required maxLength={120} /></label>
       <label>시작 일시 (KST, 포함)<input name="startsAt" type="datetime-local" defaultValue={kstInput(campaign?.startsAt)} required /></label>
       <label>종료 일시 (KST, 미포함)<input name="endsAt" type="datetime-local" defaultValue={kstInput(campaign?.endsAt)} required /></label>
       <label>노출 순서<input name="order" type="number" min={0} max={9999} step={1} defaultValue={campaign?.order ?? 0} required /></label>
     </div>
-    <label className="adm-edit-memo">기획전 설명<textarea name="description" rows={4} defaultValue={campaign?.description} required maxLength={1000} /></label>
+    <label className="adm-edit-memo">배너 설명<textarea name="description" rows={4} defaultValue={campaign?.description} required maxLength={1000} /></label>
     <section className="campaign-composition" aria-label="기획전 상품 편성">
       <div className="adm-list-heading"><h2>편성 상품 <span aria-live="polite">{selected.length} / 100종</span></h2><span>현재 노출 가능 {selected.filter(product => product.visible).length}종</span></div>
       {!selected.length ? <p className="adm-empty">편성된 상품이 없습니다.</p> : <ol className="campaign-selected">{selected.map((product, index) => <li key={product.id}><span className="campaign-rank">{index + 1}</span>{product.imageUrl ? <img src={product.imageUrl} alt="" /> : <ImageOff size={24} />}<div className="campaign-product-name"><strong>{product.name}</strong><small>{product.id} · {labels[product.status]} · {product.visible ? '노출 가능' : '현재 미노출'}</small></div><span className="campaign-price">{appraisalMoney(product.unitPrice)} / {product.unit}</span><div className="campaign-row-actions"><button type="button" className="adm-icon" title={`${product.name} 위로 이동`} aria-label={`${product.name} 위로 이동`} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp size={16} /></button><button type="button" className="adm-icon" title={`${product.name} 아래로 이동`} aria-label={`${product.name} 아래로 이동`} disabled={index === selected.length - 1} onClick={() => move(index, 1)}><ArrowDown size={16} /></button><button type="button" className="adm-icon" title={`${product.name} 편성 제거`} aria-label={`${product.name} 편성 제거`} onClick={() => toggle(product)}><Trash2 size={16} /></button></div></li>)}</ol>}
@@ -114,9 +114,9 @@ export default function CampaignEditor({ campaign, cancelHref, onSave }: { campa
         </div></div>
       </>}
     </section>
-    <label className="adm-check"><input type="checkbox" name="enabled" defaultChecked={campaign?.enabled ?? false} />기획전 노출 사용</label>
+    <label className="adm-check"><input type="checkbox" name="enabled" defaultChecked={campaign?.enabled ?? false} />배너 노출 사용</label>
     <label className="adm-edit-memo">변경 사유<textarea name="reason" rows={2} required maxLength={500} /></label>
     </fieldset>
-    <div className="adm-edit-footer">{error && <p role="alert" className="adm-form-error">{error}</p>}<div className="adm-management-actions">{!saving && <a className="adm-button" href={cancelHref}>취소</a>}<button disabled={saving} className="adm-button adm-primary">{saving ? <LoaderCircle className="adm-spinner" size={16} /> : <Save size={16} />}{saving ? '저장 중...' : '기획전 저장'}</button></div></div>
+    <div className="adm-edit-footer">{error && <p role="alert" className="adm-form-error">{error}</p>}<div className="adm-management-actions">{!saving && <a className="adm-button" href={cancelHref}>취소</a>}<button disabled={saving} className="adm-button adm-primary">{saving ? <LoaderCircle className="adm-spinner" size={16} /> : <Save size={16} />}{saving ? '저장 중...' : '배너 저장'}</button></div></div>
   </form></div>
 }

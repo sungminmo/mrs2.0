@@ -18,6 +18,8 @@
 
 ### 관리자 기획전 편성
 
+관리 화면은 **콘텐츠 관리 > 배너 관리 > 기획전 타입**이다. 이미지 타입은 기존 위치별 PC·모바일 이미지, 링크, 기간, 순서를 관리한다. 기존 기획전 편성 데이터·API·고객 마켓 노출은 보존하며 관리자 메뉴만 통합한다. 기획전 타입 경로는 `#/admin/content?tab=banners&type=campaign`, 이미지 타입은 `type=image`이다. 구 `#/admin/market?tab=campaigns` 주소는 ID·편집 모드·검색 조건을 보존해 새 경로로 이동한다.
+
 - `GET /api/admin/campaign-products?page=1&rows=20&q=상품명&status=DRAFT`: 상품 선택 검색. `q`는 상품번호·상품명·규격 검색, `status`는 `DRAFT|AVAILABLE|OUT_OF_STOCK`, rows 최대 100. 상품별 현재 가격·수량·사진·노출 가능 여부와 pagination을 반환한다.
 - `POST /api/admin/campaigns`: `{name,description,enabled,order,startsAt,endsAt,productIds,reason}`으로 생성하며 서버가 ID를 발급한다. 201 `{campaign}` 반환.
 - `PUT /api/admin/campaigns/:id`: 위 필드와 조회한 `version`을 전달한다. 200 `{campaign}` 반환. 오래된 버전은 409이며 변경 사유와 편성 전후를 원자적으로 감사 기록한다.

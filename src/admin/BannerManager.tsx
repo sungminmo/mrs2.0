@@ -70,7 +70,7 @@ export default function BannerManager({ params }: { params: URLSearchParams }) {
   return <>
     {error && <p className="adm-form-error" role="alert">{error}</p>}
     <div className="adm-management-actions"><p className="adm-note">노출 위치 ID를 고객 프론트에 연결한 뒤, 위치별로 여러 배너를 순서대로 편성합니다.</p><a className="adm-button adm-primary" href="#/admin/content?tab=banners&mode=new"><Plus size={16} />노출 위치 추가</a></div>
-    <div className="adm-list-heading"><h2>배너 노출 위치 <span>{pagination.total}개</span></h2></div>
+    <div className="adm-list-heading"><h2>이미지 배너 노출 위치 <span>{pagination.total}개</span></h2></div>
     <div className="adm-table-scroll" tabIndex={0} role="region" aria-label="배너 노출 위치 표"><table><thead><tr><th scope="col">노출 위치 ID</th><th scope="col">위치명</th><th scope="col">편성 배너</th><th scope="col">현재 노출</th><th scope="col">상태</th><th scope="col">상세</th></tr></thead><tbody>{placements.map((placement) => { const active = placement.items.filter((item) => statusOf(item) === '노출 중').length; return <tr key={placement.id}><td><strong>{placement.id}</strong></td><td>{placement.name}</td><td>{placement.items.length}개</td><td>{placement.enabled ? `${active}개` : '0개'}</td><td><span className={`adm-status adm-status-${placement.enabled ? 'active' : 'muted'}`}>{placement.enabled ? '사용' : '중지'}</span></td><td><a className="adm-detail-link" href={`#/admin/content?tab=banners&id=${placement.id}`}>상세보기</a></td></tr> })}</tbody></table></div>
     {!placements.length && <div className="adm-empty"><ImagePlus size={24} /><h2>등록된 노출 위치가 없습니다</h2><a href="#/admin/content?tab=banners&mode=new">첫 노출 위치 추가</a></div>}
     <AdminPagination pagination={{ ...pagination, page, rows }} loading={loading} onChange={(next, size) => { setPage(next); setRows(size) }} />

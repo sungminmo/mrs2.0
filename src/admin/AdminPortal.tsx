@@ -60,9 +60,11 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
   const route = legacyRoute?.menu ?? rawRoute
   const menu = menus.find((item) => item.id === route) ?? menus[0]
   const tab = menu.tabs.find((item) => item.id === (legacyRoute?.tab ?? url.searchParams.get('tab'))) ?? menu.tabs[0]
-  const scope = menu.id === 'basic' ? tab?.id : menu.id === 'inventory' ? tab?.id === 'stock' ? 'assets' : 'locations' : menu.id === 'receiving' ? tab?.id === 'requests' ? 'receivings' : tab?.id === 'primary' ? 'inspections' : tab?.id === 'disposal' ? 'disposals' : tab?.id === 'detailed' ? 'sales' : null : menu.id === 'market' && ['sales', 'products', 'quotes', 'campaigns'].includes(tab?.id ?? '') ? tab?.id : menu.id === 'dashboard' ? 'dashboard' : null
+  const bannerManagement = menu.id === 'content' && tab?.id === 'banners'
+  const campaignEditing = bannerManagement && url.searchParams.get('type') === 'campaign'
+  const scope = campaignEditing ? 'campaigns' : menu.id === 'basic' ? tab?.id : menu.id === 'inventory' ? tab?.id === 'stock' ? 'assets' : 'locations' : menu.id === 'receiving' ? tab?.id === 'requests' ? 'receivings' : tab?.id === 'primary' ? 'inspections' : tab?.id === 'disposal' ? 'disposals' : tab?.id === 'detailed' ? 'sales' : null : menu.id === 'market' && ['sales', 'products', 'quotes'].includes(tab?.id ?? '') ? tab?.id : menu.id === 'dashboard' ? 'dashboard' : null
   const requestParams = new URLSearchParams(url.searchParams)
-  requestParams.delete('tab'); requestParams.delete('mode')
+  requestParams.delete('tab'); requestParams.delete('mode'); requestParams.delete('type')
   if (scope) requestParams.set('scope', scope)
   const requestQuery = scope ? requestParams.toString() : ''
   const pending = !!scope && (loadingData || loadedQuery !== requestQuery)
@@ -82,18 +84,17 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
     }).catch((error) => { if (!controller.signal.aborted) { setAssets([]); setItems([]); setReceivingRecords([]); setInspectionRecords([]); setMarket({ sales: [], quotes: [], products: [], campaigns: [] }); setPagination({ page: 1, rows: 25, total: 0 }); setMetrics({}); setNoticeState({ scope: 'database', text: error instanceof Error ? error.message : '조회 실패' }) } }).finally(() => { if (!controller.signal.aborted) { setLoadedQuery(requestQuery); setLoadingData(false) } })
     return () => controller.abort()
   }, [requestQuery, accountRevision])
-  const sourceView = tab ? views[`${menu.id}/${tab.id}`] : null
+  const sourceView = campaignEditing ? views['content/banners'] : tab ? views[`${menu.id}/${tab.id}`] : null
   const view = sourceView ? { ...sourceView, pagination: scope ? pagination : undefined } : null
   const id = url.searchParams.get('id')
   const row = view?.rows.find((item) => item.id === id)
-  const campaignEditing = menu.id === 'market' && tab?.id === 'campaigns'
   const productManagement = menu.id === 'market' && tab?.id === 'products'
   const locationEditing = menu.id === 'inventory' && tab?.id === 'locations'
   const itemManagement = menu.id === 'basic' && tab?.id === 'items'
   const categoryManagement = menu.id === 'basic' && tab?.id === 'categories'
   const assetEditing = menu.id === 'inventory' && tab?.id === 'stock'
   const editable = itemManagement || menu.id === 'inventory' && (locationEditing || assetEditing && !!row) || campaignEditing
-  const recordKind = campaignEditing ? '기획전' : locationEditing ? '로케이션' : itemManagement ? '품목' : '자산'
+  const recordKind = campaignEditing ? '기획전 배너' : locationEditing ? '로케이션' : itemManagement ? '품목' : '자산'
   const statusTab = menu.id === 'market' && tab && tab.id !== 'sales' && tab.id !== 'quotes' && Object.hasOwn(marketStatusOptions, tab.id) ? tab.id as MarketStatusTab : undefined
   const inspectionStage = menu.id === 'receiving' && tab?.id !== 'requests' ? tab?.id : undefined
   const memberApplication = menu.id === 'members' && tab?.id === 'applications' && row?.status === '가입 승인 대기'
@@ -111,6 +112,13 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => { heading.current?.focus(); window.scrollTo(0, 0) }, [menu.id, tab?.id, id, mode])
   useEffect(() => {
+    if (rawRoute === 'market' && url.searchParams.get('tab') === 'campaigns') {
+      const next = new URLSearchParams(url.searchParams)
+      next.set('tab', 'banners')
+      next.set('type', 'campaign')
+      window.location.replace(`#/admin/content?${next}`)
+      return
+    }
     if (rawRoute === 'settings' && url.searchParams.get('tab') === 'categories') {
       window.location.replace('#/admin/basic?tab=categories')
       return
@@ -162,7 +170,8 @@ export default function AdminPortal({ hash, adminRole }: { hash: string; adminRo
       {notice.scope === 'database' && <p className="adm-form-error" role="alert">{notice.text}</p>}
       {pending ? null : menu.id === 'accounts' ? adminRole === 'SYSTEM_ADMIN' ? <AdminAccountManager params={url.searchParams} /> : <p role="alert">시스템 관리자만 관리자 계정을 관리할 수 있습니다.</p> : menu.id === 'dashboard' ? <Dashboard views={views} metrics={metrics} /> : <>
         <nav className="adm-tabs" aria-label={`${menu.label} 보기`}>{menu.tabs.map((item) => <a key={item.id} href={adminHref({ label: item.label, menu: menu.id, tab: item.id })} aria-current={item.id === tab?.id ? 'page' : undefined}>{item.label}</a>)}</nav>
-        {menu.id === 'members' || menu.id === 'customers' && ['companies', 'applications'].includes(tab?.id ?? '') ? <CustomerManager key={`${menu.id}/${tab?.id}`} params={url.searchParams} membersOnly={menu.id === 'members'} onChanged={() => setAccountRevision((value) => value + 1)} /> : menu.id === 'content' && tab?.id === 'banners' ? <BannerManager params={url.searchParams} /> : categoryManagement ? <CategoryManager counts={categoryCounts} categories={categories} items={items} assets={assets} params={url.searchParams} onSave={async (category) => { const savedCategory = await saveAdminCategory(category, !categories.some((entry) => entry.id === category.id)); setCategories((current) => current.some((entry) => entry.id === savedCategory.id) ? current.map((entry) => entry.id === savedCategory.id ? savedCategory : entry) : [...current, savedCategory]); window.location.hash = `/admin/basic?tab=categories&id=${savedCategory.id}` }} /> : <>
+        {bannerManagement && <nav className="adm-tabs" aria-label="배너 타입"><a href="#/admin/content?tab=banners&type=campaign" aria-current={campaignEditing ? 'page' : undefined}>기획전 타입</a><a href="#/admin/content?tab=banners&type=image" aria-current={!campaignEditing ? 'page' : undefined}>이미지 타입</a></nav>}
+        {menu.id === 'members' || menu.id === 'customers' && ['companies', 'applications'].includes(tab?.id ?? '') ? <CustomerManager key={`${menu.id}/${tab?.id}`} params={url.searchParams} membersOnly={menu.id === 'members'} onChanged={() => setAccountRevision((value) => value + 1)} /> : bannerManagement && !campaignEditing ? <BannerManager params={url.searchParams} /> : categoryManagement ? <CategoryManager counts={categoryCounts} categories={categories} items={items} assets={assets} params={url.searchParams} onSave={async (category) => { const savedCategory = await saveAdminCategory(category, !categories.some((entry) => entry.id === category.id)); setCategories((current) => current.some((entry) => entry.id === savedCategory.id) ? current.map((entry) => entry.id === savedCategory.id ? savedCategory : entry) : [...current, savedCategory]); window.location.hash = `/admin/basic?tab=categories&id=${savedCategory.id}` }} /> : <>
         {notice.scope === noticeScope && !editing && !discountEditing && <p className="adm-note" role="status">{notice.text}</p>}
         {menu.id === 'receiving' && ['primary', 'disposal'].includes(tab?.id ?? '') && id ? <><a className="adm-button adm-back" href={listHref}><ArrowLeft size={15} />목록으로</a><InspectionEditor key={id} id={id} categories={categories} readOnly={tab?.id === 'disposal'} onChanged={() => setAccountRevision((value) => value + 1)} /></> : <>
         {discountEditing ? <ProductDiscountEditor product={market.products.find((product) => product.id === id)!} cancelHref={cancelHref} onSave={(product) => { setMarket((current) => ({ ...current, products: current.products.map((entry) => entry.id === product.id ? product : entry) })); setNotice({ scope: `market/products/${product.id}`, text: `${product.id} 상품 할인율을 ${product.discountRate}%로 저장했습니다.` }); saved(product.id) }} /> : occupancyEditing ? <LocationOccupancyEditor location={locationRecords.find((location) => location.id === id)!} locations={locationRecords} assets={assets} items={items} categories={categories} cancelHref={cancelHref} onSave={(changedAssets) => { const replacements = new Map(changedAssets.map((asset) => [asset.id, asset])); setAssets((current) => current.map((asset) => replacements.get(asset.id) ?? asset)); setNotice({ scope: `inventory/locations/${id}`, text: `${changedAssets.length}건의 점유 재고를 저장했습니다.` }); saved(id!) }} /> : editing && campaignEditing ? <CampaignEditor key={`${mode}/${id}`} campaign={mode === 'edit' ? market.campaigns.find((entry) => entry.id === id) : undefined} cancelHref={cancelHref} onSave={(campaign) => { setAccountRevision(value => value + 1); saved(campaign.id) }} /> : editing && locationEditing ? <LocationEditor key={`${mode}/${id}`} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSave={(location) => { setLocationRecords((current) => current.some((entry) => entry.id === location.id) ? current.map((entry) => entry.id === location.id ? location : entry) : [...current, location]); setNotice({ scope: `inventory/locations/${location.id}`, text: `${location.id} 로케이션이 저장되었습니다.` }); saved(location.id) }} /> : editing ? <InventoryEditor key={`${menu.id}/${mode}/${id}`} kind={itemManagement ? 'items' : 'inventory'} items={items} assets={assets} categories={categories} locations={locationRecords} id={mode === 'edit' ? id : null} cancelHref={cancelHref} onSaveItem={(item, previousId) => { setItems((current) => previousId ? current.map((entry) => entry.id === previousId ? item : entry) : [...current, item]); if (previousId && previousId !== item.id) setAssets((current) => current.map((asset) => asset.itemId === previousId ? { ...asset, itemId: item.id } : asset)); saved(item.id) }} onSaveAsset={(asset) => { setAssets((current) => current.some((entry) => entry.id === asset.id) ? current.map((entry) => entry.id === asset.id ? asset : entry) : [...current, asset]); saved(asset.id) }} /> : <>
@@ -280,7 +289,7 @@ function RecordList({ view, params, path, categories, statusTab, onStatusChange 
   const categoryId = params.get('category') ?? ''
   const extraFilters = view.rows.some((row) => row.itemId) || path === 'inventory' && (params.get('tab') ?? 'stock') === 'stock'
     ? ([['grade', '등급'], ['saleStatus', '판매 상태'], ['itemId', '품목코드'], ['locationId', '로케이션']] as const) : []
-  const serverStatuses = path === 'basic' || path === 'inventory' && params.get('tab') === 'locations' ? ['사용', '미사용'] : path === 'inventory' ? ['입고대기', '보관중', '출고완료'] : path === 'receiving' ? params.get('tab') === 'requests' ? receivingStatuses : params.get('tab') === 'disposal' ? ['미처리', '처리 예정', '폐기 완료'] : ['검수 대기', '결과 확인 대기', '검수 종료'] : path === 'market' && params.get('tab') === 'campaigns' ? ['중지', '예약', '진행 중', '종료'] : []
+  const serverStatuses = path === 'basic' || path === 'inventory' && params.get('tab') === 'locations' ? ['사용', '미사용'] : path === 'inventory' ? ['입고대기', '보관중', '출고완료'] : path === 'receiving' ? params.get('tab') === 'requests' ? receivingStatuses : params.get('tab') === 'disposal' ? ['미처리', '처리 예정', '폐기 완료'] : ['검수 대기', '결과 확인 대기', '검수 종료'] : path === 'content' && params.get('tab') === 'banners' && params.get('type') === 'campaign' ? ['중지', '예약', '진행 중', '종료'] : []
   const statuses: string[] = path === 'market' && params.get('tab') === 'quotes' ? ['접수 완료'] : path === 'market' && params.get('tab') === 'sales' ? ['승인 대기', '승인 완료', '반려'] : statusTab ? marketStatusOptions[statusTab].filter((value) => value !== '판매취소') : view.pagination ? [...serverStatuses] : [...new Set(view.rows.map((row) => row.status))]
   const availableCustomers = customers.filter((item) => view.rows.some((row) => row.customerId === item.id))
   const periods = [...new Set(view.rows.flatMap((row) => {
@@ -305,11 +314,13 @@ function RecordList({ view, params, path, categories, statusTab, onStatusChange 
     window.dispatchEvent(new HashChangeEvent('hashchange'))
   }
   const submitSearch = () => startSearch(() => update('q', search.text))
-  const resetHref = `#/admin/${path}?tab=${params.get('tab') ?? ''}`
+  const resetParams = new URLSearchParams({ tab: params.get('tab') ?? '' })
+  if (path === 'content' && params.get('tab') === 'banners') resetParams.set('type', params.get('type') === 'campaign' ? 'campaign' : 'image')
+  const resetHref = `#/admin/${path}?${resetParams}`
   const detailHref = (id: string) => { const next = new URLSearchParams(params); next.set('id', id); return `#/admin/${path}?${next}` }
   const billed = invoices.filter((invoice) => filtered.some((row) => row.id === invoice.id) && invoice.status !== '미청구')
   return <>
-    {!(path === 'market' && ['quotes', 'campaigns'].includes(params.get('tab') ?? '')) && (categories.length > 0 || view.rows.some((row) => row.categoryId) || categoryId) && <div className="adm-category-filter"><CategorySelect categories={categories} value={categoryId} onChange={(value) => update('category', value)} /></div>}
+    {!(path === 'market' && params.get('tab') === 'quotes' || path === 'content' && params.get('tab') === 'banners') && (categories.length > 0 || view.rows.some((row) => row.categoryId) || categoryId) && <div className="adm-category-filter"><CategorySelect categories={categories} value={categoryId} onChange={(value) => update('category', value)} /></div>}
     <div className="adm-filterbar">
       <label className="adm-search"><span>검색</span><div><Search size={16} /><input type="search" value={search.text} onChange={(event) => setSearch({ scope, text: event.target.value })} placeholder="번호, 이름, 고객사" /></div></label><button className="adm-button adm-primary adm-search-button" type="button" aria-busy={searching} disabled={searching} onClick={submitSearch}>{searching ? <LoaderCircle className="adm-spinner" size={16} /> : <Search size={16} />}{searching ? '검색 중' : '검색'}</button>
       <label><span>{path === 'basic' ? '사용 구분' : extraFilters.length ? '보관 상태' : '상태'}</span><select value={status} onChange={(event) => update('status', event.target.value)}><option value="">전체 상태</option>{status && !statuses.includes(status) && <option value={status}>{status}</option>}{statuses.map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -353,7 +364,7 @@ function DashboardTable({ title, view, rows, link }: { title: string; view: Admi
 function Dashboard({ views, metrics }: { views: Record<string, AdminView>; metrics: Record<string, number> }) {
   const receivingView = views['receiving/requests']
   const inquiryView = views['customers/inquiries']
-  const campaignView = views['market/campaigns']
+  const campaignView = views['content/banners']
   return <>
     <div className="adm-metrics">{dashboardMetrics.map((metric) => <a href={adminHref(metric)} key={metric.label}><span>{metric.label}</span><strong>{metrics[`${metric.menu}/${metric.tab}`] ?? views[`${metric.menu}/${metric.tab}`].rows.filter((entry) => entry.status === metric.status).length}<small>건</small></strong><ChevronRight size={15} /></a>)}</div>
     <DashboardTable title="확인할 입고 신청" view={receivingView} rows={receivingView.rows.filter((row) => row.status === '입고 신청')} link={{ label: '', menu: 'receiving', tab: 'requests' }} />
