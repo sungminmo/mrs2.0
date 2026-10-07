@@ -566,24 +566,25 @@ export function CustomerOfferPanel({
           {query.data.offers.map((offer) => (
             <div key={`${offer.id}/${offer.version}`}>
               <OfferSummary offer={offer} />
-              {manager &&
-                !query.data.order &&
+              {!query.data.order &&
                 offer.status === 'SENT' &&
                 !offer.expired && (
                   <div className="outbound-actions">
                     <OutboundAction
-                      label="견적 승인 및 재고 예약"
+                      label="견적 승인 및 출고 요청"
                       path={`/api/customer/offers/${offer.id}/accept`}
                       values={{ version: offer.version }}
                       onDone={refresh}
                     />
-                    <OutboundAction
-                      label="견적 거절"
-                      path={`/api/customer/offers/${offer.id}/decline`}
-                      values={{ version: offer.version }}
-                      onDone={refresh}
-                      destructive
-                    />
+                    {manager && (
+                      <OutboundAction
+                        label="견적 거절"
+                        path={`/api/customer/offers/${offer.id}/decline`}
+                        values={{ version: offer.version }}
+                        onDone={refresh}
+                        destructive
+                      />
+                    )}
                   </div>
                 )}
             </div>

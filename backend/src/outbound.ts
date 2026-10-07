@@ -593,7 +593,7 @@ export function createOutboundRepository(client: PrismaClient) {
         ErrorCode.FORBIDDEN,
         '이 작업을 수행할 수 없습니다.',
       )
-    const account = await authorize(transaction, actor, true)
+    const account = await authorize(transaction, actor, action !== 'accept')
     const payloadHash = createHash('sha256')
       .update(JSON.stringify(input))
       .digest('hex')

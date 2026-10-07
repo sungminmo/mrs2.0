@@ -8,7 +8,7 @@
 
 ### 판매 승인 및 마켓 진열
 
-견적 회신·승인·분할 출고·잔여 취소·배송 완료 API는 실행 OpenAPI의 `Outbound` 태그에 등록했다. [출고 정책](OUTBOUND_POLICY.md)과 [요청·응답·버전·만료 계약](OUTBOUND_SCHEMA.md)을 참고한다. `/api/admin/quotes/{id}/offers`, `/api/admin/offers/{id}/send`, `/api/customer/offers/{id}/accept`, 양쪽 `/api/{scope}/orders`, `/api/admin/shipments/{id}/dispatch` 등으로 처리한다. 고객 MANAGER 승인 시 예약, 관리자 출고 확정 시 판매자 수량 차감이며 기존 견적 접수는 미예약·불변이다. 결제 API는 제공하지 않고 외부 적용·배포는 별도 승인한다.
+견적 회신·승인·분할 출고·잔여 취소·배송 완료 API는 실행 OpenAPI의 `Outbound` 태그에 등록했다. [출고 정책](OUTBOUND_POLICY.md)과 [요청·응답·버전·만료 계약](OUTBOUND_SCHEMA.md)을 참고한다. `/api/admin/quotes/{id}/offers`, `/api/admin/offers/{id}/send`, `/api/customer/offers/{id}/accept`, 양쪽 `/api/{scope}/orders`, `/api/admin/shipments/{id}/dispatch` 등으로 처리한다. 고객 VIEWER·MANAGER 모두 회신 직후부터 만료 전까지 승인·출고 요청할 수 있고 전체 예약·거래가 생성된다. 거절·잔여 취소 요청은 MANAGER만 가능하다. 관리자 출고 확정 시 판매자 수량 차감이며 기존 견적 접수는 미예약·불변이다. 결제 API는 제공하지 않고 외부 적용·배포는 별도 승인한다.
 
 `POST /api/admin/sale-requests/{id}/approve`는 활성 관리자만 사용할 수 있다. `{expectedUpdatedAt: 자산 updatedAt, unitPrice: 1~1000000000000 정수 원 단가, reason: 1~500자}`를 받는다. 검수 완료·승인 대기·활성 고객사·보관중·판매대기·상세 정보 등록·현재 수량 일치를 재검증한다. Serializable 트랜잭션으로 요청 `APPROVED`, 자산 `ON_SALE`, 상품 `AVAILABLE` 및 자산·고객·마켓 감사 이력을 저장한다. 상품 ID는 `PRD-{자산번호}`이며 할인율 0, 판매 수량은 요청 전체 수량, 최초 진열 시각을 기록한다. 최소 주문 수량은 1 또는 전체 수량이 1보다 작을 때 그 전체 수량이다. 성공은 `data.request = {id, status: "APPROVED", productId}`를 반환한다. 미완료 검수·중복 처리·상품 연결·버전 변경은 409, 정보 누락은 400, 요청 없음은 404이다. 실제 재고 차감·구매·출고·정산·고객 통지는 실행하지 않는다.
 
