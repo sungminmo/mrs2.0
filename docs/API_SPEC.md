@@ -8,6 +8,8 @@
 
 ### 판매 승인 및 마켓 진열
 
+견적 회신·승인·출고는 [출고 정책](OUTBOUND_POLICY.md)과 [스키마·후속 API 계약안](OUTBOUND_SCHEMA.md)을 추가한 설계 단계다. 해당 경로는 아직 실행 OpenAPI에 등록하지 않았고 결제 API는 만들지 않는다. 기존 접수 계약은 유지한다.
+
 `POST /api/admin/sale-requests/{id}/approve`는 활성 관리자만 사용할 수 있다. `{expectedUpdatedAt: 자산 updatedAt, unitPrice: 1~1000000000000 정수 원 단가, reason: 1~500자}`를 받는다. 검수 완료·승인 대기·활성 고객사·보관중·판매대기·상세 정보 등록·현재 수량 일치를 재검증한다. Serializable 트랜잭션으로 요청 `APPROVED`, 자산 `ON_SALE`, 상품 `AVAILABLE` 및 자산·고객·마켓 감사 이력을 저장한다. 상품 ID는 `PRD-{자산번호}`이며 할인율 0, 판매 수량은 요청 전체 수량, 최초 진열 시각을 기록한다. 최소 주문 수량은 1 또는 전체 수량이 1보다 작을 때 그 전체 수량이다. 성공은 `data.request = {id, status: "APPROVED", productId}`를 반환한다. 미완료 검수·중복 처리·상품 연결·버전 변경은 409, 정보 누락은 400, 요청 없음은 404이다. 실제 재고 차감·구매·출고·정산·고객 통지는 실행하지 않는다.
 
 `GET /api/market/products?page=1&size=20&q=상품명`은 비회원용 공개 상품 목록이다. size는 최대 100, page는 최대 100000이다. `data`에 `products, categories, campaigns, page, size, total`을 반환한다. 판매 중·진열 시각 존재·보관중/판매중 S/A/B 자산·활성 고객사·양수 가용 수량 상품만 조회한다. 가용 수량은 판매 등록 수량에서 예약·판매 수량을 차감한다. 상품 ID·상품명·분류 경로·규격·브랜드·등급·수량·공개 사진을 반환하며 `unitPrice`, `originalUnitPrice` 및 고객사·신청자·입고 내역은 공개하지 않는다. 할인율은 공개한다.

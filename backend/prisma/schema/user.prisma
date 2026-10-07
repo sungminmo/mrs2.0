@@ -50,6 +50,26 @@ model User {
   cart Cart?
   /// 계정이 제출한 구매 견적 요청. 조회는 고객사 단위로 공유한다.
   purchaseQuotes PurchaseQuote[]
+  /// 확정 견적 작성 행위.
+  createdOffers QuoteOffer[] @relation("OfferCreator")
+  /// 확정 견적 회신 행위.
+  sentOffers QuoteOffer[] @relation("OfferSender")
+  /// 고객 MANAGER의 거래 승인 행위.
+  approvedOrders PurchaseOrder[] @relation("OrderApprover")
+  /// 출고 초안 작성 행위.
+  createdShipments Shipment[] @relation("ShipmentCreator")
+  /// 출고 확정 행위.
+  dispatchedShipments Shipment[] @relation("ShipmentDispatcher")
+  /// 배송 완료 처리 행위.
+  deliveredShipments Shipment[] @relation("ShipmentDeliverer")
+  /// 고객 또는 관리자의 잔여 취소 요청.
+  requestedCancellations OrderCancellation[] @relation("CancellationRequester")
+  /// 관리자의 취소 결정.
+  decidedCancellations OrderCancellation[] @relation("CancellationDecider")
+  /// 거래 업무 감사 이력.
+  fulfillmentChanges FulfillmentChange[] @relation("FulfillmentActor")
+  /// 거래 업무 멱등성 영수증.
+  fulfillmentOperations FulfillmentOperation[] @relation("FulfillmentOperator")
 
   @@index([customerId])
   @@index([status, createdAt]) // 승인 대기 목록 등 상태별 조회

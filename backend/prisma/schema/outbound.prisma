@@ -1,0 +1,439 @@
+/// 회신 본문은 SENT 이후 불변이며 새 회신은 새 revision으로 저장한다. 만료는 expiresAt으로 판정한다.
+enum QuoteOfferStatus {
+  DRAFT
+  SENT
+  SUPERSEDED
+  DECLINED
+  WITHDRAWN
+  ACCEPTED
+}
+
+/// 결제 여부와 무관한 거래의 종료 사유. 진행 상태는 수량과 출고 내역으로 계산한다.
+enum PurchaseOrderClosure {
+  COMPLETED
+  CANCELLED
+  CLOSED_PARTIAL_CANCELLED
+}
+
+/// 초안은 재고를 차감하지 않고 DISPATCHED 전환에서만 차감한다.
+enum ShipmentStatus {
+  DRAFT
+  DISPATCHED
+  DELIVERED
+  CANCELLED
+}
+
+/// 승인 전에는 예약을 유지하며 출고 확정을 일시 차단한다.
+enum OrderCancellationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// 운송 방법은 수기 관리하며 배송사 시스템과 연동하지 않는다.
+enum OutboundDeliveryMethod {
+  DELIVERY
+  SELF_PICKUP
+}
+
+/// 구매 요청과 구별되는 관리자 확정 견적 버전. 승인 후 모든 거래 조건을 잠근다.
+model QuoteOffer {
+  /// 내부 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// 변경하지 않는 원 요청.
+  quoteId String @db.VarChar(36)
+  /// 요청 내 증가하는 회신 버전.
+  revision Int
+  /// 회신 진행 상태. 만료 상태는 저장하지 않는다.
+  status QuoteOfferStatus @default(DRAFT)
+  /// 낙관적 잠금 버전.
+  version Int @default(0)
+  /// 작성 관리자.
+  createdById String @db.VarChar(36)
+  /// 실제 회신 관리자.
+  sentById String? @db.VarChar(36)
+  /// 회신 시각.
+  sentAt DateTime?
+  /// 승인 가능 종료 시각. null은 무기한, 종료 시각 자체는 제외한다.
+  expiresAt DateTime?
+  /// 납품 담당자 스냅샷.
+  contactName String @db.VarChar(80)
+  /// 납품 연락처 스냅샷.
+  phone String @db.VarChar(40)
+  /// 선택 이메일 스냅샷.
+  email String @default("") @db.VarChar(254)
+  /// 납품 주소 스냅샷.
+  address String @db.VarChar(300)
+  /// 예정 납품일. 한국 달력 날짜.
+  deliveryDate DateTime? @db.Date
+  /// 운송 방법.
+  deliveryMethod OutboundDeliveryMethod @default(DELIVERY)
+  /// 회신 비고.
+  note String @default("") @db.VarChar(1000)
+  /// 거래 전체에 한 번만 적용하는 VAT 포함 KRW 배송비.
+  shippingFee Decimal @default(0) @db.Decimal(19, 0)
+  /// 라인별 원 단위 반올림한 상품 합계.
+  itemTotal Decimal @db.Decimal(24, 0)
+  /// 상품 합계와 배송비 합. 지불액이 아니다.
+  grandTotal Decimal @db.Decimal(24, 0)
+  /// 생성 UTC 시각.
+  createdAt DateTime @default(now())
+  /// 마지막 상태 또는 초안 변경 UTC 시각.
+  updatedAt DateTime @updatedAt
+  /// 원 요청 보존 관계.
+  quote PurchaseQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 작성 행위자 보존 관계.
+  createdBy User @relation("OfferCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 회신 행위자 보존 관계.
+  sentBy User? @relation("OfferSender", fields: [sentById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 회신 상품 스냅샷.
+  items QuoteOfferItem[]
+  /// 이 회신을 승인한 거래는 최대 하나.
+  order PurchaseOrder?
+  /// 동일 요청 안의 회신 버전 중복 방지.
+  @@unique([quoteId, revision])
+  /// 거래와 회신이 동일 요청에 속하도록 복합 외래키 대상 제공.
+  @@unique([quoteId, id])
+  /// 최신 회신 및 상태 조회.
+  @@index([quoteId, status])
+  /// 만료 회신 조회.
+  @@index([status, expiresAt])
+  @@map("quote_offers")
+}
+
+/// 확정 견적 상품. 요청 상품과 다를 수 있으므로 별도 스냅샷을 보존한다.
+model QuoteOfferItem {
+  /// 내부 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// 소속 회신.
+  offerId String @db.VarChar(36)
+  /// 대응하는 원 요청 항목. 신규 추가 상품이면 null.
+  sourceQuoteItemId String? @db.VarChar(36)
+  /// 실제 공급 상품.
+  productId String @db.VarChar(20)
+  /// 실제 공급 자산. 상품과 일치 여부는 저장 트랜잭션에서 확인한다.
+  assetId String @db.VarChar(11)
+  /// 판매자 고객사. 자산 소유자와 일치 여부는 저장 트랜잭션에서 확인한다.
+  sellerCustomerId String @db.VarChar(20)
+  /// 판매자 표시명 스냅샷. 개인정보는 포함하지 않는다.
+  sellerName String @db.VarChar(160)
+  /// 표시 순서.
+  sortOrder Int
+  /// 상품명 스냅샷.
+  name String @db.VarChar(160)
+  /// 카테고리 경로 스냅샷.
+  category String @db.VarChar(500)
+  /// 품질 등급 스냅샷.
+  grade String @db.VarChar(10)
+  /// 수량 단위 스냅샷.
+  unit String @db.VarChar(20)
+  /// 규격 스냅샷.
+  specification String @db.VarChar(500)
+  /// 브랜드 스냅샷.
+  brand String @db.VarChar(160)
+  /// 공개 상품 사진 스냅샷.
+  imageUrl String? @db.Text
+  /// 확정 수량. 0 초과 10억 이하, 소수 3자리.
+  quantity Decimal @db.Decimal(18, 3)
+  /// 관리자 확정 VAT 포함 KRW 단가.
+  unitPrice Decimal @db.Decimal(19, 0)
+  /// 단가 곱하기 수량을 원 단위 반올림한 금액.
+  total Decimal @db.Decimal(24, 0)
+  /// 회신 및 상품 내역 물리 삭제 제한.
+  offer QuoteOffer @relation(fields: [offerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 원 요청 항목 보존 관계.
+  sourceQuoteItem PurchaseQuoteItem? @relation(fields: [sourceQuoteItemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 공급 상품 보존 관계.
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 출고 대상 자산 보존 관계.
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 판매자 보존 관계.
+  seller Customer @relation("OfferSeller", fields: [sellerCustomerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 승인 거래 항목은 최대 하나.
+  orderItem PurchaseOrderItem?
+  /// 동일 회신의 상품 중복 방지.
+  @@unique([offerId, productId])
+  /// 동일 회신의 표시 순서 중복 방지.
+  @@unique([offerId, sortOrder])
+  @@map("quote_offer_items")
+}
+
+/// 고객 MANAGER가 승인한 거래. 가격과 납품 조건은 불변 승인 회신을 참조한다.
+model PurchaseOrder {
+  /// 내부 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// ORD-YYMMDD-8자리 고유 거래번호.
+  code String @unique @db.VarChar(30)
+  /// 요청당 거래는 하나. 재거래는 새 견적 요청으로 시작한다.
+  quoteId String @unique @db.VarChar(36)
+  /// 승인한 회신. 회신당 거래는 하나.
+  offerId String @unique @db.VarChar(36)
+  /// 구매 고객사. 원 요청 고객사 일치 여부는 승인 트랜잭션에서 확인한다.
+  customerId String @db.VarChar(20)
+  /// 승인한 고객 MANAGER.
+  approvedById String @db.VarChar(36)
+  /// 승인 UTC 시각.
+  approvedAt DateTime @default(now())
+  /// 출고와 취소의 공통 낙관적 잠금 버전.
+  version Int @default(0)
+  /// 최종 종료 사유. 미종료는 null.
+  closure PurchaseOrderClosure?
+  /// 종료 시각.
+  closedAt DateTime?
+  /// 원 견적 요청 보존 관계.
+  quote PurchaseQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 다른 요청의 회신을 승인하는 것을 복합 외래키로 차단한다.
+  offer QuoteOffer @relation(fields: [quoteId, offerId], references: [quoteId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// 구매 고객사 보존 관계.
+  customer Customer @relation("OrderBuyer", fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 승인 행위자 보존 관계.
+  approvedBy User @relation("OrderApprover", fields: [approvedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 확정 수량과 이행 누계.
+  items PurchaseOrderItem[]
+  /// 분할 출고 목록.
+  shipments Shipment[]
+  /// 잔여 취소 요청 이력.
+  cancellations OrderCancellation[]
+  /// 거래 감사 이력.
+  changes FulfillmentChange[]
+  /// 회신 복합 일대일 참조의 고유성.
+  @@unique([quoteId, offerId])
+  /// 고객사별 승인일 최신순 조회.
+  @@index([customerId, approvedAt, id])
+  @@map("purchase_orders")
+}
+
+/// 예약 잔량은 quantity-shippedQuantity-cancelledQuantity. 승인 수량은 변경하지 않는다.
+model PurchaseOrderItem {
+  /// 내부 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// 소속 거래.
+  orderId String @db.VarChar(36)
+  /// 승인 회신의 원 항목. 거래 회신 일치는 서비스에서 확인한다.
+  offerItemId String @unique @db.VarChar(36)
+  /// 공급 상품. 회신 항목과 일치는 서비스에서 확인한다.
+  productId String @db.VarChar(20)
+  /// 승인 수량.
+  quantity Decimal @db.Decimal(18, 3)
+  /// 출고 확정 누계.
+  shippedQuantity Decimal @default(0) @db.Decimal(18, 3)
+  /// 관리자 승인 취소 누계.
+  cancelledQuantity Decimal @default(0) @db.Decimal(18, 3)
+  /// 소속 거래 보존 관계.
+  order PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 승인 조건 스냅샷 참조.
+  offerItem QuoteOfferItem @relation(fields: [offerItemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 공급 상품 보존 관계.
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 분할 출고 항목.
+  shipments ShipmentItem[]
+  /// 취소 수량 스냅샷.
+  cancellations OrderCancellationItem[]
+  /// 동일 거래의 상품 중복 방지.
+  @@unique([orderId, productId])
+  /// 다른 거래의 항목 연결을 차단하는 복합 참조 대상.
+  @@unique([orderId, id])
+  @@map("purchase_order_items")
+}
+
+/// 개별 출고 문서. 확정 전에는 초안이며 실제 차감과 분리된다.
+model Shipment {
+  /// 내부 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// SHP-YYMMDD-8자리 고유 출고번호.
+  code String @unique @db.VarChar(30)
+  /// 소속 거래.
+  orderId String @db.VarChar(36)
+  /// 출고와 배송 상태.
+  status ShipmentStatus @default(DRAFT)
+  /// 낙관적 잠금 버전.
+  version Int @default(0)
+  /// 예정 출고 UTC 시각.
+  scheduledAt DateTime?
+  /// 출고 확정 UTC 시각.
+  dispatchedAt DateTime?
+  /// 관리자 배송 완료 처리 UTC 시각.
+  deliveredAt DateTime?
+  /// 초안 작성 관리자.
+  createdById String @db.VarChar(36)
+  /// 출고 확정 관리자.
+  dispatchedById String? @db.VarChar(36)
+  /// 배송 완료 관리자.
+  deliveredById String? @db.VarChar(36)
+  /// 승인 조건에서 복사한 운송 방법.
+  deliveryMethod OutboundDeliveryMethod
+  /// 승인 조건에서 복사한 주소. 확정 후 불변.
+  address String @db.VarChar(300)
+  /// 납품 담당자.
+  contactName String @db.VarChar(80)
+  /// 납품 연락처.
+  phone String @db.VarChar(40)
+  /// 선택 배송사명.
+  carrier String @default("") @db.VarChar(160)
+  /// 선택 차량 정보.
+  vehicle String @default("") @db.VarChar(160)
+  /// 선택 운송장 번호.
+  trackingNumber String @default("") @db.VarChar(160)
+  /// 운송 비고.
+  note String @default("") @db.VarChar(1000)
+  /// 생성 시각.
+  createdAt DateTime @default(now())
+  /// 최종 변경 시각.
+  updatedAt DateTime @updatedAt
+  /// 거래 보존 관계.
+  order PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 작성 행위자 보존 관계.
+  createdBy User @relation("ShipmentCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 출고 행위자 보존 관계.
+  dispatchedBy User? @relation("ShipmentDispatcher", fields: [dispatchedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 배송 완료 행위자 보존 관계.
+  deliveredBy User? @relation("ShipmentDeliverer", fields: [deliveredById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 출고 상품과 수량.
+  items ShipmentItem[]
+  /// 다른 거래의 출고 항목 혼입 방지용 복합 참조 대상.
+  @@unique([orderId, id])
+  /// 거래별 출고 현황.
+  @@index([orderId, status])
+  /// 관리자 출고 일정 조회.
+  @@index([status, scheduledAt])
+  @@map("shipments")
+}
+
+/// 출고 문서와 거래 항목은 동일 orderId를 가져야 한다.
+model ShipmentItem {
+  /// 내부 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// 두 복합 외래키가 공유하는 거래 식별자.
+  orderId String @db.VarChar(36)
+  /// 출고 문서 식별자.
+  shipmentId String @db.VarChar(36)
+  /// 승인 거래 항목 식별자.
+  orderItemId String @db.VarChar(36)
+  /// 이번 출고 수량.
+  quantity Decimal @db.Decimal(18, 3)
+  /// 소속 거래가 같은 출고 문서만 연결한다.
+  shipment Shipment @relation(fields: [orderId, shipmentId], references: [orderId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// 소속 거래가 같은 승인 항목만 연결한다.
+  orderItem PurchaseOrderItem @relation(fields: [orderId, orderItemId], references: [orderId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// 한 출고의 상품 행 중복 금지.
+  @@unique([shipmentId, orderItemId])
+  @@map("shipment_items")
+}
+
+/// 고객 요청 또는 관리자 직접 처리한 미출고 잔여 전체 취소. 동시 PENDING은 서비스에서 차단한다.
+model OrderCancellation {
+  /// 내부 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// 대상 거래.
+  orderId String @db.VarChar(36)
+  /// 관리자 결정 상태.
+  status OrderCancellationStatus @default(PENDING)
+  /// 요청 행위자. 고객 MANAGER 또는 직접 취소 관리자.
+  requestedById String @db.VarChar(36)
+  /// 요청 시각.
+  requestedAt DateTime @default(now())
+  /// 필수 요청 사유.
+  reason String @db.VarChar(500)
+  /// 결정 관리자.
+  decidedById String? @db.VarChar(36)
+  /// 결정 시각.
+  decidedAt DateTime?
+  /// 결정 사유. 결정 시 필수.
+  decisionReason String @default("") @db.VarChar(500)
+  /// 낙관적 잠금 버전.
+  version Int @default(0)
+  /// 대상 거래 보존 관계.
+  order PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 요청 행위자 보존 관계.
+  requestedBy User @relation("CancellationRequester", fields: [requestedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 결정 행위자 보존 관계.
+  decidedBy User? @relation("CancellationDecider", fields: [decidedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 취소 대상 잔여 수량 스냅샷.
+  items OrderCancellationItem[]
+  /// 다른 거래의 취소 항목 혼입 방지용 참조 대상.
+  @@unique([orderId, id])
+  /// 거래별 진행 취소 조회.
+  @@index([orderId, status])
+  @@map("order_cancellations")
+}
+
+/// 취소 요청 당시 미출고 잔량. 승인 시 같은 수량을 해제하며 출고와 경쟁하지 않는다.
+model OrderCancellationItem {
+  /// 내부 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// 소속 거래.
+  orderId String @db.VarChar(36)
+  /// 소속 취소 요청.
+  cancellationId String @db.VarChar(36)
+  /// 대상 거래 항목.
+  orderItemId String @db.VarChar(36)
+  /// 취소 대상 수량.
+  quantity Decimal @db.Decimal(18, 3)
+  /// 동일 거래의 취소 요청만 연결한다.
+  cancellation OrderCancellation @relation(fields: [orderId, cancellationId], references: [orderId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// 동일 거래의 승인 항목만 연결한다.
+  orderItem PurchaseOrderItem @relation(fields: [orderId, orderItemId], references: [orderId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// 취소 요청 내 상품 중복 방지.
+  @@unique([cancellationId, orderItemId])
+  @@map("order_cancellation_items")
+}
+
+/// 거래 작업 감사 이력. 회신 이전 작업은 quoteId, 승인 이후 작업은 orderId도 기록한다.
+model FulfillmentChange {
+  /// 내부 UUID.
+  id String @id @default(uuid()) @db.VarChar(36)
+  /// 원 요청 식별자.
+  quoteId String @db.VarChar(36)
+  /// 승인 이후 대상 거래.
+  orderId String? @db.VarChar(36)
+  /// 원 요청 안의 상세 대상 종류. OFFER/ORDER/SHIPMENT/CANCELLATION.
+  targetType String @db.VarChar(30)
+  /// 상세 대상 UUID. 종류별 존재 및 소속은 저장 트랜잭션에서 검증한다.
+  targetId String @db.VarChar(36)
+  /// 실제 작업자.
+  actorUserId String @db.VarChar(36)
+  /// 수행 액션.
+  action String @db.VarChar(80)
+  /// 필수 작업 사유.
+  reason String @db.VarChar(500)
+  /// 변경 전후 구조화 데이터. 비밀번호와 토큰은 저장하지 않는다.
+  changes Json
+  /// 발생 시각.
+  createdAt DateTime @default(now())
+  /// 요청 보존 관계.
+  quote PurchaseQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 거래 보존 관계.
+  order PurchaseOrder? @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 작업자 보존 관계.
+  actor User @relation("FulfillmentActor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 견적별 감사 조회.
+  @@index([quoteId, createdAt])
+  /// 거래별 감사 조회.
+  @@index([orderId, createdAt])
+  @@map("fulfillment_changes")
+}
+
+/// 성공한 쓰기 요청의 멱등성 영수증. 업무 변경과 동일 트랜잭션에 기록한다.
+model FulfillmentOperation {
+  /// 클라이언트 요청 UUID. 재사용 시 작업자와 본문 해시가 일치해야 한다.
+  operationId String @id @db.VarChar(36)
+  /// 요청 작업자.
+  actorUserId String @db.VarChar(36)
+  /// 요청 액션.
+  action String @db.VarChar(80)
+  /// 대상 UUID. 타입은 액션으로 구별한다.
+  targetId String @db.VarChar(36)
+  /// 정규화된 본문의 SHA-256.
+  payloadHash String @db.Char(64)
+  /// 생성 또는 변경된 자원의 UUID.
+  resultResourceId String @db.VarChar(36)
+  /// 성공 응답의 최소 참조 데이터. 개인정보와 인증정보는 저장하지 않는다.
+  result Json
+  /// 성공 시각.
+  createdAt DateTime @default(now())
+  /// 작업자 보존 관계.
+  actor User @relation("FulfillmentOperator", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 작업자별 재시도 조사.
+  @@index([actorUserId, createdAt])
+  @@map("fulfillment_operations")
+}
