@@ -119,7 +119,7 @@ export default function PublicMarket({
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [revision, setRevision] = useState(0)
   const [loadedCatalog, setCatalog] = useState<Catalog | null>(null)
-  const [selected, selectProduct, backProduct] = useHistoryState<string | null>(
+  const [selected, selectProduct] = useHistoryState<string | null>(
     member ? 'member-market-product' : 'public-market-product',
     null
   )
@@ -183,7 +183,7 @@ export default function PublicMarket({
     window.scrollTo(0, 0)
   }
   const back = () => {
-    backProduct()
+    selectProduct(null)
     requestAnimationFrame(() => window.scrollTo(0, listScroll.current))
   }
   return (
