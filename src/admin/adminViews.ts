@@ -13,7 +13,7 @@ export const menus: { id: MenuId; label: string; tabs: { id: string; label: stri
   { id: 'basic', label: '기초 정보 관리', tabs: [{ id: 'items', label: '품목 관리' }, { id: 'categories', label: '카테고리 관리' }] },
   { id: 'receiving', label: '입고·검수·폐기', tabs: [{ id: 'requests', label: '입고 신청' }, { id: 'primary', label: '1차 검수' }, { id: 'detailed', label: '상세 검수' }, { id: 'disposal', label: '폐기 관리' }] },
   { id: 'inventory', label: '자산 관리', tabs: [{ id: 'stock', label: '자산 목록' }, { id: 'locations', label: '로케이션' }] },
-  { id: 'market', label: '마켓 운영', tabs: [{ id: 'sales', label: '판매 요청' }, { id: 'products', label: '상품' }, { id: 'quotes', label: '구매 견적' }] },
+  { id: 'market', label: '마켓 운영', tabs: [{ id: 'sales', label: '판매 요청' }, { id: 'products', label: '상품' }, { id: 'quotes', label: '구매 견적' }, { id: 'outbound', label: '출고 관리' }] },
   { id: 'content', label: '콘텐츠 관리', tabs: [{ id: 'banners', label: '배너 관리' }] },
   { id: 'billing', label: '보관료·정산', tabs: [{ id: 'storage', label: '보관료' }, { id: 'payouts', label: '판매 정산' }, { id: 'disposal', label: '폐기 청구' }] },
   { id: 'customers', label: '고객사 관리', tabs: [{ id: 'companies', label: '고객사' }, { id: 'applications', label: '고객사 등록 신청' }, { id: 'sites', label: '현장' }, { id: 'inquiries', label: '문의' }] },

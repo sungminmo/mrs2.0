@@ -18,6 +18,7 @@ import { listMarketProducts, marketQuery, type MarketRepository } from './market
 import { cartAdd, cartSync, cartUpdate, cartRemove, cartHandlers, type CartRepository } from './cart.js'
 import { quoteHandlers, quoteCreateInput, quotePreviewInput, quoteListQuery, type QuoteRepository } from './quote.js'
 import { campaignHandlers, campaignInput, campaignUpdate, campaignProductQuery, type CampaignRepository } from './campaign.js'
+import { registerOutbound, type OutboundRepository } from './outbound.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -37,9 +38,10 @@ type Dependencies = {
   cart?: CartRepository
   quotes?: QuoteRepository
   campaigns?: CampaignRepository
+  outbound?: OutboundRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations, market, cart, quotes, campaigns }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations, market, cart, quotes, campaigns, outbound }: Dependencies) {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (result.success) return
@@ -86,6 +88,7 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
       app.openAPIRegistry.registerPath({ method: 'get', path: '/api/customer/market/products', tags: ['Market'], summary: '활성 고객 회원 마켓 목록·가격·실제 기획전 조회', security: [{ BearerAuth: [] }], request: { query: marketQuery }, responses: { 200: { description: '가격 포함 상품 목록' }, 400: { description: '검색·페이지 입력 오류' }, 401: { description: '회원 인증 필요' }, 403: { description: '활성 고객사 필요' } } })
     }
     const adminAuth = requireAuth(auth.repository, auth.secret, 'ADMIN')
+    if (outbound) registerOutbound(app, outbound, customerAuth, adminAuth)
     if (campaigns) {
       const handlers = campaignHandlers(campaigns)
       app.get('/api/admin/campaign-products', adminAuth, requireAdmin, handlers.products)

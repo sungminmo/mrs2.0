@@ -2,7 +2,7 @@
 
 ## 견적 기반 출고 설계 (2026-10-07)
 
-[DB 설계](OUTBOUND_SCHEMA.md)의 회신·승인 거래·분할 출고 스키마를 추가한다. Product listedQuantity는 등록 원수량, reservedQuantity는 승인 거래 미출고 예약, soldQuantity는 실제 출고 누계다. 원 요청·회신은 미예약이고 승인 API는 아직 미구현이다. 수량 규칙은 [출고 정책](OUTBOUND_POLICY.md)을 따른다.
+[DB·실행 API](OUTBOUND_SCHEMA.md)에 회신·승인 거래·분할 출고를 구현했다. Product listedQuantity는 등록 원수량, reservedQuantity는 승인 거래 미출고 예약, soldQuantity는 실제 출고 누계다. 원 요청·회신은 미예약, MANAGER 승인 시 예약, 관리자 출고 확정 시 reserved 감소·sold 증가·판매자 Asset.quantity 감소다. 수량 규칙은 [출고 정책](OUTBOUND_POLICY.md)을 따른다. 외부 미배포다.
 
 ## 구매 견적 요청 (2026-10-07)
 
