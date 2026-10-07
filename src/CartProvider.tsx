@@ -4,6 +4,7 @@ import { authenticatedFetch, readAuthSession, signOut, type AuthSession } from '
 import { useCartStore, type CartData } from './cartStore'
 import { CartQueue } from './cartQueue'
 import { CartContext } from './cartContext'
+import { createUuid } from './uuid'
 
 class CartApiError extends Error {
   status: number
@@ -52,7 +53,7 @@ export function CartProvider({ session, children }: { session: AuthSession | nul
   const merge = async () => {
     if (!session) return
     if (!useCartStore.getState().guest.length && !useCartStore.getState().batch) return
-    if (!navigator.locks) { setError('자동 병합을 지원하지 않는 브라우저입니다. 최신 브라우저에서 로그인해 주세요.'); return }
+    if (!navigator.locks) { setError('현재 접속 환경에서는 비회원 장바구니를 자동 병합할 수 없습니다. HTTPS로 접속한 뒤 다시 시도해 주세요.'); useCartStore.getState().setOpen(true); return }
     await navigator.locks.request('mrs-guest-cart-merge', async () => {
       await useCartStore.persist.rehydrate()
       const batch = useCartStore.getState().beginMerge(owner)
@@ -90,12 +91,11 @@ export function CartProvider({ session, children }: { session: AuthSession | nul
     return () => { active.current = false; queue.stop(); client.removeQueries({ queryKey: ['cart', owner] }); useCartStore.getState().resetUI(); window.removeEventListener('storage', storage); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('mrs-before-signout', signout) }
   }, [client, owner, queue])
   useEffect(() => { if (open) refetchOnOpen() }, [open])
-  const run = (work: () => Promise<void>) => { void queue.enqueue(work).catch(failure => { if (active.current) { setError(failure instanceof Error ? failure.message : '장바구니 처리 실패'); useCartStore.getState().setOpen(true) } }) }
+  const run = (work: () => Promise<void>) => { void queue.enqueue(work).catch(failure => { if (active.current) { const message = failure instanceof Error ? failure.message : '장바구니 처리에 실패했습니다. 다시 시도해 주세요.'; setError(message); useCartStore.getState().message(message, 'error'); useCartStore.getState().setOpen(true) } }) }
   const data = session ? query.data ?? { id: null, version: 0, items: [] } : { id: null, version: 0, items: guest }
-  return <CartContext value={{ member: !!session, data: { ...data, items: data.items.map(item => ({ ...item, quantity: intents[item.id] && !intents[item.id].error ? intents[item.id].quantity : item.quantity })) }, loading: !!session && query.isPending, refreshing: !!session && query.isFetching, busy: mutation.isPending || (!!session && !!useCartStore.getState().batch), error: error || (query.error?.message ?? ''), refresh: () => { setError(''); if (retryAdd.current) run(async () => { accept(await mutation.mutateAsync(retryAdd.current!)); retryAdd.current = null }); else void query.refetch() }, merge: () => run(merge), close: () => { void queue.flush().catch(() => {}); useCartStore.getState().setOpen(false) }, add: item => {
-    if (!session) { try { useCartStore.getState().addGuest(item); useCartStore.getState().message('장바구니에 담았습니다.') } catch (failure) { setError((failure as Error).message) } return }
-    const body = { operationId: crypto.randomUUID(), productId: item.productId, quantity: item.quantity }
-    run(async () => { if (useCartStore.getState().batch) throw new Error('비회원 장바구니 병합을 먼저 완료해 주세요.'); retryAdd.current = { path: '/api/cart/items', method: 'POST', body }; accept(await mutation.mutateAsync(retryAdd.current)); retryAdd.current = null; setError(''); useCartStore.getState().message('장바구니에 담았습니다.') })
+  return <CartContext value={{ member: !!session, data: { ...data, items: data.items.map(item => ({ ...item, quantity: intents[item.id] && !intents[item.id].error ? intents[item.id].quantity : item.quantity })) }, loading: !!session && query.isPending, refreshing: !!session && query.isFetching, busy: mutation.isPending || (!!session && !!useCartStore.getState().batch), error: error || (query.error?.message ?? ''), refresh: () => { setError(''); if (retryAdd.current) run(async () => { accept(await mutation.mutateAsync(retryAdd.current!)); retryAdd.current = null; useCartStore.getState().message('장바구니에 담았습니다.') }); else void query.refetch() }, merge: () => run(merge), close: () => { void queue.flush().catch(() => {}); useCartStore.getState().setOpen(false) }, add: item => {
+    if (!session) { try { useCartStore.getState().addGuest(item); setError(''); useCartStore.getState().message('장바구니에 담았습니다.') } catch (failure) { const message = failure instanceof Error ? failure.message : '장바구니에 담지 못했습니다. 다시 시도해 주세요.'; setError(message); useCartStore.getState().message(message, 'error') } return }
+    run(async () => { const body = { operationId: createUuid(), productId: item.productId, quantity: item.quantity }; if (useCartStore.getState().batch) throw new Error('비회원 장바구니 병합을 먼저 완료해 주세요.'); retryAdd.current = { path: '/api/cart/items', method: 'POST', body }; accept(await mutation.mutateAsync(retryAdd.current)); retryAdd.current = null; setError(''); useCartStore.getState().message('장바구니에 담았습니다.') })
   }, change: (id, quantity) => { if (!session) { useCartStore.getState().changeGuest(id, quantity); return } useCartStore.getState().edit(id, quantity); queue.schedule(id) }, remove: ids => {
     if (!session) { useCartStore.getState().removeGuest(ids); return }
     for (const id of ids) { queue.cancel(id); const intent = useCartStore.getState().intents[id]; if (intent) useCartStore.getState().settle(id, intent.sequence) }

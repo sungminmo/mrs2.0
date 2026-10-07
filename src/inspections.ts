@@ -1,18 +1,11 @@
 import type { AdminImage } from './admin/adminData'
+import { createUuid } from './uuid'
 
 export const inspectionUnits = { EA: 'EA', SET: 'Set', ROLL: '롤', BAR: '봉', SURFACE: '면', BOX: 'Box', KG: 'kg', TON: 'ton', M: 'M', M3: 'm³', PIECE: '본', PAIR: '켤레', GROUP: '조', SHEET: '장', SETUP: '식', CASE: '건', CONTAINER: '통', BUNDLE: '묶음', UNIT: '대', BAG: '포', PACK: '곽', CARTON: '갑', OTHER: '기타' } as const
 export type InspectionRow = { id: string; itemId: string; appraisal?: string | null; name: string; specification: string; brand: string; categoryId: string; unit: keyof typeof inspectionUnits | ''; grade: 'S' | 'A' | 'B' | 'F' | ''; received: string; usable: string; disposal: string; reason: string; locationId: string; photos: AdminImage[] }
 export type InspectionReport = { id: string; receivingId: string; siteName: string; customerId: string; receivedAt: string; status: 'PENDING' | 'AWAITING_ACKNOWLEDGEMENT' | 'COMPLETED'; version: number; inspectedAt: string | null; acknowledgedAt: string | null; consentedAt: string | null; disposalStatus: string | null; consentText: string; rows: InspectionRow[]; assets: { rowId: string; id: string }[]; editable?: boolean; editBlock?: string; skipInvalidRowIds?: string[]; skippedRows?: { id: string; row: number; message: string }[] }
 export const inspectionLabels = { PENDING: '검수 대기', AWAITING_ACKNOWLEDGEMENT: '결과 확인 대기', COMPLETED: '검수 종료' }
-function inspectionRowId(): string {
-  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  const bytes = crypto.getRandomValues(new Uint8Array(16))
-  bytes[6] = (bytes[6]! & 0x0f) | 0x40
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
-}
-export const emptyInspectionRow = (): InspectionRow => ({ id: inspectionRowId(), itemId: '', name: '', specification: '', brand: '', categoryId: '', unit: '', grade: '', received: '', usable: '', disposal: '', reason: '', locationId: '', photos: [] })
+export const emptyInspectionRow = (): InspectionRow => ({ id: createUuid(), itemId: '', name: '', specification: '', brand: '', categoryId: '', unit: '', grade: '', received: '', usable: '', disposal: '', reason: '', locationId: '', photos: [] })
 const amount = (value: string) => {
   if (!/^\d{1,10}(?:\.\d{1,3})?$/.test(value)) return null
   const [whole, fraction = ''] = value.split('.')

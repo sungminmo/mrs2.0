@@ -1,5 +1,10 @@
 .cart-dialog { max-width: min(1100px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
 .cart-heading-actions { display: flex; gap: 8px; }
+.cart-toast-region { position: fixed; right: 20px; bottom: 20px; z-index: 1000; max-width: calc(100vw - 40px); pointer-events: none; }
+.cart-toast { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 16px; border: 1px solid #b6d9c7; border-radius: 6px; background: #f1faf5; color: #174e35; box-shadow: 0 4px 16px rgb(0 0 0 / 12%); pointer-events: auto; }
+.cart-toast > svg { flex-shrink: 0; }
+.cart-toast > span { flex: 1; min-width: 120px; overflow-wrap: anywhere; }
+.cart-toast-error { border-color: #e4b4a8; background: #fff4f0; color: #8b2f19; }
 .cart-warning { color: #a33b20; display: block; font-size: 12px; line-height: 1.5; }
 .cart-dialog .sm-basket-product { min-width: 0; text-align: left; }
 .cart-dialog .sm-basket-product b, .cart-dialog .sm-basket-product small { overflow-wrap: anywhere; }

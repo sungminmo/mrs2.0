@@ -2,6 +2,33 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { CartQueue } from '../src/cartQueue.ts'
 import { addQuantity, useCartStore, validQuantity } from '../src/cartStore.ts'
+import { createUuid } from '../src/uuid.ts'
+
+test('cart operation UUIDs work on HTTP without crypto.randomUUID', context => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis.crypto, 'randomUUID')
+  const randomValues = context.mock.method(globalThis.crypto, 'getRandomValues')
+  Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: undefined })
+  try {
+    const first = createUuid()
+    assert.match(first, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    assert.notEqual(createUuid(), first)
+    assert.equal(randomValues.mock.callCount(), 2)
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis.crypto, 'randomUUID', descriptor)
+    else Reflect.deleteProperty(globalThis.crypto, 'randomUUID')
+  }
+})
+test('cart notices repeat and failures remain distinguishable', () => {
+  const store = useCartStore.getState()
+  store.message('장바구니에 담았습니다.')
+  const first = useCartStore.getState().noticeVersion
+  store.message('장바구니에 담았습니다.')
+  assert.equal(useCartStore.getState().noticeVersion, first + 1)
+  store.message('장바구니에 담지 못했습니다.', 'error')
+  assert.equal(useCartStore.getState().noticeKind, 'error')
+  store.resetUI()
+  assert.equal(useCartStore.getState().notice, '')
+})
 
 test('cart quantities use exact decimal addition and unit validation', () => {
   assert.equal(addQuantity('0.001', '0.009'), '0.01')
