@@ -29,14 +29,15 @@ Serializable 트랜잭션에서 활성 계정·고객사·세션을 재확인한
 - 상품은 검수 완료된 자산과 1:1로 연결한다.
 - 자산의 품목, 카테고리, 등급, 규격, 단위와 이미지는 상품에서 중복 저장하지 않고 `Asset` 관계로 조회한다.
 - 상품명과 판매 가격은 마켓 운영 중 별도로 관리될 수 있으므로 상품에 저장한다.
-- 기획전은 상품을 직접 편성하지 않는다. 선택 카테고리와 모든 하위 카테고리에 속한 `AVAILABLE` 상품을 조회 시점에 동적으로 포함한다.
+- 기획전은 카테고리를 사용하지 않고 상품을 최대 100종 직접 편성한다. 판매대기·판매 중·재고 없음 상품을 선택할 수 있으며 고객에게는 현재 판매 가능한 상품만 노출한다.
 - 상품과 기획전은 삭제하지 않고 상태 또는 `enabled`로 운영을 중지한다.
 - 금액은 원 단위 정수 `DECIMAL(19, 0)`, 수량은 `DECIMAL(18, 3)`, 시간은 UTC `DATETIME(3)`으로 저장한다.
 
 ```mermaid
 erDiagram
   Asset ||--o| Product : "listed as"
-  MaterialCategory ||--o{ Campaign : "targets"
+  Campaign ||--o{ CampaignProduct : "contains"
+  Product ||--o{ CampaignProduct : "composed in"
   User o|--o{ MarketChange : "acts"
 
   Product {
@@ -52,7 +53,7 @@ erDiagram
 
   Campaign {
     string id PK
-    string categoryId FK
+    int version
     boolean enabled
     int sortOrder
     datetime startsAt
@@ -122,7 +123,7 @@ DB CHECK 제약은 할인율, 음수 수량, 수량 합계, 최소 주문 수량
 | --- | --- | --- | --- |
 | `id` | `VARCHAR(20)` | PK | `CAM-...` 기획전 코드 |
 | `name` | `VARCHAR(120)` | NOT NULL | 제목 및 고객 화면 특가 라벨 |
-| `categoryId` | `VARCHAR(20)` | FK | 포함 기준 카테고리, 모든 깊이 허용 |
+| `version` | `INT` | 기본 0, 음수 금지 | 동시 편집 충돌 확인 |
 | `description` | `VARCHAR(1000)` | NOT NULL | 기획전 설명 |
 | `enabled` | `BOOLEAN` | 기본 false | 운영자 노출 설정 |
 | `sortOrder` | `SMALLINT UNSIGNED` | 0~9999 | 낮을수록 우선 노출 |
@@ -140,12 +141,24 @@ DB CHECK 제약은 할인율, 음수 수량, 수량 합계, 최소 주문 수량
 
 기획전 상품 조회 조건은 다음과 같다.
 
-1. 기획전 카테고리 또는 모든 하위 카테고리에 속한 자산의 상품
-2. 상품 `status=AVAILABLE`
-3. 연결된 카테고리가 현재 사용 중
+1. `campaign_products`에 직접 편성된 상품
+2. 상품 `status=AVAILABLE`, 공개 시각 존재
+3. 자산 보관중·판매중·S/A/B, 판매 고객사 활성, 상품 분류 및 모든 상위 분류 활성
 4. `availableQuantity > 0`
 
-한 상품이 여러 진행 중 기획전에 포함되면 `sortOrder ASC`, `endsAt ASC`, `id ASC` 순서의 첫 기획전을 대표 기획전으로 사용한다. 할인율은 상품에 귀속되므로 기획전마다 다른 할인율은 지원하지 않는다.
+판매 불가 상품의 편성은 유지하며 다시 판매 가능해지면 자동 노출한다. 노출 가능 상품이 0종이면 기획전도 고객 목록에서 숨긴다. 고객 기본 정렬은 저장한 편성 순서이며 최신순·가격순·할인순 선택 시 해당 정렬을 우선한다. 할인율과 가격은 상품의 현재 값을 사용하며 기획전별 할인은 없다.
+
+### campaign_products
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `campaignId` | `VARCHAR(20)` | Campaign FK, 삭제 CASCADE | 기획전 |
+| `productId` | `VARCHAR(20)` | Product FK, 삭제 RESTRICT | 상품 |
+| `sortOrder` | `SMALLINT UNSIGNED` | 0~99 | 편성 순서 |
+
+복합 PK `(campaignId, productId)`로 같은 기획전 내 중복을 막고 `(campaignId, sortOrder)` UNIQUE와 순서 CHECK로 최대 100종을 보장한다. 동일 상품을 여러 기획전에 편성할 수 있다. 비노출 기획전은 빈 편성으로 저장할 수 있지만 노출 사용 시 최소 1종이 필요하다.
+
+`20261007002000_campaign_product_composition`은 기존 기획전을 모두 노출 중지하고 카테고리 FK·열을 제거한다. 기존 카테고리를 상품 편성으로 자동 변환하지 않는다. 활성 관리자의 저장은 버전 검사·편성 교체·감사 이력을 하나의 트랜잭션으로 처리한다. 운영 DB 적용 후 기존 기획전을 직접 재편성하고 노출을 다시 설정해야 한다.
 
 ## market_changes
 
@@ -175,13 +188,13 @@ DB CHECK 제약은 할인율, 음수 수량, 수량 합계, 최소 주문 수량
 - `products.assetId UNIQUE`: 자산당 상품 하나 보장
 - `products(status, createdAt)`: 공개 상품 목록과 최신순 조회
 - `campaigns(enabled, startsAt, endsAt, sortOrder)`: 현재 노출 기획전 조회
-- `campaigns(categoryId)`: 카테고리별 기획전 관리
+- `campaign_products(campaignId, sortOrder) UNIQUE`: 편성 순서 조회
+- `campaign_products(productId)`: 상품별 편성 조회
 - `market_changes(entityType, entityId, createdAt)`: 대상별 변경 이력
 - `market_changes(actorUserId, createdAt)`: 관리자별 작업 추적
 
 ## 제외 범위
 
 - 구매 요청, 견적, 예약 해제 및 출고 테이블
-- 기획전별 상품 직접 추가·제외
 - 상품 전용 이미지. 현재는 `AssetImage`를 사용한다.
 - 기획전별 개별 할인율

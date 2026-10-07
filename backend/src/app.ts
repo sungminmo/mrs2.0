@@ -17,6 +17,7 @@ import { locationHandlers, locationInput, locationUpdate, locationQuery, type Lo
 import { listMarketProducts, marketQuery, type MarketRepository } from './market.js'
 import { cartAdd, cartSync, cartUpdate, cartRemove, cartHandlers, type CartRepository } from './cart.js'
 import { quoteHandlers, quoteCreateInput, quotePreviewInput, quoteListQuery, type QuoteRepository } from './quote.js'
+import { campaignHandlers, campaignInput, campaignUpdate, campaignProductQuery, type CampaignRepository } from './campaign.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -35,9 +36,10 @@ type Dependencies = {
   market?: MarketRepository
   cart?: CartRepository
   quotes?: QuoteRepository
+  campaigns?: CampaignRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations, market, cart, quotes }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations, market, cart, quotes, campaigns }: Dependencies) {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (result.success) return
@@ -84,6 +86,13 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
       app.openAPIRegistry.registerPath({ method: 'get', path: '/api/customer/market/products', tags: ['Market'], summary: '활성 고객 회원 마켓 목록·가격·실제 기획전 조회', security: [{ BearerAuth: [] }], request: { query: marketQuery }, responses: { 200: { description: '가격 포함 상품 목록' }, 400: { description: '검색·페이지 입력 오류' }, 401: { description: '회원 인증 필요' }, 403: { description: '활성 고객사 필요' } } })
     }
     const adminAuth = requireAuth(auth.repository, auth.secret, 'ADMIN')
+    if (campaigns) {
+      const handlers = campaignHandlers(campaigns)
+      app.get('/api/admin/campaign-products', adminAuth, requireAdmin, handlers.products)
+      app.post('/api/admin/campaigns', adminAuth, requireAdmin, bodyLimit({ maxSize: 32768 }), handlers.save(false))
+      app.put('/api/admin/campaigns/:id', adminAuth, requireAdmin, bodyLimit({ maxSize: 32768 }), handlers.save(true))
+      for (const [method, path, schema] of [['get', '/api/admin/campaign-products', null], ['post', '/api/admin/campaigns', campaignInput], ['put', '/api/admin/campaigns/{id}', campaignUpdate]] as const) app.openAPIRegistry.registerPath({ method, path, tags: ['Campaigns'], summary: '기획전 직접 상품 편성 및 순서 저장 (최대 100종)', security: [{ BearerAuth: [] }], request: method === 'get' ? { query: campaignProductQuery } : { ...(method === 'put' ? { params: z.object({ id: z.string().min(1).max(20) }) } : {}), body: { required: true, content: { 'application/json': { schema: schema! } } } }, responses: { 200: { description: '상품 검색·기획전 수정' }, 201: { description: '기획전 등록' }, 400: { description: '입력·편성 오류' }, 401: { description: '관리자 인증 필요' }, 403: { description: '관리자 권한 필요' }, 404: { description: '기획전 없음' }, 409: { description: '동시 수정 충돌' } } })
+    }
     if (inspections) {
       const inspection = inspectionHandlers(inspections)
       app.use('/api/admin/inspections/:id/*', bodyLimit({ maxSize: 10 * 1024 * 1024, onError: (context) => failure(context, 413, ErrorCode.VALIDATION_ERROR, '검수 요청은 10MB 이하입니다. 행과 사진을 나눠 주세요.') }))

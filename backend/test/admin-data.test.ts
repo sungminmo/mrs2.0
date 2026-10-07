@@ -71,7 +71,7 @@ test('public market endpoint allows guests and rejects invalid pagination', asyn
   const calls: unknown[] = []
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, market: { list: async (query) => { calls.push(query); return { products: [], categories: [], campaigns: [], page: query.page, size: query.size, total: 0 } } } })
   assert.equal((await app.request('/api/market/products')).status, 200)
-  assert.deepEqual(calls, [{ page: 1, size: 20, sort: 'latest' }])
+  assert.deepEqual(calls, [{ page: 1, size: 20, sort: 'campaign' }])
   for (const query of ['page=0', 'size=101', 'page=bad']) assert.equal((await app.request(`/api/market/products?${query}`)).status, 400)
 })
 

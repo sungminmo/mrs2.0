@@ -1,5 +1,4 @@
 import type { Campaign, Inventory, Product, Quote, SaleRequest } from './adminData.ts'
-import { categoryEnabled, categoryChain, type MaterialCategory } from '../categories.ts'
 
 export type MarketData = { sales: SaleRequest[]; products: Product[]; quotes: Quote[]; campaigns: Campaign[] }
 export const marketStatusOptions = {
@@ -31,11 +30,11 @@ export function changeMarketStatus(data: MarketData, tab: MarketStatusTab, ids: 
   return { ...data, products: data.products.map((record) => selected.has(record.id) ? { ...record, status: productStatus } : record) }
 }
 
-export function validateCampaign(campaign: Campaign, categories: MaterialCategory[], previous?: Campaign) {
+export function validateCampaign(campaign: Campaign) {
   if (!campaign.name.trim() || campaign.name.trim().length > 120) throw new Error('기획전 제목은 1~120자로 입력해 주세요.')
   if (!campaign.description.trim() || campaign.description.trim().length > 1000) throw new Error('기획전 설명은 1~1,000자로 입력해 주세요.')
-  if (!categoryChain(categories, campaign.category).length) throw new Error('기획전 카테고리를 선택해 주세요.')
-  if (!categoryEnabled(categories, campaign.category) && (previous?.category !== campaign.category || campaign.enabled)) throw new Error('사용 중인 카테고리를 선택하거나 기획전 노출을 중지해 주세요.')
+  if (campaign.productIds.length > 100 || new Set(campaign.productIds).size !== campaign.productIds.length) throw new Error('중복 없이 최대 100종까지 편성할 수 있습니다.')
+  if (campaign.enabled && !campaign.productIds.length) throw new Error('상품을 편성한 뒤 노출을 사용해 주세요.')
   if (!Number.isInteger(campaign.order) || campaign.order < 0 || campaign.order > 9999) throw new Error('노출 순서는 0~9,999의 정수로 입력해 주세요.')
   const start = Date.parse(campaign.startsAt)
   const end = Date.parse(campaign.endsAt)

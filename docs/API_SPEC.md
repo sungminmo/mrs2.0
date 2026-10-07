@@ -14,7 +14,15 @@
 
 `GET /api/customer/market/products`는 활성 고객 회원 인증을 요구하며 같은 목록에 원 단가 `unitPrice`, 할인 전 단가 `originalUnitPrice`를 포함한다. 회원 가격은 화면뿐 아니라 API에서 보호하며 두 경로 모두 `Cache-Control: private, no-store`를 사용한다. 회원 가격 조회는 마켓 전체 상품 대상이며 자사 자산 조회와 별개다.
 
-두 경로 모두 `categoryId`(하위 분류 포함), `grade`(S/A/B), `campaignId`, `discountOnly=true`(40% 이상), `sort=latest|discount` 필터를 지원한다. 회원만 `sort=price`(할인 적용 단가 오름차순)를 사용할 수 있다. 검색·정렬·페이지 처리는 전체 DB 결과를 기준으로 적용한다. 실제 기획전은 enabled·시작 시각 포함·종료 시각 제외·상위 포함 카테고리 활성 조건으로 조회하며 기획전 필터는 해당 카테고리 및 활성 하위 분류에 적용한다. 없는/비노출 기획전은 빈 결과이다.
+두 경로 모두 `categoryId`(상품의 하위 분류 포함), `grade`(S/A/B), `campaignId`, `discountOnly=true`(40% 이상), `sort=campaign|latest|discount`를 지원한다. 기본 `campaign`은 선택 기획전의 저장된 편성 순서이며 기획전 미선택 시 최신순이다. 회원만 `sort=price`를 사용할 수 있다. 검색·정렬·페이지 처리는 전체 DB 결과에 적용한다. 기획전 자체에는 카테고리가 없고 직접 편성 상품만 포함한다. enabled·시작 시각 포함·종료 시각 제외 조건과 노출 가능 상품 최소 1종을 충족해야 고객에게 노출한다. 없는/비노출 기획전은 빈 결과이다. 기획전 응답에는 카테고리 없이 `id,title,description,imageUrl,enabled,order,startsAt,endsAt`을 반환한다.
+
+### 관리자 기획전 편성
+
+- `GET /api/admin/campaign-products?page=1&rows=20&q=상품명&status=DRAFT`: 상품 선택 검색. `q`는 상품번호·상품명·규격 검색, `status`는 `DRAFT|AVAILABLE|OUT_OF_STOCK`, rows 최대 100. 상품별 현재 가격·수량·사진·노출 가능 여부와 pagination을 반환한다.
+- `POST /api/admin/campaigns`: `{name,description,enabled,order,startsAt,endsAt,productIds,reason}`으로 생성하며 서버가 ID를 발급한다. 201 `{campaign}` 반환.
+- `PUT /api/admin/campaigns/:id`: 위 필드와 조회한 `version`을 전달한다. 200 `{campaign}` 반환. 오래된 버전은 409이며 변경 사유와 편성 전후를 원자적으로 감사 기록한다.
+- 관리자 인증이 필요하며 응답은 `private, no-store`. 최대 100종, 한 기획전 내 중복 금지, 기획전 간 중복 허용. 비노출 빈 편성은 허용하고 노출 빈 편성은 400. 카테고리 입력은 허용하지 않는다.
+- 관리자 조회의 기획전 DTO는 `productIds`(순서 유지), `products`, `productCount`, `visibleProductCount`, `version`을 포함한다. 판매 불가 상품도 관리 편성에 유지되며 고객 화면에서만 숨긴다.
 
 ### 상세 검수 완료 API
 
@@ -663,7 +671,7 @@ Query:
 현재 Prisma 스키마에는 아래 확장이 필요합니다.
 
 1. `User.businessRegistrationNumber` 추가. 자산 소유권은 `User.customerId`와 기존 고객 코드를 연결해 조회하며, 고객사 엔터티 분리는 후속 과제
-2. `Product`, `Campaign`, `MarketChange`: 스키마 정의 완료. 상품·기획전 관리 API와 구매 요청 연계 구현 필요
+2. `Product`, `Campaign`, `CampaignProduct`, `MarketChange`: 스키마 정의 및 기획전 직접 편성 API 구현 완료. 상품 편집·주문 연계의 추가 구현은 별도 범위
 3. `PurchaseRequest`, `PurchaseRequestItem`: 요청자, 상품 스냅샷, 배송·연락처, 상태
 4. `SaleStatusRequest`: `START_SALE`/`CANCEL_SALE`, 승인 상태, 희망 금액, 사유
 5. `Transaction`: 유형, 금액, 상태, 업무 리소스 참조

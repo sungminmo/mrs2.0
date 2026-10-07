@@ -20,7 +20,8 @@ export type Location = { id: string; assetCount?: number; name: string; zone: st
 export type SaleRequest = { id: string; assetId: string; date: string; quantity: number; desiredAmount: number; status: '승인 대기' | '승인 완료' | '반려'; inspection: string }
 export type Product = { id: string; assetId: string; name: string; price: number; discountRate: number; unit: string; status: '판매대기' | '판매 중' | '재고 없음' }
 export type Quote = { id: string; code?: string; company?: string; contactName?: string; phone?: string; email?: string; actorUserId?: string; itemCount?: number; total?: string; customerId: string; date: string; dueAt: string; status: '접수 완료' | '접수 대기' | '견적 회신' | '출고 완료'; lines: { productId: string; name: string; quantity: number | string; unit: string; unitPrice: number | string | null; total?: string; category?: string; grade?: string; specification?: string }[]; address: string; note: string }
-export type Campaign = { id: string; productCount?: number; name: string; category: string; description: string; enabled: boolean; order: number; startsAt: string; endsAt: string }
+export type CampaignProduct = { id: string; name: string; unit: string; grade: string | null; status: 'DRAFT' | 'AVAILABLE' | 'OUT_OF_STOCK'; unitPrice: string; quantity: string; imageUrl: string | null; visible: boolean }
+export type Campaign = { id: string; productCount?: number; visibleProductCount?: number; version?: number; productIds: string[]; products?: CampaignProduct[]; name: string; description: string; enabled: boolean; order: number; startsAt: string; endsAt: string }
 export type MemberAccount = { id: string; type: '기업회원' | '공급처'; email: string; companyName: string; businessNumber: string; representativeName: string; managerName: string; managerPhone: string; companyPhone: string; faxNumber: string; lastLoginAt: string | null; joinedAt: string; status: '가입 승인 대기' | '이용 중' | '승인 반려' }
 type Invoice = { id: string; customerId: string; type: '보관료' | '판매 정산' | '폐기 비용'; date: string; period: string; status: '미청구' | '청구 완료' | '수납 완료' | '정산 완료'; estimate: number | null; lines: { label: string; amount: number }[]; receiptId?: string; locationId?: string; quoteId?: string }
 type Inquiry = { id: string; customerId: string; date: string; type: '서비스' | '입고' | '검수 이의' | '구매'; title: string; text: string; status: '미답변' | '확인 중' | '답변 완료'; answer: string | null; receiptId?: string; receivingId?: string; quoteId?: string }
@@ -89,9 +90,9 @@ export const quotes: Quote[] = [
   { id: 'QUO-0911', customerId: 'CUS-002', date: '2026-09-11T10:00:00+09:00', dueAt: '2026-09-18T09:00:00+09:00', status: '견적 회신', lines: [{ productId: 'PRD-003', name: '폴리에틸렌 파이프 DN100', quantity: 20, unit: 'M', unitPrice: 3490 }], address: '서울 성동구 · 예시 납품지', note: '자재 금액 69,800원 · 운반비 별도' },
 ]
 export const campaigns: Campaign[] = [
-  { id: 'CAM-001', name: '배관자재(전기) 기획전', category: '010000', description: '트레이부터 후렉시블까지 전기 배관자재', enabled: true, order: 1, startsAt: '2026-09-01T00:00:00+09:00', endsAt: '2026-09-26T00:00:00+09:00' },
-  { id: 'CAM-002', name: '케이블 자재 모음전', category: '020000', description: '전선과 용도별 케이블 자재', enabled: true, order: 2, startsAt: '2026-09-20T00:00:00+09:00', endsAt: '2026-10-01T00:00:00+09:00' },
-  { id: 'CAM-003', name: '전기기구 기획전', category: '030000', description: '배선·조명·배전 기구 편성 준비', enabled: false, order: 3, startsAt: '2026-09-01T00:00:00+09:00', endsAt: '2026-10-01T00:00:00+09:00' },
+  { id: 'CAM-001', name: '배관자재(전기) 기획전', productIds: [], description: '트레이부터 후렉시블까지 전기 배관자재', enabled: false, order: 1, startsAt: '2026-09-01T00:00:00+09:00', endsAt: '2026-09-26T00:00:00+09:00' },
+  { id: 'CAM-002', name: '케이블 자재 모음전', productIds: [], description: '전선과 용도별 케이블 자재', enabled: false, order: 2, startsAt: '2026-09-20T00:00:00+09:00', endsAt: '2026-10-01T00:00:00+09:00' },
+  { id: 'CAM-003', name: '전기기구 기획전', productIds: [], description: '배선·조명·배전 기구 편성 준비', enabled: false, order: 3, startsAt: '2026-09-01T00:00:00+09:00', endsAt: '2026-10-01T00:00:00+09:00' },
 ]
 export const invoices: Invoice[] = [
   { id: 'BILL-0801', customerId: 'CUS-001', type: '보관료', date: '2026-08-29T16:45:00+09:00', period: '2026-08', status: '수납 완료', estimate: null, lines: [{ label: 'C-07 야적장 보관료 · 8월분', amount: 45000 }], locationId: 'LOC-C07' },
@@ -107,7 +108,7 @@ export const inquiries: Inquiry[] = [
   { id: 'INQ-004', customerId: 'CUS-002', date: '2026-09-11T10:00:00+09:00', type: '서비스', title: '보관료 산정 기준 문의', text: '자재별이 아닌 위치별로 청구되는지 궁금합니다.', status: '답변 완료', answer: '점유 로케이션과 계약 기간에 따라 청구됩니다. 개별 계약 내용을 확인해 주세요. (답변 예시)' },
 ]
 
-export const campaignStatus = (campaign: Campaign) => !campaign.enabled ? '노출 중지' : referenceDate < campaign.startsAt ? '예약' : referenceDate >= campaign.endsAt ? '종료' : '진행 중'
+export const campaignStatus = (campaign: Campaign, now = Date.now()) => !campaign.enabled ? '중지' : now < Date.parse(campaign.startsAt) ? '예약' : now >= Date.parse(campaign.endsAt) ? '종료' : '진행 중'
 export const invoiceAmount = (invoice: Invoice) => invoice.lines.length ? invoice.lines.reduce((sum, line) => sum + line.amount, 0) : null
 export const customerForSite = (siteId: string) => sites.find((site) => site.id === siteId)!.customerId
 export const siteForReceipt = (receiptId: string) => receivings.find((request) => request.id === inspections.find((receipt) => receipt.id === receiptId)!.receivingId)!.siteId

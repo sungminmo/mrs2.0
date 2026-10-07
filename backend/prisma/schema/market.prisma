@@ -48,29 +48,64 @@ model Product {
   cartItems CartItem[]
   /// 접수 당시 정보를 보존하는 구매 견적 상품 스냅샷.
   quoteItems PurchaseQuoteItem[]
+  /// 상품을 직접 선택해 편성한 기획전 연결. 여러 기획전에 중복 편성 가능하다.
+  campaignItems CampaignProduct[]
 
   @@index([status, createdAt])
   @@map("products")
 }
 
-/// 카테고리 기반 기획전. 선택 카테고리와 모든 하위 카테고리의 판매 중 상품을 동적으로 포함한다.
+/// 직접 상품 편성 기획전. 기간 내 판매 가능한 편성 상품만 고객에게 노출한다.
 model Campaign {
+  /// 서버가 생성하는 변경 불가 기획전 번호.
   id          String   @id @db.VarChar(20)
+  /// 고객 마켓에 표시하는 기획전 제목.
   name        String   @db.VarChar(120)
-  categoryId  String   @db.VarChar(6)
+  /// 고객에게 표시하는 설명.
   description String   @db.VarChar(1000)
+  /// 노출 사용 여부. 빈 편성은 사용 설정 불가하다.
   enabled     Boolean  @default(false)
+  /// 기획전 간 노출 순서. 작은 값이 먼저 표시된다.
   sortOrder   Int      @default(0) @db.UnsignedSmallInt
+  /// 노출 시작 시각(포함), UTC 저장.
   startsAt    DateTime
+  /// 노출 종료 시각(미포함), UTC 저장.
   endsAt      DateTime
+  /// 동시 편집 충돌 검사용 버전. 저장마다 증가한다.
+  version     Int      @default(0)
+  /// 최초 등록 시각.
   createdAt   DateTime @default(now())
+  /// 마지막 저장 시각.
   updatedAt   DateTime @updatedAt
 
-  category MaterialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// 최대 100종의 직접 편성 상품과 표시 순서.
+  items CampaignProduct[]
 
+  /// 노출 대상 기획전 기간 및 순서 조회용 인덱스.
   @@index([enabled, startsAt, endsAt, sortOrder])
-  @@index([categoryId])
   @@map("campaigns")
+}
+
+/// 기획전 상품 편성. 판매 중단 시에도 연결을 보존해 판매 재개 시 다시 노출한다.
+model CampaignProduct {
+  /// 편성 대상 기획전 번호.
+  campaignId String @db.VarChar(20)
+  /// 선택한 실제 상품 번호.
+  productId String @db.VarChar(20)
+  /// 기획전 내 표시 순서. 0부터 시작하며 중복을 허용하지 않는다.
+  sortOrder Int @db.UnsignedSmallInt
+  /// 기획전 삭제 시 편성 연결만 삭제한다.
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  /// 편성 중 상품 삭제를 차단한다. 재고와 가격은 현재 상품 값을 조회한다.
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  /// 한 기획전에 동일 상품은 한 번만 편성 가능하다.
+  @@id([campaignId, productId])
+  /// 기획전 내 순서 중복 방지.
+  @@unique([campaignId, sortOrder])
+  /// 상품별 기획전 연결 조회용 인덱스.
+  @@index([productId])
+  @@map("campaign_products")
 }
 
 /// 상품·기획전 운영 변경 감사 이력. 다형 대상은 entityType/entityId로 식별한다.

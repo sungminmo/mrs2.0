@@ -116,7 +116,7 @@ export default function PublicMarket({
   const [filters, setFilters] = useState(emptyFilters)
   const [draft, setDraft] = useState(emptyFilters)
   const [page, setPage] = useState(1)
-  const [sort, setSort] = useState('latest')
+  const [sort, setSort] = useState('campaign')
   const [discountOnly, setDiscountOnly] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [view, setView] = useState<'grid' | 'list'>('grid')
@@ -172,6 +172,7 @@ export default function PublicMarket({
   const categories = loadedCatalog?.categories ?? []
   const campaigns = loadedCatalog?.campaigns ?? []
   const apply = (next: Filters) => {
+    if (next.campaignId !== filters.campaignId) setSort('campaign')
     setFilters(next)
     setPage(1)
   }
@@ -445,6 +446,7 @@ export default function PublicMarket({
                     setPage(1)
                   }}
                 >
+                  <option value="campaign">{filters.campaignId ? '편성 순서' : '기본순'}</option>
                   <option value="latest">최신순</option>
                   {member && <option value="price">낮은 가격순</option>}
                   <option value="discount">할인율 높은순</option>
