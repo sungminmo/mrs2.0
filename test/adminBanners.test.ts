@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { adminHref, createAdminViews, menus } from '../src/admin/adminViews.ts'
+import { validateCampaign } from '../src/admin/adminMarket.ts'
 
 test('campaign composition belongs to content banner management, not market navigation', () => {
   assert.equal(menus.find(menu => menu.id === 'market')!.tabs.some(tab => tab.id === 'campaigns'), false)
@@ -18,4 +19,14 @@ test('banner view preserves existing campaign composition and has no category co
   assert.equal(views['content/banners'].rows[0].id, campaign.id)
   assert.equal(views['content/banners'].rows[0].cells[3], '1종')
   assert.equal(views['content/banners'].headers.includes('카테고리'), false)
+  assert.equal(views['content/banners'].headers.includes('등록 영역'), true)
+  assert.deepEqual(views['content/banners'].rows[0].fields.find(([label]) => label === '영역 코드'), ['영역 코드', 'MKT'])
+})
+
+test('campaign banners require a three-character text placement and readable name', () => {
+  const campaign = { id: '', name: '배너', description: '설명', placementCode: 'MKT', placementName: '고객포탈 마켓 상단 기획전', enabled: false, order: 0, startsAt: '2026-10-01T00:00:00Z', endsAt: '2026-11-01T00:00:00Z', productIds: [] }
+  assert.doesNotThrow(() => validateCampaign(campaign))
+  assert.doesNotThrow(() => validateCampaign({ ...campaign, placementCode: '001' }))
+  for (const placementCode of ['', 'MK', 'MKTT', '   ']) assert.throws(() => validateCampaign({ ...campaign, placementCode }), /3자리/)
+  assert.throws(() => validateCampaign({ ...campaign, placementName: ' ' }), /영역명/)
 })

@@ -82,7 +82,7 @@ export default function CampaignEditor({ campaign, cancelHref, onSave }: { campa
     if (submitting.current) return
     const data = new FormData(event.currentTarget)
     const text = (key: string) => String(data.get(key) ?? '').trim()
-    const next: Campaign = { id: campaign?.id ?? '', productIds: selected.map(product => product.id), name: text('name'), description: text('description'), enabled: data.has('enabled'), order: Number(text('order')), startsAt: `${text('startsAt')}:00+09:00`, endsAt: `${text('endsAt')}:00+09:00` }
+    const next: Campaign = { id: campaign?.id ?? '', placementCode: text('placementCode'), placementName: text('placementName'), productIds: selected.map(product => product.id), name: text('name'), description: text('description'), enabled: data.has('enabled'), order: Number(text('order')), startsAt: `${text('startsAt')}:00+09:00`, endsAt: `${text('endsAt')}:00+09:00` }
     try {
       validateCampaign(next)
       submitting.current = true; setSaving(true); setError('')
@@ -92,6 +92,13 @@ export default function CampaignEditor({ campaign, cancelHref, onSave }: { campa
     } catch (failure) { setError(failure instanceof Error ? failure.message : '기획전을 저장하지 못했습니다.') } finally { submitting.current = false; setSaving(false) }
   }} onInput={() => setError('')}>
     <fieldset disabled={saving} className="campaign-fields">
+    <section aria-label="배너 등록 위치">
+      <h2>배너 등록 위치</h2>
+      <div className="adm-edit-fields">
+        <label>영역 코드 (3자리)<input name="placementCode" type="text" minLength={3} maxLength={3} defaultValue={campaign?.placementCode ?? 'MKT'} required /></label>
+        <label>영역명<input name="placementName" type="text" maxLength={120} defaultValue={campaign?.placementName ?? '고객포탈 마켓 상단 기획전'} required /></label>
+      </div>
+    </section>
     <div className="adm-edit-fields">
       <label>기획전 배너 번호<input value={campaign?.id ?? '저장 시 자동 생성'} readOnly /></label>
       <label>배너 제목<input name="name" defaultValue={campaign?.name} required maxLength={120} /></label>

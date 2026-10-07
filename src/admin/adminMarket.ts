@@ -33,6 +33,8 @@ export function changeMarketStatus(data: MarketData, tab: MarketStatusTab, ids: 
 export function validateCampaign(campaign: Campaign) {
   if (!campaign.name.trim() || campaign.name.trim().length > 120) throw new Error('기획전 제목은 1~120자로 입력해 주세요.')
   if (!campaign.description.trim() || campaign.description.trim().length > 1000) throw new Error('기획전 설명은 1~1,000자로 입력해 주세요.')
+  if (campaign.placementCode?.trim().length !== 3) throw new Error('영역 코드는 3자리 텍스트로 입력해 주세요.')
+  if (!campaign.placementName?.trim() || campaign.placementName.trim().length > 120) throw new Error('영역명은 1~120자로 입력해 주세요.')
   if (campaign.productIds.length > 100 || new Set(campaign.productIds).size !== campaign.productIds.length) throw new Error('중복 없이 최대 100종까지 편성할 수 있습니다.')
   if (campaign.enabled && !campaign.productIds.length) throw new Error('상품을 편성한 뒤 노출을 사용해 주세요.')
   if (!Number.isInteger(campaign.order) || campaign.order < 0 || campaign.order > 9999) throw new Error('노출 순서는 0~9,999의 정수로 입력해 주세요.')

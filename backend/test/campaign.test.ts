@@ -5,9 +5,14 @@ import { createApp } from '../src/app.js'
 import type { AuthUser, AuthRepository } from '../src/auth.js'
 import { campaignInput, campaignUpdate, campaignProductQuery, enabledMarketCategoryIds, type CampaignRepository } from '../src/campaign.js'
 
-const input = { name: '직접 편성', description: '기획전 설명', enabled: true, order: 1, startsAt: '2026-10-01T00:00:00+09:00', endsAt: '2026-11-01T00:00:00+09:00', productIds: ['PRD-1'], reason: '편성 등록' }
+const input = { name: '직접 편성', placementCode: 'MKT', placementName: '고객포탈 마켓 상단 기획전', description: '기획전 설명', enabled: true, order: 1, startsAt: '2026-10-01T00:00:00+09:00', endsAt: '2026-11-01T00:00:00+09:00', productIds: ['PRD-1'], reason: '편성 등록' }
 test('campaign contracts reject categories, duplicates, empty exposure, invalid dates and more than 100 products', () => {
   assert.equal(campaignInput.safeParse(input).success, true)
+  for (const placementCode of ['', 'MK', 'MKTT', '   ']) assert.equal(campaignInput.safeParse({ ...input, placementCode }).success, false)
+  assert.equal(campaignInput.safeParse({ ...input, placementCode: 123 }).success, false)
+  assert.equal(campaignInput.safeParse({ ...input, placementName: ' ' }).success, false)
+  assert.equal(campaignInput.safeParse({ ...input, placementCode: '001' }).success, true)
+  assert.equal(campaignInput.parse({ ...input, placementCode: ' MKT ' }).placementCode, 'MKT')
   for (const value of [{ ...input, category: '010000' }, { ...input, productIds: ['PRD-1', 'PRD-1'] }, { ...input, productIds: [] }, { ...input, productIds: Array.from({ length: 101 }, (_, index) => `PRD-${index}`) }, { ...input, endsAt: input.startsAt }, { ...input, startsAt: '2026-02-30T00:00:00Z' }, { ...input, reason: ' ' }]) assert.equal(campaignInput.safeParse(value).success, false)
   assert.equal(campaignInput.safeParse({ ...input, enabled: false, productIds: [] }).success, true)
   assert.equal(campaignUpdate.safeParse(input).success, false)

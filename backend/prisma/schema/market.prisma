@@ -61,6 +61,10 @@ model Campaign {
   id          String   @id @db.VarChar(20)
   /// 고객 마켓에 표시하는 기획전 제목.
   name        String   @db.VarChar(120)
+  /// 고객 화면의 배너 등록 영역을 식별하는 3자리 텍스트 코드.
+  placementCode String @default("MKT") @db.VarChar(3)
+  /// 관리자가 등록 위치를 인식하기 위한 영역 설명명.
+  placementName String @default("고객포탈 마켓 상단 기획전") @db.VarChar(120)
   /// 고객에게 표시하는 설명.
   description String   @db.VarChar(1000)
   /// 노출 사용 여부. 빈 편성은 사용 설정 불가하다.
@@ -83,6 +87,8 @@ model Campaign {
 
   /// 노출 대상 기획전 기간 및 순서 조회용 인덱스.
   @@index([enabled, startsAt, endsAt, sortOrder])
+  /// 영역별 노출 대상 및 순서 조회용 인덱스.
+  @@index([placementCode, enabled, sortOrder])
   @@map("campaigns")
 }
 

@@ -15,7 +15,7 @@ export function createMarketRepository(client: PrismaClient) {
       const descendants = (id: string) => categories.filter((entry) => chain(entry.id).some((parent) => parent.id === id)).map((entry) => entry.id)
       const now = new Date()
       const enabledCategories = enabledMarketCategoryIds(categories)
-      const campaigns = (await transaction.campaign.findMany({ where: { enabled: true, startsAt: { lte: now }, endsAt: { gt: now } }, include: campaignInclude, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] })).filter(entry => entry.items.some(item => campaignProductPayload(item.product, enabledCategories).visible))
+      const campaigns = (await transaction.campaign.findMany({ where: { placementCode: 'MKT', enabled: true, startsAt: { lte: now }, endsAt: { gt: now } }, include: campaignInclude, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] })).filter(entry => entry.items.some(item => campaignProductPayload(item.product, enabledCategories).visible))
       const campaign = campaigns.find((entry) => entry.id === query.campaignId)
       const categoryIds = query.categoryId ? descendants(query.categoryId) : undefined
       const campaignIds = query.campaignId ? campaign?.items.map(item => item.productId) ?? [] : undefined

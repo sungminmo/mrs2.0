@@ -7,7 +7,7 @@ import { customerTransaction } from './customer.js'
 import { publicImageUrl } from './admin-images.js'
 import { AppError, ErrorCode, success } from './http.js'
 
-const fields = z.object({ name: z.string().trim().min(1).max(120), description: z.string().trim().min(1).max(1000), enabled: z.boolean(), order: z.number().int().min(0).max(9999), startsAt: z.iso.datetime({ offset: true }), endsAt: z.iso.datetime({ offset: true }), productIds: z.array(z.string().min(1).max(20)).max(100), reason: z.string().trim().min(1).max(500) }).strict()
+const fields = z.object({ name: z.string().trim().min(1).max(120), placementCode: z.string().trim().length(3, '영역 코드는 3자리 텍스트로 입력해 주세요.'), placementName: z.string().trim().min(1).max(120), description: z.string().trim().min(1).max(1000), enabled: z.boolean(), order: z.number().int().min(0).max(9999), startsAt: z.iso.datetime({ offset: true }), endsAt: z.iso.datetime({ offset: true }), productIds: z.array(z.string().min(1).max(20)).max(100), reason: z.string().trim().min(1).max(500) }).strict()
 const validate = (input: z.infer<typeof fields>, context: z.RefinementCtx) => {
   if (Date.parse(input.startsAt) >= Date.parse(input.endsAt)) context.addIssue({ code: 'custom', path: ['endsAt'], message: '종료 일시는 시작 일시 이후여야 합니다.' })
   if (new Set(input.productIds).size !== input.productIds.length) context.addIssue({ code: 'custom', path: ['productIds'], message: '동일 상품은 한 번만 편성할 수 있습니다.' })
@@ -35,7 +35,7 @@ export function campaignProductPayload(product: CampaignProductRecord, categoryI
 }
 export function campaignPayload(record: Prisma.CampaignGetPayload<{ include: typeof campaignInclude }>, categoryIds: string[]) {
   const products = record.items.map(item => campaignProductPayload(item.product, categoryIds))
-  return { id: record.id, name: record.name, description: record.description, enabled: record.enabled, order: record.sortOrder, startsAt: record.startsAt.toISOString(), endsAt: record.endsAt.toISOString(), version: record.version, productIds: products.map(product => product.id), products, productCount: products.length, visibleProductCount: products.filter(product => product.visible).length }
+  return { id: record.id, name: record.name, placementCode: record.placementCode, placementName: record.placementName, description: record.description, enabled: record.enabled, order: record.sortOrder, startsAt: record.startsAt.toISOString(), endsAt: record.endsAt.toISOString(), version: record.version, productIds: products.map(product => product.id), products, productCount: products.length, visibleProductCount: products.filter(product => product.visible).length }
 }
 export function createCampaignRepository(client: PrismaClient) {
   return {
@@ -52,7 +52,7 @@ export function createCampaignRepository(client: PrismaClient) {
       if (id && !previous) throw new AppError(404, ErrorCode.NOT_FOUND, '기획전을 찾을 수 없습니다.')
       if (previous && (!('version' in input) || input.version !== previous.version)) throw new AppError(409, ErrorCode.CONFLICT, '기획전이 변경되었습니다. 새로 조회한 뒤 다시 저장해 주세요.')
       if (await transaction.product.count({ where: { id: { in: input.productIds } } }) !== input.productIds.length) throw new AppError(400, ErrorCode.VALIDATION_ERROR, '편성 상품을 찾을 수 없습니다. 상품 선택을 확인해 주세요.')
-      const data = { name: input.name, description: input.description, enabled: input.enabled, sortOrder: input.order, startsAt: new Date(input.startsAt), endsAt: new Date(input.endsAt) }
+      const data = { name: input.name, placementCode: input.placementCode, placementName: input.placementName, description: input.description, enabled: input.enabled, sortOrder: input.order, startsAt: new Date(input.startsAt), endsAt: new Date(input.endsAt) }
       const campaignId = id ?? `CAM-${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`
       if (previous) {
         if ((await transaction.campaign.updateMany({ where: { id: campaignId, version: previous.version }, data: { ...data, version: { increment: 1 } } })).count !== 1) throw new AppError(409, ErrorCode.CONFLICT, '다른 관리자가 기획전을 변경했습니다.')

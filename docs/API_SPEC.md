@@ -21,7 +21,7 @@
 관리 화면은 **콘텐츠 관리 > 배너 관리 > 기획전 타입**이다. 이미지 타입은 기존 위치별 PC·모바일 이미지, 링크, 기간, 순서를 관리한다. 기존 기획전 편성 데이터·API·고객 마켓 노출은 보존하며 관리자 메뉴만 통합한다. 기획전 타입 경로는 `#/admin/content?tab=banners&type=campaign`, 이미지 타입은 `type=image`이다. 구 `#/admin/market?tab=campaigns` 주소는 ID·편집 모드·검색 조건을 보존해 새 경로로 이동한다.
 
 - `GET /api/admin/campaign-products?page=1&rows=20&q=상품명&status=DRAFT`: 상품 선택 검색. `q`는 상품번호·상품명·규격 검색, `status`는 `DRAFT|AVAILABLE|OUT_OF_STOCK`, rows 최대 100. 상품별 현재 가격·수량·사진·노출 가능 여부와 pagination을 반환한다.
-- `POST /api/admin/campaigns`: `{name,description,enabled,order,startsAt,endsAt,productIds,reason}`으로 생성하며 서버가 ID를 발급한다. 201 `{campaign}` 반환.
+- `POST /api/admin/campaigns`: `{name,placementCode,placementName,description,enabled,order,startsAt,endsAt,productIds,reason}`으로 생성하며 서버가 ID를 발급한다. 201 `{campaign}` 반환. `placementCode`는 공백 제거 후 정확히 3자리 텍스트, `placementName`은 1~120자 필수 영역명이다. 마켓 상단 영역은 `MKT` / `고객포탈 마켓 상단 기획전`이다. 다른 영역 코드는 마켓 배너 조회·선택에 포함하지 않는다.
 - `PUT /api/admin/campaigns/:id`: 위 필드와 조회한 `version`을 전달한다. 200 `{campaign}` 반환. 오래된 버전은 409이며 변경 사유와 편성 전후를 원자적으로 감사 기록한다.
 - 관리자 인증이 필요하며 응답은 `private, no-store`. 최대 100종, 한 기획전 내 중복 금지, 기획전 간 중복 허용. 비노출 빈 편성은 허용하고 노출 빈 편성은 400. 카테고리 입력은 허용하지 않는다.
 - 관리자 조회의 기획전 DTO는 `productIds`(순서 유지), `products`, `productCount`, `visibleProductCount`, `version`을 포함한다. 판매 불가 상품도 관리 편성에 유지되며 고객 화면에서만 숨긴다.
