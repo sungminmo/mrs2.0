@@ -2,8 +2,9 @@ import { useId, useState, type ReactNode } from 'react'
 import { ArrowLeft, ArrowRight, CircleHelp, FileSearch } from 'lucide-react'
 import './CustomerHistory.css'
 
-type HistoryKind = 'receivings' | 'inspections' | 'quotes' | 'orders'
+type HistoryKind = 'receivings' | 'inspections' | 'quotes' | 'orders' | 'saleRequests'
 const content = {
+  saleRequests: { title: '판매 요청 내역', description: '판매 요청한 자산의 검수·승인과 마켓 판매 상태를 확인하는 내역입니다.', steps: ['판매 요청', '상세 검수', '판매 승인', '마켓 판매'], empty: '판매 요청 내역이 없습니다', note: '판매 가능한 자산의 상세에서 판매를 요청할 수 있습니다.' },
   receivings: { title: '입고 내역', description: '맡기신 자재의 입고 신청부터 승인 결과와 입고 일정까지 확인하세요.', steps: ['입고 신청', '신청 검토', '입고 승인', '자재 입고'], empty: '입고 신청 내역이 없습니다', note: '자재를 맡기려면 입고 신청을 진행해 주세요.' },
   inspections: { title: '검수·폐기', description: '입고된 자재의 검수 결과와 재사용 수량, 폐기가 필요한 자재를 확인하세요.', steps: ['자재 검수', '결과 확인', '폐기 대상 별도 동의'], empty: '공개된 검수 결과가 없습니다', note: '입고 후 검수가 끝나면 확정된 결과가 표시됩니다.' },
   quotes: { title: '구매 견적', description: '구매를 요청한 자재와 회신된 견적을 확인하고, 조건이 맞으면 출고를 요청하세요.', steps: ['견적 요청', '견적 회신', '승인·출고 요청'], empty: '요청한 구매 견적이 없습니다', note: '마켓에서 필요한 자재를 선택해 견적을 요청해 주세요.' },

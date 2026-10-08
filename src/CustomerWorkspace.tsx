@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Archive, ArrowDownToLine, ArrowLeft, ArrowRight, Box, ChevronLeft, ChevronRight, CircleAlert, LayoutDashboard, MapPin, RefreshCw, RotateCcw, Save, Search, ShoppingCart, UserRound, Warehouse } from 'lucide-react'
+import { Archive, ArrowDownToLine, ArrowLeft, ArrowRight, Box, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, FileSearch, LayoutDashboard, MapPin, RefreshCw, RotateCcw, Save, Search, ShoppingCart, UserRound, Warehouse } from 'lucide-react'
 import DetailSearch from './DetailSearch'
 import { unparse } from 'papaparse'
 import AdminShell from './AdminShell'
@@ -22,6 +22,7 @@ import CustomerQuotes, { CustomerQuoteRequest } from './CustomerQuotes'
 import type { PurchaseQuote, QuoteDraft } from './purchaseQuotes'
 import { OrdersPage } from './OutboundWorkspace'
 import CustomerMyPage, { type MemberProfile, type MyPageView } from './CustomerMyPage'
+import { HistoryHeader } from './CustomerHistory'
 
 import { appraisalMoney, appraisalTotal } from './appraisal'
 
@@ -73,10 +74,11 @@ function CustomerWorkspaceContent() {
 }
 
 function MemberWorkspace({ session, onProfileSave, profileMessage }: { session: AuthSession; onProfileSave: (profile: MemberProfile, currentPassword?: string) => Promise<void>; profileMessage: string }) {
-  const [view, setView] = useHistoryState<'overview' | 'assets' | 'profile' | 'market' | 'receivings' | 'inspections' | 'quotes' | 'orders'>(`company-view:${session.user.id}:${session.user.customerId}`, 'overview')
+  const [view, setView] = useHistoryState<'overview' | 'assets' | 'saleRequests' | 'profile' | 'market' | 'receivings' | 'inspections' | 'quotes' | 'orders'>(`company-view:${session.user.id}:${session.user.customerId}`, 'overview')
   const profile: MemberProfile = { managerName: session.user.managerName, managerPhone: session.user.managerPhone, email: session.user.email }
   const isMyPage = ['profile', 'receivings', 'inspections', 'quotes', 'orders'].includes(view)
-  const isAssets = view === 'overview' || view === 'assets'
+  const isSaleRequests = view === 'saleRequests'
+  const isAssets = view === 'overview' || view === 'assets' || isSaleRequests
   const [quoteDraft, setQuoteDraft] = useState<QuoteDraft | null>(null)
   const [completedQuote, setCompletedQuote] = useState<PurchaseQuote | null>(null)
   const [quoteId, selectQuote] = useHistoryState<string | null>(`quote-detail:${session.user.id}:${session.user.customerId}`, null)
@@ -96,6 +98,7 @@ function MemberWorkspace({ session, onProfileSave, profileMessage }: { session: 
   const loading = loadedKey !== loadKey
   const page = loading ? null : loadedPage
   useEffect(() => {
+    if (isSaleRequests) return
     const controller = new AbortController()
     Promise.all([
       authenticatedFetch(`/api/assets?${parametersKey}`, { signal: controller.signal }).then(async (response) => { if (!response.ok) { const body = await response.json(); throw new Error(body.error?.message ?? '자산을 불러오지 못했습니다.') } return response.json() as Promise<Page> }),
@@ -103,7 +106,7 @@ function MemberWorkspace({ session, onProfileSave, profileMessage }: { session: 
       selectedId ? accountRequest<{ asset: AssetRecord }>(`/api/assets/${encodeURIComponent(selectedId)}`, { signal: controller.signal }) : Promise.resolve(null),
     ]).then(([records, totals, selected]) => { if (!controller.signal.aborted) { setError(''); setPage(records); setSummary(totals); setDetail(selected?.asset ?? null) } }).catch((reason) => { if (!controller.signal.aborted) { setPage(null); setDetail(null); setSummary(null); setError(reason instanceof Error ? reason.message : '조회에 실패했습니다.') } }).finally(() => { if (!controller.signal.aborted) setLoadedKey(loadKey) })
     return () => controller.abort()
-  }, [parametersKey, selectedId, revision, loadKey])
+  }, [parametersKey, selectedId, revision, loadKey, isSaleRequests])
   useEffect(() => {
     const revalidate = () => { if (document.visibilityState === 'visible') setRevision((value) => value + 1) }
     window.addEventListener('focus', revalidate)
@@ -131,19 +134,32 @@ function MemberWorkspace({ session, onProfileSave, profileMessage }: { session: 
     URL.revokeObjectURL(url)
   }
   return <ReceivingRequestProvider contact={{ name: session.user.managerName, phone: session.user.managerPhone ?? '' }} onSubmit={async (form) => { const receiving = await submitReceiving(form); setRevision((value) => value + 1); return receiving }} onViewHistory={() => { selectReceiving(null); setReceivingParameters({ page: '1', size: '20' }); navigate('receivings') }}><AdminShell navigation={navigation} customerName={company?.name ?? session.user.companyName} readOnly className="customer-workspace"><main className="sa-main">
-    {!quoteDraft && !selectedId && view !== 'market' && <div className="sa-heading"><div><div className="sa-breadcrumb">{company?.name ?? session.user.companyName}</div><h1>{isMyPage ? '마이페이지' : '내 자산'}</h1></div>{(isAssets || view === 'receivings' || view === 'inspections') && <div className="customer-heading-actions">{!isAssets && <ReceivingRequestButton />}<button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div>}</div>}
-    {!quoteDraft && !selectedId && isAssets && <div className="customer-asset-tabs" role="group" aria-label="내 자산 보기"><button className="sa-button" aria-pressed={view === 'overview'} onClick={() => navigate('overview')}><LayoutDashboard size={15} />자산 현황</button><button className="sa-button" aria-pressed={view === 'assets'} onClick={() => navigate('assets')}><Archive size={15} />자산 목록</button></div>}
-    {!quoteDraft && !isMyPage && error && <p className="customer-error" role="alert">{error}</p>}
-    {!quoteDraft && !isMyPage && loading && <p role="status">불러오는 중...</p>}
+    {!quoteDraft && !selectedId && view !== 'market' && <div className="sa-heading"><div><div className="sa-breadcrumb">{company?.name ?? session.user.companyName}</div><h1>{isMyPage ? '마이페이지' : '내 자산'}</h1></div>{((isAssets && !isSaleRequests) || view === 'receivings' || view === 'inspections') && <div className="customer-heading-actions">{!isAssets && <ReceivingRequestButton />}<button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div>}</div>}
+    {!quoteDraft && !selectedId && isAssets && <div className="customer-asset-tabs" role="group" aria-label="내 자산 보기"><button className="sa-button" aria-pressed={view === 'overview'} onClick={() => navigate('overview')}><LayoutDashboard size={15} />자산 현황</button><button className="sa-button" aria-pressed={view === 'assets'} onClick={() => navigate('assets')}><Archive size={15} />자산 목록</button><button className="sa-button" aria-pressed={isSaleRequests} onClick={() => navigate('saleRequests')}><ClipboardList size={15} />판매 요청 내역</button></div>}
+    {!quoteDraft && !isMyPage && !isSaleRequests && error && <p className="customer-error" role="alert">{error}</p>}
+    {!quoteDraft && !isMyPage && !isSaleRequests && loading && <p role="status">불러오는 중...</p>}
     {quoteDraft ? <CustomerQuoteRequest session={session} draft={quoteDraft} onBack={() => setQuoteDraft(null)} onDone={quote => { setCompletedQuote(quote); setQuoteDraft(null); selectQuote(quote.id); setView('quotes') }} /> : isMyPage ? <CustomerMyPage view={view as MyPageView} onNavigate={navigate} user={session.user} profile={profile} onProfileChange={onProfileSave} savedMessage={profileMessage}>
       {view === 'orders' ? <OrdersPage manager={session.user.customerRole === 'MANAGER'} /> : view === 'quotes' ? <CustomerQuotes session={session} selected={quoteId} select={selectQuote} initial={completedQuote} /> : view === 'inspections' ? <CustomerInspections historyKey={`${session.user.id}:${session.user.customerId}`} manager={session.user.customerRole === 'MANAGER'} revision={revision} onAsset={(id) => { setView('assets'); selectId(id) }} /> : view === 'receivings' ? <CustomerReceivings revision={revision} parameters={receivingParameters} setParameters={setReceivingParameters} selected={receivingId} select={selectReceiving} back={backReceiving} /> : null}
     </CustomerMyPage> : selectedId ? <>{(loading || !detail) && <div className="customer-heading-actions"><button className="sa-button" onClick={back}><ArrowLeft size={16} />목록으로</button><button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div>}{!loading && detail && <AssetDetails key={detail.id} asset={detail} records={loadedPage?.data ?? []} onBack={back} onNavigate={selectId} onRefresh={() => setRevision((value) => value + 1)} />}</>
         : view === 'market' ? <div className="sm-market"><PublicMarket member onRequestQuote={setQuoteDraft} /></div>
+          : isSaleRequests ? <SaleRequestsPage onAssets={() => navigate('assets')} />
           : view === 'overview' ? !loading && summary && <AssetOverview summary={summary} recent={page?.data ?? []} onAsset={selectId} onList={(filters) => { setParameters({ page: '1', size: '20', sort: 'updatedDesc', ...filters }); setView('assets') }} /> : <div className="customer-asset-list">
             <AssetSearch key={parametersKey} parameters={parameters} onSubmit={applySearch} onReset={() => setParameters({ page: '1', size: '20', sort: 'updatedDesc' })} />
             {page && <><div className="customer-result-heading"><h2>자산 목록 <span>{page.meta.totalElements.toLocaleString()}건</span></h2><div className="customer-asset-list-controls"><button className="sa-button" disabled={!page.data.length} onClick={exportPage}><ArrowDownToLine size={15} />현재 페이지 내보내기</button><label>페이지당 <select aria-label="페이지당 자산 수" value={parameters.size ?? '20'} onChange={(event) => setParameters({ ...parameters, page: '1', size: event.target.value })}>{[20, 50, 100].map((size) => <option key={size}>{size}</option>)}</select></label></div></div><div className="sa-table-scroll" role="region" aria-label="자산 목록 표" tabIndex={0}><table className="sa-table"><thead><tr>{['자산', '분류', '등급', '수량', '개당 평가금액', '평가 총액', '보관 상태', '판매 상태', '등록일'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{page.data.map((asset) => <tr key={asset.id}><td><button className="sa-asset-link" onClick={() => selectId(asset.id)}><AssetThumbnail asset={asset} /><span><b>{asset.name}</b><small className="customer-asset-code">{asset.id}</small></span></button></td><td>{asset.category?.path ?? '미분류'}</td><td><span className={`sa-grade grade-${asset.grade.toLowerCase()}`}>{asset.grade}</span></td><td className="sa-numeric">{asset.quantity} {asset.unit}</td><td className="sa-numeric">{money(asset.appraisalValue)}</td><td className="sa-numeric sa-value">{money(appraisalTotal(asset.appraisalValue, asset.quantity))}</td><td><span className={`sa-badge ${asset.storageStatus === 'PENDING' ? 'pending' : 'stored'}`}><span />{storageLabels[asset.storageStatus]}</span></td><td><span className={`sa-badge ${asset.saleStatus === 'ON_SALE' ? 'selling' : asset.saleStatus === 'SOLD' ? 'stored' : 'pending'}`}><span />{saleLabels[asset.saleStatus]}</span></td><td>{date(asset.createdAt)}</td></tr>)}</tbody></table></div>{!page.data.length && <div className="customer-asset-empty"><Search size={26} /><p>{Object.keys(parameters).some(key => !['page', 'size', 'sort'].includes(key)) ? '조건에 맞는 자산이 없습니다.' : '등록된 자산이 없습니다.'}</p><button className="sa-button" onClick={() => setParameters({ page: '1', size: '20', sort: 'updatedDesc' })}><RotateCcw size={15} />검색 조건 초기화</button></div>}<div className="customer-pagination"><button className="sa-icon" title="이전 페이지" aria-label="이전 페이지" disabled={page.meta.page <= 1} onClick={() => setParameters({ ...parameters, page: String(page.meta.page - 1) })}><ChevronLeft size={20} /></button><span>{page.meta.page} / {Math.max(1, page.meta.totalPages)}</span><button className="sa-icon" title="다음 페이지" aria-label="다음 페이지" disabled={page.meta.page >= page.meta.totalPages} onClick={() => setParameters({ ...parameters, page: String(page.meta.page + 1) })}><ChevronRight size={20} /></button></div></>}
           </div>}
   </main></AdminShell><Cart onLogin={() => {}} onRequestQuote={draft => { selectId(null); setView('market'); setQuoteDraft(draft) }} /></ReceivingRequestProvider>
+}
+
+function SaleRequestsPage({ onAssets }: { onAssets: () => void }) {
+  return <section className="customer-history customer-sale-requests" aria-label="판매 요청 내역">
+    <HistoryHeader kind="saleRequests" />
+    <div className="history-empty customer-sale-awaiting">
+      <FileSearch size={28} aria-hidden="true" />
+      <h3>판매 요청 내역 조회 준비 중</h3>
+      <p>현재 요청번호·승인 상태·판매 희망금액은 해당 자산의 상세에서 확인할 수 있습니다.</p>
+      <button type="button" className="sa-button" onClick={onAssets}><Archive size={15} />자산 목록 보기<ArrowRight size={15} /></button>
+    </div>
+  </section>
 }
 
 function AssetSearch({ parameters, onSubmit, onReset }: { parameters: Record<string, string>; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onReset: () => void }) {
