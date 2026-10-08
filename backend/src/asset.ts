@@ -43,6 +43,10 @@ function saleRequestView(request: SaleRequestRecord | null, product: SaleProduct
   return request ? saleRequestSchema.parse({ id: request.id, status: request.status, inspection: request.inspection, quantity: request.quantity.toString(), desiredAmount: request.desiredAmount.toString(), createdAt: request.createdAt.toISOString(), product: product ? { id: product.id, status: product.status, publishedAt: product.publishedAt?.toISOString() ?? null, listedQuantity: product.listedQuantity.toString(), reservedQuantity: product.reservedQuantity.toString(), soldQuantity: product.soldQuantity.toString() } : null }) : null
 }
 
+export function canAssetRequestSale(asset: { storageStatus: string; saleStatus: string; grade: string; quantity: { toString: () => string }; saleRequest?: unknown; product?: unknown }) {
+  return asset.storageStatus === 'STORED' && asset.saleStatus === 'PENDING' && ['S', 'A', 'B'].includes(asset.grade) && new Prisma.Decimal(asset.quantity.toString()).gt(0) && !asset.saleRequest && !asset.product
+}
+
 type AssetListRecord = {
   id: string
   itemId: string | null
@@ -59,6 +63,7 @@ type AssetListRecord = {
   saleStatus: 'PENDING' | 'ON_SALE' | 'SOLD'
   locationId: string | null
   thumbnailUrl: string | null
+  canRequestSale?: boolean
   saleRequest?: SaleRequestView | null
   receivedAt: Date
   createdAt: Date
@@ -103,6 +108,7 @@ const assetSchema = z.object({
   saleStatus: z.enum(['PENDING', 'ON_SALE', 'SOLD']),
   locationId: z.string().nullable(),
   thumbnailUrl: z.string().nullable(),
+  canRequestSale: z.boolean().optional().describe('현재 판매 요청 가능 여부. 등록 시 상태·수량을 다시 검증'),
   saleRequest: saleRequestSchema.nullable().optional(),
   receivedAt: z.iso.datetime(),
   storageDays: z.number().int().min(0),
@@ -364,6 +370,7 @@ export function createAssetRepository(client: PrismaClient): AssetRepository {
           saleStatus: record.saleStatus,
           locationId: record.locationId,
           thumbnailUrl: record.images[0] ? privateImage(record.images[0].url) : null,
+          canRequestSale: canAssetRequestSale(record),
           saleRequest: saleRequestView(record.saleRequest ?? null, record.product ?? null),
           receivedAt: record.createdAt,
           createdAt: record.createdAt,
@@ -376,7 +383,7 @@ export function createAssetRepository(client: PrismaClient): AssetRepository {
       const record = await client.asset.findFirst({ where: { id, customerId }, include: { category: true, saleRequest: { select: saleRequestSelect }, product: { select: saleProductSelect }, images: { orderBy: { sortOrder: 'asc' } } } })
       if (!record) return null
       const categories = await client.materialCategory.findMany({ select: { id: true, parentId: true, name: true } })
-      return { saleRequest: saleRequestView(record.saleRequest, record.product), canRequestSale: record.storageStatus === 'STORED' && record.saleStatus === 'PENDING' && record.grade !== 'F' && record.quantity.gt(0) && !record.saleRequest && !record.product, id: record.id, itemId: record.itemId, receivingId: record.receivingId, name: record.name, specification: record.specification, brand: record.brand, grade: record.grade, quantity: record.quantity.toString(), unit: record.unit, appraisalValue: record.appraisal?.toString() ?? null, storageStatus: record.storageStatus, saleStatus: record.saleStatus, locationId: record.locationId, createdAt: record.createdAt, category: record.category ? { id: record.category.id, name: record.category.name, path: categoryPath(categories, record.category.id) } : null, images: record.images.flatMap((image) => { const url = privateImage(image.url); return url ? [{ id: image.id, name: image.name, url }] : [] }) }
+      return { saleRequest: saleRequestView(record.saleRequest, record.product), canRequestSale: canAssetRequestSale(record), id: record.id, itemId: record.itemId, receivingId: record.receivingId, name: record.name, specification: record.specification, brand: record.brand, grade: record.grade, quantity: record.quantity.toString(), unit: record.unit, appraisalValue: record.appraisal?.toString() ?? null, storageStatus: record.storageStatus, saleStatus: record.saleStatus, locationId: record.locationId, createdAt: record.createdAt, category: record.category ? { id: record.category.id, name: record.category.name, path: categoryPath(categories, record.category.id) } : null, images: record.images.flatMap((image) => { const url = privateImage(image.url); return url ? [{ id: image.id, name: image.name, url }] : [] }) }
     },
     requestSale: (user, id, input) => customerTransaction(client, async (transaction) => {
       const actor = await transaction.user.findUnique({ where: { id: user.id }, include: { customer: true } })

@@ -2,12 +2,18 @@ import assert from 'node:assert/strict'
 import { randomInt, randomUUID } from 'node:crypto'
 import { test } from 'node:test'
 import { createApp } from '../src/app.js'
-import { createAssetRepository, type AssetListQuery, type AssetRepository } from '../src/asset.js'
+import { canAssetRequestSale, createAssetRepository, type AssetListQuery, type AssetRepository } from '../src/asset.js'
 import { hashPassword, type AuthRepository, type AuthUser } from '../src/auth.js'
 import type { Prisma, PrismaClient } from '../src/generated/prisma/client.js'
 import { createDatabase } from '../src/database.js'
 
 const secret = 'test-only-secret-at-least-32-characters'
+
+test('asset list and detail share precise sale eligibility', () => {
+  const asset = { storageStatus: 'STORED', saleStatus: 'PENDING', grade: 'A', quantity: '0.001', saleRequest: null, product: null }
+  for (const grade of ['S', 'A', 'B']) assert.equal(canAssetRequestSale({ ...asset, grade }), true)
+  for (const changed of [{ storageStatus: 'PENDING' }, { storageStatus: 'RELEASED' }, { saleStatus: 'ON_SALE' }, { saleStatus: 'SOLD' }, { grade: 'F' }, { quantity: '0' }, { quantity: '-1' }, { saleRequest: { id: 'existing' } }, { product: { id: 'existing' } }]) assert.equal(canAssetRequestSale({ ...asset, ...changed }), false)
+})
 
 async function fixture(customerId: string | null = 'TEST-CUST-001') {
   const user: AuthUser = {
@@ -163,6 +169,7 @@ test('Prisma repository scopes ownership and expands descendant categories', asy
   assert.deepEqual(findArguments?.orderBy, [{ name: 'asc' }, { id: 'asc' }])
   assert.equal(result.records[0]?.category?.path, 'Root > Child > Leaf')
   assert.equal(result.records[0]?.appraisalValue, null)
+  assert.equal(result.records[0]?.canRequestSale, true)
 })
 
 test('OpenAPI document and Scalar reference expose the asset endpoint', async () => {
