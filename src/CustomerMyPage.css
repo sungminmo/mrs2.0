@@ -1,0 +1,56 @@
+.customer-mypage { --mypage-green: #285c43; --mypage-muted: #68726c; --mypage-line: #dce2dd; color: #303630; min-width: 0; letter-spacing: 0; }
+.mypage-tabs { display: flex; flex-wrap: wrap; gap: 0 24px; border-bottom: 1px solid var(--mypage-line); margin-bottom: 28px; }
+.mypage-tabs button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 10px 2px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--mypage-muted); font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.mypage-tabs button[aria-current="page"] { color: var(--mypage-green); border-bottom-color: var(--mypage-green); font-weight: 700; }
+.mypage-tabs button:hover { color: var(--mypage-green); background: #eaf0eb; }
+.customer-mypage :is(button, input, a):focus-visible { outline: 2px solid var(--mypage-green); outline-offset: 3px; }
+.mypage-identity { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding: 4px 0 28px; border-bottom: 1px solid var(--mypage-line); }
+.mypage-avatar { display: grid; place-items: center; flex: 0 0 56px; height: 56px; border-radius: 50%; background: #e4ece6; color: var(--mypage-green); }
+.mypage-identity > div { min-width: 0; flex: 1; }
+.mypage-identity h2 { margin: 0; font-size: 22px; line-height: 1.5; overflow-wrap: anywhere; }
+.mypage-identity h2 > span { margin-left: 5px; font-size: 16px; font-weight: 400; }
+.mypage-identity p { margin: 5px 0 0; color: var(--mypage-muted); font-size: 13px; overflow-wrap: anywhere; }
+.mypage-role { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 4px; font-size: 12px; color: var(--mypage-green); background: #e4ece6; }
+.mypage-section { display: grid; grid-template-columns: 190px minmax(0, 1fr); column-gap: 36px; padding: 30px 0; border-bottom: 1px solid var(--mypage-line); }
+.mypage-section-title h2 { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; font-size: 15px; }
+.mypage-section-title > span { color: var(--mypage-muted); font-size: 12px; }
+.mypage-member-form { min-width: 0; }
+.mypage-fields, .mypage-company-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 32px; margin: 0; }
+.mypage-fields label { display: flex; flex-direction: column; gap: 8px; min-width: 0; color: var(--mypage-muted); font-size: 12px; }
+.mypage-fields label > span { display: flex; align-items: center; min-height: 40px; color: #303630; font-size: 14px; overflow-wrap: anywhere; }
+.mypage-fields input { width: 100%; min-width: 0; height: 40px; padding: 8px 11px; border: 1px solid #aebbb2; border-radius: 5px; background: #fdfefd; font: inherit; font-size: 14px; color: #303630; }
+.mypage-field-wide { grid-column: 1 / -1; }
+.mypage-form-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 24px; }
+.mypage-form-footer p { margin: 0; color: var(--mypage-muted); font-size: 12px; line-height: 1.7; }
+.mypage-form-footer > div { display: flex; gap: 8px; flex-wrap: wrap; }
+.mypage-company-fields dt { color: var(--mypage-muted); font-size: 12px; }
+.mypage-company-fields dd { margin: 8px 0 0; font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.mypage-company-footer { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--mypage-line); color: var(--mypage-muted); font-size: 12px; }
+.mypage-company-footer a { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; color: var(--mypage-green); font-weight: 600; text-decoration: none; }
+.mypage-feedback { grid-column: 2; display: flex; align-items: flex-start; gap: 8px; margin: 16px 0 0; padding: 12px; background: #e7eee8; color: var(--mypage-green); font-size: 12px; line-height: 1.7; }
+.mypage-feedback svg { flex-shrink: 0; margin-top: 2px; }
+.mypage-history-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.mypage-history-heading h2 { margin: 0; font-size: 18px; }
+.mypage-history-heading > span { color: var(--mypage-muted); font-size: 12px; }
+.mypage-process { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 24px; padding: 14px 16px; margin-bottom: 24px; background: #eaf0eb; border-radius: 4px; font-size: 12px; }
+.mypage-process > span { color: var(--mypage-green); font-weight: 700; }
+.mypage-process ol { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0; margin: 0; list-style: none; }
+.mypage-process li { display: flex; align-items: center; gap: 10px; }
+.mypage-process svg { color: #7a877e; flex-shrink: 0; }
+@media (max-width: 1000px) { .mypage-section { grid-template-columns: 145px minmax(0, 1fr); gap: 24px; } }
+@media (max-width: 640px) {
+  .mypage-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; margin-bottom: 22px; }
+  .mypage-tabs button { flex-direction: column; gap: 6px; min-width: 0; min-height: 60px; padding: 8px 0; font-size: 12px; }
+  .mypage-section { grid-template-columns: minmax(0, 1fr); padding: 24px 0; gap: 20px; }
+  .mypage-section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .mypage-section-title h2 { margin: 0; }
+  .mypage-company-footer, .mypage-feedback { grid-column: 1; margin-top: 0; }
+  .mypage-fields, .mypage-company-fields { gap: 20px 16px; }
+  .mypage-fields { grid-template-columns: minmax(0, 1fr); }
+  .mypage-form-footer { align-items: flex-start; flex-direction: column; }
+  .mypage-form-footer > div { align-self: flex-end; }
+  .mypage-identity { gap: 12px; }
+  .mypage-identity h2 { font-size: 20px; }
+  .mypage-process { gap: 12px; }
+  .mypage-process ol { gap: 8px; }
+}
