@@ -67,6 +67,14 @@ Hono 실행 라우트와 `@hono/zod-openapi`의 Zod 요청·조회 스키마를 
 
 ### 고객 판매 요청
 
+판매 요청 내역은 새 엔드포인트 대신 기존 `GET /api/assets`를 사용한다. `saleRequested=true`로 요청이 있는 자산만 조회하고 `false`는 요청 없는 자산, 생략은 기존 전체 자산이다. 요청은 자산당 한 건으로 DB의 `assetId` UNIQUE 관계를 사용한다. 활성 고객 VIEWER·MANAGER의 자사 범위만 조회한다.
+
+- 요청 조회 전용 조건: `saleRequestStatus=PENDING|APPROVED|REJECTED`, `saleInspection=PENDING|COMPLETED`, `saleRequestedFrom/To=YYYY-MM-DD`, `sort=requestedDesc`. 전용 조건은 `saleRequested=true`와 함께 사용해야 하며 그렇지 않으면400이다. 요청일 기간은 한국시간 날짜 시작 포함·종료 다음 날 미포함이며 역전/유효하지 않은 날짜는400이다. 요청일 내림차순 뒤 자산번호 오름차순으로 정렬한다.
+- 기존 `q`(최대160자), 자산 상태·분류·위치·날짜 조건, `page`, `size`(최대100), 기존 정렬을 유지한다. 요청 조회에서 `q`는 자산번호·이름·규격·브랜드 외 요청번호도 검색한다.
+- 기존 `{success:true,data:Asset[],meta}` 구조를 유지한다. 목록과 `GET /api/assets/{id}`의 `saleRequest`는 null 또는 `{id,status,inspection,quantity,desiredAmount,createdAt,product}`다. `quantity`는 요청 당시 전체 수량 스냅샷, `desiredAmount`는 전체 수량 희망금액이며 Decimal 문자열이다. 현재 자산 수량이나 개당 평가금액·정산금과 다르다. 자산명·단위는 현재 자산 정보다.
+- `product`는 null 또는 `{id,status,publishedAt,listedQuantity,reservedQuantity,soldQuantity}`다. 상태 `DRAFT|AVAILABLE|OUT_OF_STOCK`는 요청 승인·상세 검수·자산 판매 상태와 별개다. OUT_OF_STOCK을 판매 완료로 간주하지 않는다. 구매자 정보·관리자 내부 메모·신청자 번호·감사 이력은 반환하지 않는다.
+- `saleRequested=true`에서만 최상위 `saleRequestSummary={approval:{PENDING,APPROVED,REJECTED},inspection:{PENDING,COMPLETED}}`를 추가한다. 고객사·검색어·기간·자산 조건 범위 전체 집계이며 페이지와 선택 승인·검수 필터에 독립적이다. 목록 총건수는 선택 상태 필터까지 적용한다. 요청/상품 관계 조회는 자산 소유 범위에 종속되며 타 고객사 자산 상세는404다.
+
 `POST /api/assets/{id}/sale-requests`는 활성 고객사 소속 고객 인증을 요구한다. `{desiredAmount: 1~1000000000000 정수, expectedQuantity: 조회한 수량 문자열}`을 받으며 자사 보관중·판매대기 S/A/B 자산 전체 수량을 `승인 대기`, `상세 검수 대기`로 저장한다. 품목·카테고리·평가금액은 선택이다. 성공 201은 `data.request.id`를 반환한다. 중복·상품 연결·변경된 수량·판매 불가 상태는 409, 타사 또는 없는 자산은 404다. 자산 상태·수량·상품은 변경하지 않으며 요청과 고객/자산 이력을 같은 Serializable 트랜잭션으로 저장한다. 고객 자산 상세의 `saleRequest`, `canRequestSale`로 접수 상태를 확인한다. 관리자는 `GET /api/admin/data?scope=sales`로 페이지·검색·승인 상태·고객·월 필터 및 `id` 상세 조회를 사용한다. 상세 검수 완료와 판매 승인은 별도 관리자 API를 사용한다. 접수만으로 상품을 생성하지 않는다.
 
 `PUT /api/admin/assets/{id}`는 활성 관리자 인증이 필요하다. 자산 상세의 수정 화면에서 이름·규격·브랜드·선택 카테고리·수량·등급·위치·보관/판매 상태·개당 평가금액을 편집한다. 요청은 `expectedUpdatedAt`(조회 응답의 `updatedAt`), 필수 `reason`(1~500자)과 편집 필드를 포함한다. `appraisal`은 0~1조원 정수 또는 null이며 생략하면 기존값을 유지한다. 상세 검수 화면의 평가금액 저장도 이 API를 사용한다. 자산번호·품목·단위·입고·소유 고객은 이 API로 변경하지 않으며 이미지는 기존 별도 저장 API를 사용한다. 빈 카테고리는 null, 빈 규격은 빈 문자열이다.

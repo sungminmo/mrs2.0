@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Archive, ArrowDownToLine, ArrowLeft, ArrowRight, Box, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, FileSearch, LayoutDashboard, MapPin, RefreshCw, RotateCcw, Save, Search, ShoppingCart, UserRound, Warehouse } from 'lucide-react'
+import { Archive, ArrowDownToLine, ArrowLeft, ArrowRight, Box, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, LayoutDashboard, MapPin, RefreshCw, RotateCcw, Save, Search, ShoppingCart, UserRound, Warehouse } from 'lucide-react'
 import DetailSearch from './DetailSearch'
 import { unparse } from 'papaparse'
 import AdminShell from './AdminShell'
@@ -22,15 +22,19 @@ import CustomerQuotes, { CustomerQuoteRequest } from './CustomerQuotes'
 import type { PurchaseQuote, QuoteDraft } from './purchaseQuotes'
 import { OrdersPage } from './OutboundWorkspace'
 import CustomerMyPage, { type MemberProfile, type MyPageView } from './CustomerMyPage'
-import { HistoryHeader } from './CustomerHistory'
+import { HistoryEmpty, HistoryHeader, HistoryStatus, HistorySummary } from './CustomerHistory'
 
 import { appraisalMoney, appraisalTotal } from './appraisal'
 
-type AssetRecord = { canRequestSale?: boolean; saleRequest?: { id: string; status: string; desiredAmount: string; createdAt: string } | null; id: string; name: string; itemId: string | null; receivingId: string; category: { id: string; name: string; path: string } | null; specification: string; brand: string; grade: string; quantity: string; unit: string; appraisalValue: string | null; storageStatus: string; saleStatus: string; locationId: string | null; thumbnailUrl?: string | null; createdAt: string; images?: Array<{ id: string; name: string; url: string }> }
+type SaleRequestRecord = { id: string; status: string; inspection: string; quantity: string; desiredAmount: string; createdAt: string; product: { id: string; status: string; publishedAt: string | null; listedQuantity: string; reservedQuantity: string; soldQuantity: string } | null }
+type AssetRecord = { canRequestSale?: boolean; saleRequest?: SaleRequestRecord | null; id: string; name: string; itemId: string | null; receivingId: string; category: { id: string; name: string; path: string } | null; specification: string; brand: string; grade: string; quantity: string; unit: string; appraisalValue: string | null; storageStatus: string; saleStatus: string; locationId: string | null; thumbnailUrl?: string | null; createdAt: string; images?: Array<{ id: string; name: string; url: string }> }
 type Summary = { total: number; appraisalValue: string | null; unappraised: number; groups: Array<{ storageStatus: string; saleStatus: string; count: number }>; quantities: Array<{ unit: string; quantity: string }> }
-type Page = { data: AssetRecord[]; meta: { page: number; size: number; totalElements: number; totalPages: number } }
+type Page = { data: AssetRecord[]; meta: { page: number; size: number; totalElements: number; totalPages: number }; saleRequestSummary?: { approval: Record<string, number>; inspection: Record<string, number> } }
 const storageLabels: Record<string, string> = { PENDING: '입고 대기', STORED: '보관 중', RELEASED: '출고 완료' }
 const saleLabels: Record<string, string> = { PENDING: '판매 대기', ON_SALE: '판매 중', SOLD: '판매 완료' }
+const approvalLabels: Record<string, string> = { PENDING: '승인 대기', APPROVED: '승인 완료', REJECTED: '반려' }
+const saleInspectionLabels: Record<string, string> = { PENDING: '상세 검수 대기', COMPLETED: '상세 검수 완료' }
+const productLabels: Record<string, string> = { DRAFT: '판매 대기', AVAILABLE: '판매 중', OUT_OF_STOCK: '재고 없음' }
 const money = appraisalMoney
 const date = (value: string) => new Date(value).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
 
@@ -86,6 +90,7 @@ function MemberWorkspace({ session, onProfileSave, profileMessage }: { session: 
   const [receivingId, selectReceiving, backReceiving] = useHistoryState<string | null>(`receiving-detail:${session.user.id}:${session.user.customerId}`, null)
   const [receivingParameters, setReceivingParameters] = useHistoryState<Record<string, string>>(`receiving-query:${session.user.id}:${session.user.customerId}`, { page: '1', size: '20' })
   const [parameters, setParameters] = useHistoryState<Record<string, string>>(`company-query:${session.user.id}:${session.user.customerId}`, { page: '1', size: '20', sort: 'updatedDesc' })
+  const [saleParameters, setSaleParameters] = useHistoryState<Record<string, string>>(`sale-request-query:${session.user.id}:${session.user.customerId}`, { page: '1', size: '20' })
   const [loadedPage, setPage] = useState<Page | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [detail, setDetail] = useState<AssetRecord | null>(null)
@@ -93,16 +98,15 @@ function MemberWorkspace({ session, onProfileSave, profileMessage }: { session: 
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
   const company = session.user.customer
-  const parametersKey = new URLSearchParams(view === 'overview' ? { page: '1', size: '5', sort: 'receivedDesc' } : parameters).toString()
+  const parametersKey = new URLSearchParams(isSaleRequests ? { ...saleParameters, saleRequested: 'true', sort: 'requestedDesc' } : view === 'overview' ? { page: '1', size: '5', sort: 'receivedDesc' } : parameters).toString()
   const loadKey = `${parametersKey}/${selectedId}/${revision}`
   const loading = loadedKey !== loadKey
   const page = loading ? null : loadedPage
   useEffect(() => {
-    if (isSaleRequests) return
     const controller = new AbortController()
     Promise.all([
       authenticatedFetch(`/api/assets?${parametersKey}`, { signal: controller.signal }).then(async (response) => { if (!response.ok) { const body = await response.json(); throw new Error(body.error?.message ?? '자산을 불러오지 못했습니다.') } return response.json() as Promise<Page> }),
-      accountRequest<Summary>('/api/assets/summary', { signal: controller.signal }),
+      isSaleRequests ? Promise.resolve(null) : accountRequest<Summary>('/api/assets/summary', { signal: controller.signal }),
       selectedId ? accountRequest<{ asset: AssetRecord }>(`/api/assets/${encodeURIComponent(selectedId)}`, { signal: controller.signal }) : Promise.resolve(null),
     ]).then(([records, totals, selected]) => { if (!controller.signal.aborted) { setError(''); setPage(records); setSummary(totals); setDetail(selected?.asset ?? null) } }).catch((reason) => { if (!controller.signal.aborted) { setPage(null); setDetail(null); setSummary(null); setError(reason instanceof Error ? reason.message : '조회에 실패했습니다.') } }).finally(() => { if (!controller.signal.aborted) setLoadedKey(loadKey) })
     return () => controller.abort()
@@ -119,30 +123,31 @@ function MemberWorkspace({ session, onProfileSave, profileMessage }: { session: 
   const applySearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
-    const next: Record<string, string> = { page: '1', size: parameters.size ?? '20' }
+    const next: Record<string, string> = { page: '1', size: (isSaleRequests ? saleParameters : parameters).size ?? '20' }
     for (const [key, value] of data) if (String(value).trim()) next[key] = String(value).trim()
-    setParameters(next)
+    if (isSaleRequests) setSaleParameters(next)
+    else setParameters(next)
   }
   const exportPage = () => {
     if (!page?.data.length) return
-    const rows = page.data.map(asset => ({ 자산번호: asset.id, 자산명: asset.name, 분류: asset.category?.path ?? '미분류', 등급: asset.grade, 수량: asset.quantity, 단위: asset.unit, 개당평가금액: asset.appraisalValue ?? '미평가', 평가총액: appraisalTotal(asset.appraisalValue, asset.quantity) ?? '미평가', 보관상태: storageLabels[asset.storageStatus], 판매상태: saleLabels[asset.saleStatus], 등록일: date(asset.createdAt) }))
+    const rows: Array<Record<string, string>> = isSaleRequests ? page.data.flatMap(asset => asset.saleRequest ? [{ 요청번호: asset.saleRequest.id, 자산번호: asset.id, 자산명: asset.name, 요청일: date(asset.saleRequest.createdAt), 요청수량: asset.saleRequest.quantity, 단위: asset.unit, 전체수량판매희망금액: asset.saleRequest.desiredAmount, 상세검수: saleInspectionLabels[asset.saleRequest.inspection], 승인상태: approvalLabels[asset.saleRequest.status], 마켓상태: asset.saleRequest.product ? productLabels[asset.saleRequest.product.status] : '상품 미등록' }] : []) : page.data.map(asset => ({ 자산번호: asset.id, 자산명: asset.name, 분류: asset.category?.path ?? '미분류', 등급: asset.grade, 수량: asset.quantity, 단위: asset.unit, 개당평가금액: asset.appraisalValue ?? '미평가', 평가총액: appraisalTotal(asset.appraisalValue, asset.quantity) ?? '미평가', 보관상태: storageLabels[asset.storageStatus], 판매상태: saleLabels[asset.saleStatus], 등록일: date(asset.createdAt) }))
     const url = URL.createObjectURL(new Blob(['\uFEFF', unparse(rows, { escapeFormulae: true })], { type: 'text/csv;charset=utf-8;' }))
     const link = document.createElement('a')
     link.href = url
-    link.download = `MRS-assets-page-${page.meta.page}.csv`
+    link.download = `MRS-${isSaleRequests ? 'sale-requests' : 'assets'}-page-${page.meta.page}.csv`
     link.click()
     URL.revokeObjectURL(url)
   }
   return <ReceivingRequestProvider contact={{ name: session.user.managerName, phone: session.user.managerPhone ?? '' }} onSubmit={async (form) => { const receiving = await submitReceiving(form); setRevision((value) => value + 1); return receiving }} onViewHistory={() => { selectReceiving(null); setReceivingParameters({ page: '1', size: '20' }); navigate('receivings') }}><AdminShell navigation={navigation} customerName={company?.name ?? session.user.companyName} readOnly className="customer-workspace"><main className="sa-main">
-    {!quoteDraft && !selectedId && view !== 'market' && <div className="sa-heading"><div><div className="sa-breadcrumb">{company?.name ?? session.user.companyName}</div><h1>{isMyPage ? '마이페이지' : '내 자산'}</h1></div>{((isAssets && !isSaleRequests) || view === 'receivings' || view === 'inspections') && <div className="customer-heading-actions">{!isAssets && <ReceivingRequestButton />}<button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div>}</div>}
+    {!quoteDraft && !selectedId && view !== 'market' && <div className="sa-heading"><div><div className="sa-breadcrumb">{company?.name ?? session.user.companyName}</div><h1>{isMyPage ? '마이페이지' : '내 자산'}</h1></div>{(isAssets || view === 'receivings' || view === 'inspections') && <div className="customer-heading-actions">{!isAssets && <ReceivingRequestButton />}<button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div>}</div>}
     {!quoteDraft && !selectedId && isAssets && <div className="customer-asset-tabs" role="group" aria-label="내 자산 보기"><button className="sa-button" aria-pressed={view === 'overview'} onClick={() => navigate('overview')}><LayoutDashboard size={15} />자산 현황</button><button className="sa-button" aria-pressed={view === 'assets'} onClick={() => navigate('assets')}><Archive size={15} />자산 목록</button><button className="sa-button" aria-pressed={isSaleRequests} onClick={() => navigate('saleRequests')}><ClipboardList size={15} />판매 요청 내역</button></div>}
-    {!quoteDraft && !isMyPage && !isSaleRequests && error && <p className="customer-error" role="alert">{error}</p>}
-    {!quoteDraft && !isMyPage && !isSaleRequests && loading && <p role="status">불러오는 중...</p>}
+    {!quoteDraft && !isMyPage && error && <p className="customer-error" role="alert">{error}</p>}
+    {!quoteDraft && !isMyPage && loading && <p role="status">불러오는 중...</p>}
     {quoteDraft ? <CustomerQuoteRequest session={session} draft={quoteDraft} onBack={() => setQuoteDraft(null)} onDone={quote => { setCompletedQuote(quote); setQuoteDraft(null); selectQuote(quote.id); setView('quotes') }} /> : isMyPage ? <CustomerMyPage view={view as MyPageView} onNavigate={navigate} user={session.user} profile={profile} onProfileChange={onProfileSave} savedMessage={profileMessage}>
       {view === 'orders' ? <OrdersPage manager={session.user.customerRole === 'MANAGER'} /> : view === 'quotes' ? <CustomerQuotes session={session} selected={quoteId} select={selectQuote} initial={completedQuote} /> : view === 'inspections' ? <CustomerInspections historyKey={`${session.user.id}:${session.user.customerId}`} manager={session.user.customerRole === 'MANAGER'} revision={revision} onAsset={(id) => { setView('assets'); selectId(id) }} /> : view === 'receivings' ? <CustomerReceivings revision={revision} parameters={receivingParameters} setParameters={setReceivingParameters} selected={receivingId} select={selectReceiving} back={backReceiving} /> : null}
     </CustomerMyPage> : selectedId ? <>{(loading || !detail) && <div className="customer-heading-actions"><button className="sa-button" onClick={back}><ArrowLeft size={16} />목록으로</button><button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div>}{!loading && detail && <AssetDetails key={detail.id} asset={detail} records={loadedPage?.data ?? []} onBack={back} onNavigate={selectId} onRefresh={() => setRevision((value) => value + 1)} />}</>
         : view === 'market' ? <div className="sm-market"><PublicMarket member onRequestQuote={setQuoteDraft} /></div>
-          : isSaleRequests ? <SaleRequestsPage onAssets={() => navigate('assets')} />
+          : isSaleRequests ? <SaleRequestsPage key={parametersKey} page={page} parameters={saleParameters} onParameters={setSaleParameters} onSubmit={applySearch} onAsset={selectId} onExport={exportPage} />
           : view === 'overview' ? !loading && summary && <AssetOverview summary={summary} recent={page?.data ?? []} onAsset={selectId} onList={(filters) => { setParameters({ page: '1', size: '20', sort: 'updatedDesc', ...filters }); setView('assets') }} /> : <div className="customer-asset-list">
             <AssetSearch key={parametersKey} parameters={parameters} onSubmit={applySearch} onReset={() => setParameters({ page: '1', size: '20', sort: 'updatedDesc' })} />
             {page && <><div className="customer-result-heading"><h2>자산 목록 <span>{page.meta.totalElements.toLocaleString()}건</span></h2><div className="customer-asset-list-controls"><button className="sa-button" disabled={!page.data.length} onClick={exportPage}><ArrowDownToLine size={15} />현재 페이지 내보내기</button><label>페이지당 <select aria-label="페이지당 자산 수" value={parameters.size ?? '20'} onChange={(event) => setParameters({ ...parameters, page: '1', size: event.target.value })}>{[20, 50, 100].map((size) => <option key={size}>{size}</option>)}</select></label></div></div><div className="sa-table-scroll" role="region" aria-label="자산 목록 표" tabIndex={0}><table className="sa-table"><thead><tr>{['자산', '분류', '등급', '수량', '개당 평가금액', '평가 총액', '보관 상태', '판매 상태', '등록일'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{page.data.map((asset) => <tr key={asset.id}><td><button className="sa-asset-link" onClick={() => selectId(asset.id)}><AssetThumbnail asset={asset} /><span><b>{asset.name}</b><small className="customer-asset-code">{asset.id}</small></span></button></td><td>{asset.category?.path ?? '미분류'}</td><td><span className={`sa-grade grade-${asset.grade.toLowerCase()}`}>{asset.grade}</span></td><td className="sa-numeric">{asset.quantity} {asset.unit}</td><td className="sa-numeric">{money(asset.appraisalValue)}</td><td className="sa-numeric sa-value">{money(appraisalTotal(asset.appraisalValue, asset.quantity))}</td><td><span className={`sa-badge ${asset.storageStatus === 'PENDING' ? 'pending' : 'stored'}`}><span />{storageLabels[asset.storageStatus]}</span></td><td><span className={`sa-badge ${asset.saleStatus === 'ON_SALE' ? 'selling' : asset.saleStatus === 'SOLD' ? 'stored' : 'pending'}`}><span />{saleLabels[asset.saleStatus]}</span></td><td>{date(asset.createdAt)}</td></tr>)}</tbody></table></div>{!page.data.length && <div className="customer-asset-empty"><Search size={26} /><p>{Object.keys(parameters).some(key => !['page', 'size', 'sort'].includes(key)) ? '조건에 맞는 자산이 없습니다.' : '등록된 자산이 없습니다.'}</p><button className="sa-button" onClick={() => setParameters({ page: '1', size: '20', sort: 'updatedDesc' })}><RotateCcw size={15} />검색 조건 초기화</button></div>}<div className="customer-pagination"><button className="sa-icon" title="이전 페이지" aria-label="이전 페이지" disabled={page.meta.page <= 1} onClick={() => setParameters({ ...parameters, page: String(page.meta.page - 1) })}><ChevronLeft size={20} /></button><span>{page.meta.page} / {Math.max(1, page.meta.totalPages)}</span><button className="sa-icon" title="다음 페이지" aria-label="다음 페이지" disabled={page.meta.page >= page.meta.totalPages} onClick={() => setParameters({ ...parameters, page: String(page.meta.page + 1) })}><ChevronRight size={20} /></button></div></>}
@@ -150,15 +155,30 @@ function MemberWorkspace({ session, onProfileSave, profileMessage }: { session: 
   </main></AdminShell><Cart onLogin={() => {}} onRequestQuote={draft => { selectId(null); setView('market'); setQuoteDraft(draft) }} /></ReceivingRequestProvider>
 }
 
-function SaleRequestsPage({ onAssets }: { onAssets: () => void }) {
+function SaleRequestsPage({ page, parameters, onParameters, onSubmit, onAsset, onExport }: { page: Page | null; parameters: Record<string, string>; onParameters: (parameters: Record<string, string>) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onAsset: (id: string) => void; onExport: () => void }) {
+  const [query, setQuery] = useState(parameters.q ?? '')
+  const filterCount = Object.entries(parameters).filter(([key, value]) => !['page', 'size', 'q'].includes(key) && value).length
+  const [expanded, setExpanded] = useState(filterCount > 0)
+  const filtered = !!parameters.q || filterCount > 0
   return <section className="customer-history customer-sale-requests" aria-label="판매 요청 내역">
     <HistoryHeader kind="saleRequests" />
-    <div className="history-empty customer-sale-awaiting">
-      <FileSearch size={28} aria-hidden="true" />
-      <h3>판매 요청 내역 조회 준비 중</h3>
-      <p>현재 요청번호·승인 상태·판매 희망금액은 해당 자산의 상세에서 확인할 수 있습니다.</p>
-      <button type="button" className="sa-button" onClick={onAssets}><Archive size={15} />자산 목록 보기<ArrowRight size={15} /></button>
-    </div>
+    <DetailSearch id="customer-sale-filter" query={query} queryLabel="판매 요청 검색어" placeholder="요청번호 · 자산번호 · 자산명 · 규격 · 브랜드" expanded={expanded} filterCount={filterCount} onQueryChange={setQuery} onToggle={() => setExpanded(!expanded)} onSubmit={onSubmit} onReset={() => { setQuery(''); setExpanded(false); onParameters({ page: '1', size: parameters.size ?? '20' }) }}>
+      <fieldset className="customer-asset-filter-group"><legend>판매 요청 조건</legend><div className="sa-filter-fields">
+        <label><span>승인 상태</span><select name="saleRequestStatus" defaultValue={parameters.saleRequestStatus ?? ''}><option value="">전체</option>{Object.entries(approvalLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label><span>상세 검수</span><select name="saleInspection" defaultValue={parameters.saleInspection ?? ''}><option value="">전체</option>{Object.entries(saleInspectionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label><span>요청 기간</span><div className="sa-date-range"><input name="saleRequestedFrom" aria-label="판매 요청 시작일" type="date" defaultValue={parameters.saleRequestedFrom} /><i>~</i><input name="saleRequestedTo" aria-label="판매 요청 종료일" type="date" defaultValue={parameters.saleRequestedTo} /></div></label>
+      </div></fieldset>
+    </DetailSearch>
+    {page && <>
+      {page.saleRequestSummary && <div className="customer-sale-summaries"><HistorySummary title="전체 검색 범위 승인 상태별 건수" counts={page.saleRequestSummary.approval} labels={approvalLabels} /><HistorySummary title="전체 검색 범위 상세 검수 상태별 건수" counts={page.saleRequestSummary.inspection} labels={saleInspectionLabels} /></div>}
+      <div className="customer-result-heading"><h3>요청 내역 <span>{page.meta.totalElements.toLocaleString()}건</span></h3><div className="customer-asset-list-controls"><button className="sa-button" disabled={!page.data.length} onClick={onExport}><ArrowDownToLine size={15} />현재 페이지 내보내기</button><label>페이지당 <select aria-label="페이지당 판매 요청 수" value={parameters.size ?? '20'} onChange={event => onParameters({ ...parameters, page: '1', size: event.target.value })}>{[20, 50, 100].map(size => <option key={size}>{size}</option>)}</select></label></div></div>
+      {page.data.length ? <div className="sa-table-scroll" role="region" aria-label="판매 요청 내역 표" tabIndex={0}><table className="sa-table"><thead><tr>{['요청번호', '자산', '요청일', '요청 수량', '판매 희망금액 (전체 수량)', '상세 검수', '승인 상태', '마켓 상태'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{page.data.map(asset => { const request = asset.saleRequest; return request && <tr key={request.id}>
+        <td><button className="history-record-link customer-sale-request-id" aria-label={`${request.id} 판매 요청 상세 보기`} onClick={() => onAsset(asset.id)}><strong>{request.id}</strong></button></td>
+        <td><button className="sa-asset-link" onClick={() => onAsset(asset.id)}><AssetThumbnail asset={asset} /><span><b>{asset.name}</b><small className="customer-asset-code">{asset.id}</small></span></button></td>
+        <td>{date(request.createdAt)}</td><td className="sa-numeric">{request.quantity} {asset.unit}</td><td className="sa-numeric">{money(request.desiredAmount)}</td><td><HistoryStatus>{saleInspectionLabels[request.inspection] ?? request.inspection}</HistoryStatus></td><td><HistoryStatus>{approvalLabels[request.status] ?? request.status}</HistoryStatus></td><td>{request.product ? productLabels[request.product.status] ?? request.product.status : '상품 미등록'}</td>
+      </tr> })}</tbody></table></div> : <HistoryEmpty kind="saleRequests" filtered={filtered} />}
+      <div className="customer-pagination"><button className="sa-icon" title="이전 페이지" aria-label="이전 판매 요청 페이지" disabled={page.meta.page <= 1} onClick={() => onParameters({ ...parameters, page: String(page.meta.page - 1) })}><ChevronLeft size={16} /></button><span>{page.meta.page} / {Math.max(1, page.meta.totalPages)}</span><button className="sa-icon" title="다음 페이지" aria-label="다음 판매 요청 페이지" disabled={page.meta.page >= page.meta.totalPages} onClick={() => onParameters({ ...parameters, page: String(page.meta.page + 1) })}><ChevronRight size={16} /></button></div>
+    </>}
   </section>
 }
 
@@ -230,7 +250,7 @@ function AssetDetails({ asset, records, onBack, onNavigate, onRefresh }: { asset
     setMessage('자산 정보를 CSV로 내보냈습니다.')
   }
   return <div className="shopify-detail customer-asset-detail">
-    {saleOpen && <SaleRegistration persistent asset={{ name: asset.name, grade: asset.grade, quantity: asset.quantity, unit: asset.unit, salePrice: '' }} onClose={() => setSaleOpen(false)} onRegister={async (price) => { const desiredAmount = Number(price.replaceAll(',', '')); const result = await accountRequest<{ request: { id: string } }>(`/api/assets/${asset.id}/sale-requests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ desiredAmount, expectedQuantity: asset.quantity }) }); setSubmittedSale({ id: result.request.id, status: 'PENDING', desiredAmount: String(desiredAmount), createdAt: new Date().toISOString() }) }} />}
+    {saleOpen && <SaleRegistration persistent asset={{ name: asset.name, grade: asset.grade, quantity: asset.quantity, unit: asset.unit, salePrice: '' }} onClose={() => setSaleOpen(false)} onRegister={async (price) => { const desiredAmount = Number(price.replaceAll(',', '')); const result = await accountRequest<{ request: { id: string } }>(`/api/assets/${asset.id}/sale-requests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ desiredAmount, expectedQuantity: asset.quantity }) }); setSubmittedSale({ id: result.request.id, status: 'PENDING', inspection: 'PENDING', quantity: asset.quantity, desiredAmount: String(desiredAmount), createdAt: new Date().toISOString(), product: null }) }} />}
     <div className="sd-breadcrumb"><button onClick={onBack}>내 자산</button><ChevronRight size={12} /><span>{asset.id}</span></div>
     <div className="sd-heading"><button className="sd-icon" title="자산 목록으로" aria-label="자산 목록으로" onClick={onBack}><ArrowLeft size={18} /></button><div className="sd-title"><h1 tabIndex={-1} ref={heading}>{asset.name}</h1><span className={`sd-badge ${state}`}><i />{status}</span></div><div className="sd-paging"><button className="sd-icon" title="이전 자산" aria-label="이전 자산" disabled={!previous} onClick={() => previous && onNavigate(previous.id)}><ChevronLeft size={17} /></button><button className="sd-icon" title="다음 자산" aria-label="다음 자산" disabled={!next} onClick={() => next && onNavigate(next.id)}><ChevronRight size={17} /></button></div></div>
     <div className="sd-actions"><span>등록일 {date(asset.createdAt)} <i>·</i> 등록 경과 {days.toLocaleString('ko-KR')}일</span><div><button className="sd-icon" title="새로고침" aria-label="새로고침" onClick={onRefresh}><RefreshCw size={15} /></button><button className="sd-button" onClick={exportAsset}><ArrowDownToLine size={14} />내보내기</button></div></div>
@@ -241,6 +261,7 @@ function AssetDetails({ asset, records, onBack, onNavigate, onRefresh }: { asset
       <section className="sd-section"><div className="sd-section-heading"><h2>재고 정보</h2><span><MapPin size={13} />{asset.locationId ?? '미지정'}</span></div><div className="sd-stock"><div><span>현재 수량</span><strong>{Number(asset.quantity).toLocaleString('ko-KR', { maximumFractionDigits: 3 })}<small>{asset.unit}</small></strong></div><dl><div><dt>관리 단위</dt><dd>{asset.unit}</dd></div><div><dt>등록일</dt><dd>{date(asset.createdAt)}</dd></div></dl></div></section>
     </div><aside className="sd-secondary-column" aria-label="자산 관리">
       <section className="sd-section"><div className="sd-section-heading"><h2>자산 상태</h2><span className={`sd-badge ${state}`}><i />{status}</span></div><dl className="sd-side-fields"><div><dt>보관 상태</dt><dd>{storageLabels[asset.storageStatus]}</dd></div><div><dt>판매 상태</dt><dd>{saleLabels[asset.saleStatus]}</dd></div>{request && <><div><dt>판매 요청번호</dt><dd>{request.id}</dd></div><div><dt>승인 상태</dt><dd>{{ PENDING: '승인 대기', APPROVED: '승인 완료', REJECTED: '반려' }[request.status] ?? request.status}</dd></div><div><dt>판매 희망금액</dt><dd>{money(request.desiredAmount)}</dd></div></>}</dl><button className="sd-button customer-market-unavailable" disabled={!asset.canRequestSale || !!request} onClick={() => setSaleOpen(true)}><ShoppingCart size={15} />{request ? '판매 요청 접수됨' : '마켓에 등록하기'}</button></section>
+      {request && <section className="sd-section"><div className="sd-section-heading"><h2>판매 요청 상세</h2><ClipboardList size={16} /></div><dl className="sd-side-fields"><div><dt>요청일</dt><dd>{date(request.createdAt)}</dd></div><div><dt>요청 당시 수량</dt><dd>{request.quantity} {asset.unit}</dd></div><div><dt>희망금액 (전체 수량)</dt><dd>{money(request.desiredAmount)}</dd></div><div><dt>상세 검수</dt><dd>{saleInspectionLabels[request.inspection] ?? request.inspection}</dd></div><div><dt>마켓 상태</dt><dd>{request.product ? productLabels[request.product.status] ?? request.product.status : '상품 미등록'}</dd></div>{request.product && <><div><dt>상품번호</dt><dd>{request.product.id}</dd></div><div><dt>판매 등록 수량</dt><dd>{request.product.listedQuantity} {asset.unit}</dd></div><div><dt>구매 예약 수량</dt><dd>{request.product.reservedQuantity} {asset.unit}</dd></div><div><dt>출고 확정 누적 수량</dt><dd>{request.product.soldQuantity} {asset.unit}</dd></div></>}</dl></section>}
       <section className="sd-section"><div className="sd-section-heading"><h2>보관 정보</h2><Warehouse size={16} /></div><dl className="sd-side-fields"><div><dt>보관 위치 코드</dt><dd>{asset.locationId ?? '미지정'}</dd></div><div><dt>등록 경과일</dt><dd>{days.toLocaleString('ko-KR')}일</dd></div><div><dt>등록일</dt><dd>{date(asset.createdAt)}</dd></div></dl></section>
       <section className="sd-section"><div className="sd-section-heading"><h2>자산 분류</h2><Box size={16} /></div><dl className="sd-side-fields"><div><dt>카테고리</dt><dd>{asset.category?.path ?? '미분류'}</dd></div><div><dt>브랜드</dt><dd>{asset.brand || '미등록'}</dd></div><div><dt>품질 등급</dt><dd><span className="sd-grade">{asset.grade}</span></dd></div><div><dt>관리 단위</dt><dd>{asset.unit}</dd></div></dl></section>
       <section className="sd-section"><div className="sd-section-heading"><h2><label htmlFor="customer-asset-note">자산 메모</label></h2><span>미등록</span></div><textarea id="customer-asset-note" value="" readOnly disabled rows={6} aria-label="자산 메모" title="자산 메모 저장은 현재 지원하지 않습니다" /></section>
