@@ -17,14 +17,18 @@ const questions = [
 ]
 
 export function Faq({ navigation }: { navigation: ReactNode }) {
+  return <AdminShell navigation={navigation}><main className="sa-main"><FaqContent /></main></AdminShell>
+}
+
+export function FaqContent() {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('전체')
   const shown = questions.filter((item) => (category === '전체' || item.category === category) && `${item.question} ${item.answer}`.toLowerCase().includes(query.trim().toLowerCase()))
-  return <AdminShell navigation={navigation}><main className="sa-main faq-page">
+  return <div className="faq-page">
     <div className="sa-heading"><div><div className="sa-breadcrumb">워크스페이스 <span>/</span> 도움말</div><h1>F&Q</h1></div></div>
     <div className="sa-section-title"><h2>자주 묻는 질문</h2><span>{shown.length}건</span></div>
     <label className="op-search"><Search size={18} /><input aria-label="질문 검색" placeholder="질문 또는 키워드 검색" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button className="sa-icon" aria-label="검색 지우기" onClick={() => setQuery('')}><X size={16} /></button>}</label>
     <div className="sa-tabs op-faq-tabs" aria-label="질문 분류">{['전체', ...new Set(questions.map((item) => item.category))].map((value) => <button key={value} aria-pressed={category === value} onClick={() => setCategory(value)}>{value}</button>)}</div>
     <section className="op-questions" aria-label="질문과 답변">{shown.map((item) => <details key={item.question}><summary><span className="op-question-category">{item.category}</span><span>{item.question}</span><ChevronDown size={17} /></summary><p>{item.answer}</p></details>)}{shown.length === 0 && <div className="sa-empty"><Search size={26} /><h2>검색 결과가 없습니다</h2><button className="sa-button" onClick={() => { setQuery(''); setCategory('전체') }}>전체 질문 보기</button></div>}</section>
-  </main></AdminShell>
+  </div>
 }
