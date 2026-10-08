@@ -231,7 +231,7 @@ export const assetUpdateInput = z.object({
   grade: z.enum(['S', 'A', 'B', 'F']), locationId: z.string().max(20).transform((value) => value || null),
   status: z.enum(['입고대기', '보관중', '출고완료']), saleStatus: z.enum(['판매대기', '판매중', '판매완료']),
 }).strict()
-const itemInput = z.object({
+export const itemInput = z.object({
   id: z.string().regex(/^\d{6}$/),
   name: z.string().trim().max(160),
   category: z.union([z.string().regex(/^\d{6}$/), z.literal('')]).transform((value) => value || null),
@@ -246,7 +246,7 @@ const itemInput = z.object({
   images: z.array(imageInput).max(1),
 })
 
-const categoryInput = z.object({
+export const categoryInput = z.object({
   parentId: z.string().regex(/^\d{6}$/).nullable(),
   name: z.string().trim().min(1).max(80),
   enabled: z.boolean(),

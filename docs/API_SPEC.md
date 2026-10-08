@@ -1,3 +1,24 @@
+## Scalar API 테스트 화면
+
+Hono 실행 라우트와 `@hono/zod-openapi`의 Zod 요청·조회 스키마를 기반으로 OpenAPI 3.1 문서를 생성한다. Scalar의 요청 실행 기능은 현재 접속 환경의 실제 API를 호출하며 목업 응답이 아니다.
+
+| 경로 | 용도 |
+| --- | --- |
+| `/api/docs` | 고객 포털·관리자 문서 선택 |
+| `/api/docs/customer` | 고객 포털 API 테스트 |
+| `/api/docs/admin` | 관리자 API 테스트 |
+| `/api/openapi/customer.json` | 공개·고객 인증 API의 OpenAPI 문서 |
+| `/api/openapi/admin.json` | 관리자 API와 공통 헬스 API의 OpenAPI 문서 |
+| `/api/openapi.json` | 기존 호환용 전체 OpenAPI 문서 |
+
+고객 문서는 인증·고객사 검색·자산·마켓·개인 장바구니·입고·검수·구매 견적·출고 도메인을 구분한다. 관리자 문서는 인증·고객사·회원/계정·품목·자산·카테고리·기획전·배너/이미지·입고·검수·위치·판매/출고·관리 데이터 도메인을 구분한다. 실제 검증 스키마를 이름 있는 요청/조회 컴포넌트로 재사용하며 인증·자산·견적·입고·검수 조회 응답과 공통 오류 스키마를 제공한다. 각 영역 문서에서는 해당 경로와 사용하는 스키마만 노출한다.
+
+1. 고객은 `POST /api/auth/login`의 `{email,password}`, 관리자는 `POST /api/admin/auth/login`의 `{id,password}`를 실행한다.
+2. 성공 응답 `data.accessToken`을 해당 문서의 인증 설정에 입력한다. 고객은 `CustomerBearer`, 관리자는 `AdminBearer`이며 Scalar가 `Authorization: Bearer <token>`을 전송한다. 토큰 입력에는 `Bearer` 접두어를 중복 입력하지 않는다.
+3. 공개 API는 `security: []`다. 보호 API는 영역별 Bearer 인증을 필수로 지정하고 401·403 응답을 정의한다. 고객은 활성 회원·고객사·현재 소속/세션 검증, 관리자는 활성 관리자·현재 세션 검증을 통과해야 한다. MANAGER·SYSTEM_ADMIN 등 작업별 제한은 기존 서버 로직이 최종 검증한다.
+
+문서에는 실제 토큰·비밀번호·개인정보를 삽입하지 않으며 Scalar 인증 저장은 `persistAuth: false`로 설정한다. 로그인 후 인증 설정은 직접 입력한다. POST·PUT·PATCH·DELETE 요청은 실제 등록·승인·재고/거래 변경을 일으킬 수 있으므로 로컬 테스트 계정과 데이터를 사용한다. 문서 공개가 API 권한을 우회하지 않으며 운영에서 문서 자체를 제한하려면 별도 접근 정책이 필요하다. Scalar 화면 렌더링에는 외부 Scalar CDN 접속이 필요하다.
+
 ### 본인 회원정보 수정
 
 `PATCH /api/auth/me`는 활성 고객 VIEWER·MANAGER의 본인 담당자명·연락처·이메일만 저장한다. `{managerName,managerPhone,email,version,currentPassword?}`를 받으며 `version`은 조회 응답의 `sessionVersion`이다. 이메일 변경 시 현재 비밀번호 확인이 필요하고 중복 이메일·동시 수정은409다. 성공 시 `{accessToken,tokenType,user}`를 반환해 현재 세션을 갱신하고 기존 토큰을 폐기한다. 고객사·소속·권한·비밀번호 변경은 허용하지 않는다. 입력·보안·감사 계약은 [고객 관리](CUSTOMER_MANAGEMENT.md)를 참고한다.

@@ -36,7 +36,7 @@ export type BannerRepository = {
   replace: (id: string, input: BannerPlacementInput) => Promise<BannerPlacementRecord>
 }
 
-const placementId = z.string().trim().min(2).max(80).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/, 'Placement ID may contain letters, numbers, dots, underscores, colons, and hyphens')
+export const placementId = z.string().trim().min(2).max(80).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/, 'Placement ID may contain letters, numbers, dots, underscores, colons, and hyphens')
 const imageSource = z.string().trim().min(1).max(7_000_000).refine((value) => /^https?:\/\//i.test(value) || value.startsWith('/') || /^data:image\/(?:jpeg|png|webp);base64,/i.test(value), 'Image must be an HTTP URL, root-relative path, or JPG/PNG/WebP upload')
 const destination = z.string().trim().max(2048).refine((value) => !value || /^https?:\/\//i.test(value) || value.startsWith('/') || value.startsWith('#'), 'Link must be an HTTP URL, root-relative path, or hash route')
 const optionalDate = z.union([z.iso.datetime({ offset: true }), z.literal(''), z.null()]).transform((value) => value ? new Date(value) : null)
@@ -54,7 +54,7 @@ const bannerItemInput = z.object({
   if (value.startsAt && value.endsAt && value.startsAt >= value.endsAt) context.addIssue({ code: 'custom', path: ['endsAt'], message: 'End time must be later than start time' })
 })
 
-const placementInput = z.object({
+export const placementInput = z.object({
   name: z.string().trim().min(1).max(120),
   enabled: z.boolean(),
   items: z.array(bannerItemInput).max(30),

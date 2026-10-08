@@ -1,12 +1,13 @@
 import { OpenAPIHono, z } from '@hono/zod-openapi'
-import { Scalar } from '@scalar/hono-api-reference'
+import { registerApiDocs } from './api-docs.js'
 import { assetDetail, assetDetailRoute, assetSummary, assetSummaryRoute, assetListRoute, listAssets, requestAssetSale, saleRequestRoute, type AssetRepository } from './asset.js'
-import { adminLogin, adminLoginSchema, approveMember, currentUser, customerLogin, listMembers, register, registrationSchema, requireAdmin, requireAuth, updateMember, updateOwnProfile, memberProfileSchema, type AuthRepository } from './auth.js'
+import { adminLogin, adminLoginSchema, loginSchema, approveMember, currentUser, customerLogin, listMembers, register, registrationSchema, requireAdmin, requireAuth, updateMember, updateOwnProfile, memberProfileSchema, type AuthRepository } from './auth.js'
 import { businessNumberSchema, customerFieldsSchema, customerHandlers, decisionSchema, memberDecisionSchema, type CustomerRepository } from './customer.js'
 import { getConnInfo } from '@hono/node-server/conninfo'
-import { listAdminBanners, listPublicBanners, saveBanner, type BannerRepository } from './banner.js'
+import { listAdminBanners, listPublicBanners, saveBanner, placementId, placementInput, type BannerRepository } from './banner.js'
 import { ErrorCode, failure, handleError, success } from './http.js'
-import { approveAdminSale, saleApprovalInput, completeAdminSaleInspection, saleInspectionCompleteInput, createAdminItems, updateAdminItem, updateAdminAsset, assetUpdateInput, itemUpdateInput, loadAdminData, saveAdminCategory, type AdminDataRepository } from './admin-data.js'
+import { approveAdminSale, saleApprovalInput, completeAdminSaleInspection, saleInspectionCompleteInput, createAdminItems, updateAdminItem, updateAdminAsset, assetUpdateInput, itemUpdateInput, itemInput, categoryInput, adminDataQuery, loadAdminData, saveAdminCategory, type AdminDataRepository } from './admin-data.js'
+import { adminListQuery } from './admin-pagination.js'
 import { adminAccountCreate, adminAccountUpdate, adminAccountHandlers, requireSystemAdmin, type AdminAccountRepository } from './admin-accounts.js'
 import { bodyLimit } from 'hono/body-limit'
 import type { Context } from 'hono'
@@ -206,18 +207,26 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
       ] as const) app.openAPIRegistry.registerPath({ method, path, summary, tags: ['Customers'], security: [{ BearerAuth: [] }], request: { ...(path.includes('{id}') ? { params: z.object({ id: z.string().min(1).max(36) }) } : {}), ...(schema ? { body: body(schema) } : {}) }, responses: { ...responses, ...(method === 'post' && path === '/api/admin/customers' ? { 201: { description: '고객사 생성' } } : {}) } })
     }
     app.post('/api/auth/login', customerLogin(auth.repository, auth.secret, auth.expiresIn))
+    app.openAPIRegistry.registerPath({ method: 'post', path: '/api/auth/login', tags: ['Auth'], summary: '활성 고객 회원 로그인 (customer audience JWT)', request: { body: { required: true, content: { 'application/json': { schema: loginSchema } } } }, responses: { 200: { description: '고객 토큰 및 프로필' }, 400: { description: '입력 오류' }, 401: { description: '계정 또는 비밀번호 불일치' }, 403: { description: '활성 회원·고객사 필요' } } })
     app.post('/api/admin/auth/login', adminLogin(auth.repository, auth.secret, auth.expiresIn))
     app.get('/api/admin/auth/me', adminAuth, requireAdmin, currentUser)
     app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/auth/login', tags: ['Admin Auth'], summary: '직접 생성된 MRS 관리자 계정 로그인', request: { body: { required: true, content: { 'application/json': { schema: adminLoginSchema } } } }, responses: { 200: { description: '관리자 전용 audience 토큰 발급' }, 400: { description: '잘못된 요청' }, 401: { description: '계정 또는 비밀번호 불일치 (고객 계정 포함)' }, 403: { description: '비활성 계정' } } })
     app.openAPIRegistry.registerPath({ method: 'get', path: '/api/admin/auth/me', tags: ['Admin Auth'], summary: '관리자 전용 세션과 현재 DB 역할 확인', security: [{ BearerAuth: [] }], responses: { 200: { description: '확인된 관리자 프로필' }, 401: { description: '관리자 인증 필요' } } })
     app.post('/api/auth/register', register(auth.repository))
     app.get('/api/auth/me', customerAuth, currentUser)
+    app.openAPIRegistry.registerPath({ method: 'get', path: '/api/auth/me', tags: ['Auth'], summary: '현재 고객 세션·소속·고객사 활성 상태 조회', security: [{ BearerAuth: [] }], responses: { 200: { description: '고객 프로필' } } })
+    if (!customers) app.openAPIRegistry.registerPath({ method: 'post', path: '/api/auth/register', tags: ['Auth'], summary: '기존 고객사 소속 또는 신규 고객사 회원 신청', request: { body: { required: true, content: { 'application/json': { schema: registrationSchema } } } }, responses: { 201: { description: '승인 대기 회원' }, 400: { description: '입력 오류' }, 409: { description: '중복 회원' } } })
     app.get('/api/admin/members', adminAuth, requireAdmin, listMembers(auth.repository))
     app.post('/api/admin/members/:id/approve', adminAuth, requireAdmin, approveMember(auth.repository))
     app.post('/api/admin/members/:id/actions', adminAuth, requireAdmin, updateMember(auth.repository))
+    app.openAPIRegistry.registerPath({ method: 'get', path: '/api/admin/members', tags: ['Accounts'], summary: '고객 회원 목록·검색·페이지 조회', security: [{ BearerAuth: [] }], request: { query: adminListQuery }, responses: { 200: { description: '회원 및 pagination' } } })
+    app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/members/{id}/approve', tags: ['Accounts'], summary: '고객 회원 소속 승인', security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.uuid() }), body: { required: true, content: { 'application/json': { schema: memberDecisionSchema.omit({ action: true }) } } } }, responses: { 200: { description: '승인된 회원' }, 409: { description: '상태·버전 충돌' } } })
+    if (!customers) app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/members/{id}/actions', tags: ['Accounts'], summary: '고객 회원 심사·권한·소속 변경', security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.uuid() }), body: { required: true, content: { 'application/json': { schema: memberDecisionSchema } } } }, responses: { 200: { description: '변경된 회원' }, 409: { description: '상태·버전 충돌' } } })
     if (adminData) {
       app.get('/api/admin/data', adminAuth, requireAdmin, loadAdminData(adminData))
+      app.openAPIRegistry.registerPath({ method: 'get', path: '/api/admin/data', tags: ['Admin data'], summary: '도메인별 관리 데이터 (scope)·검색·페이지·상세 조회', security: [{ BearerAuth: [] }], request: { query: adminDataQuery }, responses: { 200: { description: '선택한 도메인 자료 및 pagination' } } })
       app.post('/api/admin/items', adminAuth, requireAdmin, createAdminItems(adminData))
+      app.openAPIRegistry.registerPath({ method: 'post', path: '/api/admin/items', tags: ['Items'], summary: '품목 단일·일괄 등록 (최대 50000행)', security: [{ BearerAuth: [] }], request: { body: { required: true, content: { 'application/json': { schema: z.object({ items: z.array(itemInput).min(1).max(50000) }) } } } }, responses: { 201: { description: '등록된 품목' }, 400: { description: '입력 오류' }, 409: { description: '품목 중복·참조 오류' } } })
       app.put('/api/admin/items/:id', adminAuth, requireAdmin, updateAdminItem(adminData))
       app.put('/api/admin/assets/:id', adminAuth, requireAdmin, updateAdminAsset(adminData))
       app.post('/api/admin/sale-requests/:id/inspection/complete', adminAuth, requireAdmin, completeAdminSaleInspection(adminData))
@@ -225,6 +234,7 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
       app.openAPIRegistry.registerPath({ method: 'put', path: '/api/admin/assets/{id}', summary: '기존 자산 정보 수정 및 변경 이력 저장', tags: ['Admin assets'], security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string().regex(/^\d{6}-\d{4}$/) }), body: { required: true, content: { 'application/json': { schema: assetUpdateInput } } } }, responses: { 200: { description: 'DB에 저장된 data.asset 반환' }, 400: { description: '입력·상태·참조 오류' }, 401: { description: '관리자 인증 필요' }, 404: { description: '자산 없음' }, 409: { description: '동시 변경 또는 연결 상품 충돌' } } })
       app.openAPIRegistry.registerPath({ method: 'put', path: '/api/admin/items/{id}', summary: '기존 품목 정보와 이미지 수정', tags: ['Admin items'], security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string().regex(/^\d{6}$/) }), body: { required: true, content: { 'application/json': { schema: itemUpdateInput } } } }, responses: { 200: { description: 'DB에 저장된 data.item 반환' }, 400: { description: '입력 또는 카테고리·이미지 오류' }, 401: { description: '관리자 인증 필요' }, 404: { description: '품목 없음' }, 409: { description: '중복 코드, 연결 자산 단위 변경 또는 동시 변경 충돌' } } })
       app.put('/api/admin/categories/:id', adminAuth, requireAdmin, saveAdminCategory(adminData))
+      app.openAPIRegistry.registerPath({ method: 'put', path: '/api/admin/categories/{id}', tags: ['Categories'], summary: '카테고리 저장', security: [{ BearerAuth: [] }], request: { params: z.object({ id: z.string().regex(/^\d{6}$/) }), body: { required: true, content: { 'application/json': { schema: categoryInput } } } }, responses: { 200: { description: '저장된 카테고리' }, 409: { description: '코드·상위 분류·중복 오류' } } })
     }
     if (assets) {
       app.use('/api/assets', customerAuth)
@@ -237,10 +247,17 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
     if (banners) {
       app.get('/api/admin/banners', adminAuth, requireAdmin, listAdminBanners(banners))
       app.put('/api/admin/banners/:id', adminAuth, requireAdmin, saveBanner(banners))
+      app.openAPIRegistry.registerPath({ method: 'get', path: '/api/admin/banners', tags: ['Banners'], summary: '관리자 배너 위치 목록·상세', security: [{ BearerAuth: [] }], request: { query: adminListQuery }, responses: { 200: { description: '배너 위치 및 페이지' } } })
+      app.openAPIRegistry.registerPath({ method: 'put', path: '/api/admin/banners/{id}', tags: ['Banners'], summary: '배너 위치·이미지·기간·링크·순서 저장', security: [{ BearerAuth: [] }], request: { params: z.object({ id: placementId }), body: { required: true, content: { 'application/json': { schema: placementInput } } } }, responses: { 200: { description: '저장된 배너 위치' }, 409: { description: '배너 저장 충돌' } } })
     }
   }
 
-  if (banners) app.get('/api/banners', listPublicBanners(banners))
+  if (banners) {
+    app.get('/api/banners', listPublicBanners(banners))
+    app.openAPIRegistry.registerPath({ method: 'get', path: '/api/banners', tags: ['Banners'], summary: '활성 기간의 공개 배너 조회', request: { query: z.object({ placements: z.string().min(1).describe('쉼표로 구분한 배너 위치 ID, 최대 20개') }) }, responses: { 200: { description: '공개 배너 위치·이미지·링크' }, 400: { description: '위치 입력 오류' } } })
+  }
+
+  for (const endpoint of ['live', 'ready']) app.openAPIRegistry.registerPath({ method: 'get', path: `/api/health/${endpoint}`, tags: ['Health'], summary: endpoint === 'live' ? '프로세스 상태' : '데이터베이스 준비 상태', responses: { 200: { description: '정상' }, ...(endpoint === 'ready' ? { 503: { description: 'DB 사용 불가' } } : {}) } })
 
   app.get('/api/health/live', (context) => success(context, { status: 'ok' }))
 
@@ -263,12 +280,7 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
     }
   })
 
-  app.doc31('/api/openapi.json', (context) => ({
-    openapi: '3.1.0',
-    info: { title: 'MRS Customer API', version: '1.0.0' },
-    servers: [{ url: new URL(context.req.url).origin, description: 'Current environment' }],
-  }))
-  app.get('/api/docs', Scalar({ url: '/api/openapi.json', pageTitle: 'MRS API Reference' }))
+  registerApiDocs(app)
 
   app.notFound((context) => failure(context, 404, ErrorCode.NOT_FOUND, 'Not found'))
 
