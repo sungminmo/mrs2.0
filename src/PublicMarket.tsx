@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   ArrowUpDown,
   Box,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -13,15 +12,13 @@ import {
   Minus,
   Plus,
   RefreshCw,
-  RotateCcw,
   Search,
-  ShoppingCart,
-  SlidersHorizontal,
-  X
+  ShoppingCart
 } from 'lucide-react'
 import { appraisalMoney, appraisalTotal } from './appraisal'
 import { authenticatedFetch } from './authSession'
 import CategorySelect from './CategorySelect'
+import DetailSearch from './DetailSearch'
 import {
   categoryMatches,
   categoryPath,
@@ -273,85 +270,25 @@ export default function PublicMarket({
                 ?.scrollIntoView({ block: 'start' })
             }}
           />
-          <form
-            className="sa-detail-search sm-market-search"
+          <DetailSearch
+            id="public-market-filter"
+            className="sm-market-search"
+            query={draft.q}
+            queryLabel="마켓 상세 검색어"
+            placeholder="자재명 또는 카테고리 검색"
+            expanded={expanded}
+            filterCount={[filters.categoryId, filters.grade, filters.campaignId].filter(Boolean).length}
+            onQueryChange={(q) => setDraft({ ...draft, q })}
+            onToggle={() => {
+              if (!expanded) setDraft(filters)
+              setExpanded(!expanded)
+            }}
+            onReset={reset}
             onSubmit={(event) => {
               event.preventDefault()
               apply(draft)
             }}
           >
-            <div className="sa-detail-search-heading">
-              <div>
-                <h2>상세 검색</h2>
-              </div>
-              <button
-                type="button"
-                className="sa-filter-toggle"
-                aria-expanded={expanded}
-                aria-controls="public-market-filter"
-                onClick={() => {
-                  if (!expanded) setDraft(filters)
-                  setExpanded(!expanded)
-                }}
-              >
-                <SlidersHorizontal size={14} />
-                상세 필터
-                {[filters.categoryId, filters.grade, filters.campaignId].filter(
-                  Boolean
-                ).length > 0 && (
-                  <span className="sa-filter-count">
-                    {
-                      [
-                        filters.categoryId,
-                        filters.grade,
-                        filters.campaignId
-                      ].filter(Boolean).length
-                    }
-                  </span>
-                )}
-                <ChevronDown size={14} className="sa-chevron" />
-              </button>
-            </div>
-            <div className="sa-detail-search-bar">
-              <label className="sa-detail-keyword">
-                <Search size={15} />
-                <input
-                  aria-label="마켓 상세 검색어"
-                  placeholder="자재명 또는 카테고리 검색"
-                  maxLength={160}
-                  value={draft.q}
-                  onChange={(event) =>
-                    setDraft({ ...draft, q: event.target.value })
-                  }
-                />
-                {draft.q && (
-                  <button
-                    type="button"
-                    className="sa-icon sa-detail-keyword-clear"
-                    aria-label="검색어 지우기"
-                    onClick={() => setDraft({ ...draft, q: '' })}
-                  >
-                    <X size={13} />
-                  </button>
-                )}
-              </label>
-              <div className="sa-detail-search-buttons">
-                <button className="sa-button" type="button" onClick={reset}>
-                  <RotateCcw size={13} />
-                  초기화
-                </button>
-                <button className="sa-button sa-primary">
-                  <Search size={14} />
-                  검색
-                </button>
-              </div>
-            </div>
-            <div
-              id="public-market-filter"
-              className={`sa-filter-panel${expanded ? ' is-open' : ''}`}
-              inert={!expanded}
-            >
-              <div className="sa-filter-panel-inner">
                 <CategorySelect
                   categories={categories}
                   value={draft.categoryId}
@@ -389,9 +326,7 @@ export default function PublicMarket({
                     </select>
                   </label>
                 </div>
-              </div>
-            </div>
-          </form>
+          </DetailSearch>
           <div className="sm-catalog-heading">
             <h2 id="public-market-catalog">
               {filters.categoryId
