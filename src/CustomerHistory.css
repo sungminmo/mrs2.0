@@ -1,0 +1,77 @@
+.customer-history { min-width: 0; color: #303630; }
+.history-header { margin-bottom: 24px; }
+.history-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.history-title-row > div:first-child { min-width: 0; }
+.customer-history .history-title-row h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 0; font-size: 20px; line-height: 1.5; letter-spacing: 0; overflow-wrap: anywhere; }
+.history-title-row p { margin: 8px 0 0; color: #626d65; font-size: 13px; line-height: 1.8; word-break: keep-all; overflow-wrap: anywhere; }
+.history-header-actions { display: flex; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+.history-process { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 20px; padding: 14px 0; border-block: 1px solid #dce2dd; font-size: 12px; }
+.history-process > span:first-child { color: #68726c; }
+.history-process ol { display: flex; flex-wrap: wrap; gap: 12px; list-style: none; margin: 0; padding: 0; }
+.history-process li, .history-process li > span { display: flex; align-items: center; gap: 8px; }
+.history-process li > svg { color: #869087; }
+.history-process b { display: grid; place-items: center; width: 20px; height: 20px; background: #e5ece6; color: #285c43; border-radius: 50%; font-size: 11px; font-weight: 600; }
+.history-backbar { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 20px; }
+.history-back { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 8px 0; border: 0; background: transparent; color: #285c43; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.history-back:disabled { opacity: .5; cursor: wait; }
+.history-backbar > span { color: #727a74; font-size: 12px; border-left: 1px solid #ccd5ce; padding-left: 16px; }
+.history-status { display: inline-flex; align-items: center; width: fit-content; max-width: 100%; padding: 4px 8px; border: 1px solid #d5dfd7; border-radius: 4px; background: #edf3ee; color: #315c40; font-size: 12px; font-weight: 500; line-height: 1.5; white-space: nowrap; }
+.customer-history .customer-filters, .customer-history .customer-quote-search, .customer-history > .outbound-actions:first-of-type { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; padding: 18px; margin: 0 0 20px; background: #eef1ee; border: 0; border-radius: 6px; }
+.customer-history :is(.customer-filters, .customer-quote-search, .outbound-actions) label { display: grid; gap: 7px; color: #626d65; font-size: 12px; }
+.customer-history :is(.customer-filters, .customer-quote-search, .outbound-actions) input { min-height: 40px; border: 1px solid #bcc8bf; border-radius: 5px; padding: 9px 12px; background: #fdfefd; font: inherit; color: #303630; }
+.customer-history .customer-quote-search label, .customer-history > .outbound-actions > label { flex: 1 1 240px; min-width: 0; }
+.customer-history :is(.sa-table-scroll, .outbound-table) { border: 1px solid #dce2dd; border-radius: 6px; background: #fdfefd; margin: 0; }
+.customer-history :is(.sa-table, .outbound-table table) { width: 100%; border-collapse: collapse; font-size: 13px; }
+.customer-history :is(.sa-table, .outbound-table table) th { padding: 13px 16px; background: #eef1ee; color: #626d65; font-size: 12px; font-weight: 600; text-align: left; white-space: nowrap; }
+.customer-history :is(.sa-table, .outbound-table table) td { padding: 16px; border-top: 1px solid #e5e9e5; line-height: 1.6; }
+.customer-history :is(.sa-table, .outbound-table table) tbody tr:hover { background: #f4f7f4; }
+.history-record-link { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; border: 0; padding: 0; background: transparent; color: #285c43; cursor: pointer; font: inherit; text-align: left; }
+.history-record-link strong { font-weight: 600; }
+.history-record-link small { color: #727a74; font-size: 11px; }
+.history-view { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; border: 0; background: transparent; color: #285c43; font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.history-results { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 12px; font-size: 13px; }
+.history-results strong { color: #285c43; font-weight: 600; }
+.history-results > span:last-child { font-size: 12px; color: #727a74; }
+.history-empty { display: grid; justify-items: center; text-align: center; padding: 40px 16px; color: #68726c; }
+.history-empty svg { color: #7d9283; margin-bottom: 14px; }
+.history-empty h3 { margin: 0 0 8px; color: #38453b; font-size: 15px; font-weight: 600; }
+.history-empty p { margin: 0; font-size: 13px; line-height: 1.7; }
+.customer-history .customer-section { padding: 24px 0; }
+.customer-history .customer-section > h3, .history-section-title { margin: 0 0 20px; font-size: 15px; font-weight: 600; }
+.customer-history .customer-data { padding: 0; gap: 24px 32px; }
+.customer-history .customer-data dd { font-size: 14px; line-height: 1.7; }
+.customer-history .customer-photos { margin-top: 24px; }
+.customer-history .customer-inspection-actions, .customer-history .customer-disposal-consent { padding: 20px 0; margin: 24px 0 0; border-top: 1px solid #dce2dd; }
+.customer-history .qh-detail-grid, .customer-history .qh-requester, .customer-history .sm-request-items, .customer-history .outbound-section { box-shadow: none; border-radius: 0; }
+.customer-history .qh-requester, .customer-history .sm-request-items, .customer-history .outbound-section { border: 0; border-bottom: 1px solid #dce2dd; background: transparent; padding: 24px 0; }
+.customer-history .qh-detail-grid { grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr); gap: 24px 32px; padding-top: 0; }
+.customer-history .qh-detail-grid > .outbound-workspace { grid-column: 1 / -1; min-width: 0; padding-bottom: 24px; border-bottom: 1px solid #dce2dd; }
+.customer-history .qh-detail-grid > section + section { padding-left: 0; border-left: 0; }
+.customer-history .qh-detail-grid h3 { margin-bottom: 16px; font-size: 15px; }
+.customer-history .qh-requester dt { font-size: 12px; }
+.customer-history .qh-requester dd { font-size: 13px; text-align: left; }
+.customer-history .outbound-heading h2 { font-size: 16px; }
+.customer-history .outbound-heading h3 { font-size: 15px; }
+.customer-history .outbound-offer, .customer-history .outbound-order { padding: 20px 0; margin: 0; }
+.history-waiting { padding: 18px 0; color: #626d65; font-size: 13px; line-height: 1.8; }
+.history-tooltip { position: relative; display: inline-flex; margin-left: auto; }
+.history-help { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; color: #567360; cursor: help; border-radius: 50%; }
+.history-help:hover, .history-help:focus-visible { background: #e2eae3; }
+.history-tooltip-content { position: absolute; z-index: 20; top: calc(100% + 8px); right: 0; width: 280px; max-width: calc(100vw - 48px); padding: 14px 16px; border-radius: 6px; background: #293c30; color: #f4f7f4; box-shadow: 0 6px 20px #20332526; font-size: 12px; line-height: 1.8; text-align: left; font-weight: 400; }
+.history-tooltip-content::before { content: ''; position: absolute; right: 10px; top: -5px; width: 10px; height: 10px; transform: rotate(45deg); background: #293c30; }
+.history-tooltip-content strong { display: block; margin-bottom: 6px; font-weight: 600; }
+.history-tooltip::after { content: ''; position: absolute; top: 100%; right: 0; width: 280px; height: 10px; }
+@media (max-width: 640px) {
+  .history-title-row { flex-direction: column; gap: 14px; }
+  .customer-history .history-title-row h2 { font-size: 18px; }
+  .history-header-actions { width: 100%; }
+  .history-process { gap: 12px; }
+  .history-process > span:first-child { width: 100%; }
+  .history-process ol { gap: 8px; flex: 1; }
+  .history-process li { gap: 6px; }
+  .history-tooltip { align-self: flex-start; }
+  .customer-history :is(.customer-filters, .customer-quote-search) { padding: 14px; }
+  .customer-history .customer-data { grid-template-columns: minmax(0, 1fr); }
+  .customer-history .customer-pagination { gap: 12px; }
+  .customer-history .qh-detail-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+}

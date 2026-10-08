@@ -23,15 +23,9 @@ export default function CustomerMyPage({ view, onNavigate, user, profile, onProf
   savedMessage: string
   children: ReactNode
 }) {
-  const section = sections.find((entry) => entry.id === view)!
-  const receiving = view === 'receivings' || view === 'inspections'
   return <div className="customer-mypage">
     <nav className="mypage-tabs" aria-label="마이페이지 메뉴">{sections.map(({ id, label, Icon }) => <button key={id} type="button" aria-current={view === id ? 'page' : undefined} onClick={() => onNavigate(id)}><Icon size={17} /><span>{label}</span></button>)}</nav>
-    {view === 'profile' ? <MemberInformation user={user} profile={profile} onChange={onProfileChange} savedMessage={savedMessage} /> : <>
-      <div className="mypage-history-heading"><h2>{section.label}</h2><span>고객사 이용 내역</span></div>
-      <div className="mypage-process"><span>{receiving ? '입고·검수' : '구매·배송'}</span><ol aria-label={receiving ? '입고·검수 절차' : '구매·배송 절차'}>{(receiving ? ['입고 신청', '입고 승인', '입고·검수', '결과 확인·폐기 동의'] : ['견적 요청', '견적 회신', '승인·출고 요청', '출고·배송']).map((step, index) => <li key={step}>{index > 0 && <ArrowRight size={13} aria-hidden="true" />}<span>{step}</span></li>)}</ol></div>
-      {children}
-    </>}
+    {view === 'profile' ? <MemberInformation user={user} profile={profile} onChange={onProfileChange} savedMessage={savedMessage} /> : children}
   </div>
 }
 

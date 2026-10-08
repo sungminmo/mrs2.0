@@ -4,6 +4,8 @@ import {
   ArrowDownToLine,
   ArrowLeft,
   Box,
+  ChevronLeft,
+  ChevronRight,
   FileText,
   RefreshCw,
   Search
@@ -23,6 +25,7 @@ import {
 import './QuoteHistory.css'
 import './CustomerQuotes.css'
 import { CustomerOfferPanel } from './OutboundWorkspace'
+import { HistoryEmpty, HistoryHeader, HistoryStatus } from './CustomerHistory'
 
 function Items({ data }: { data: QuotePreview | PurchaseQuote }) {
   return (
@@ -68,27 +71,15 @@ function Items({ data }: { data: QuotePreview | PurchaseQuote }) {
 function Detail({ quote, back, session }: { quote: PurchaseQuote; back: () => void; session: AuthSession }) {
   return (
     <article className="qh-detail">
-      <div className="qh-detail-heading">
+      <HistoryHeader kind="quotes" detail={quote.code} onBack={back} status="요청 접수 완료" actions={
         <button
-          className="sa-icon"
-          aria-label="견적 요청 목록으로"
-          title="견적 요청 목록으로"
-          onClick={back}
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <div>
-          <h2>{quote.code}</h2>
-          <p>{new Date(quote.createdAt).toLocaleString('ko-KR')} · 접수 완료</p>
-        </div>
-        <button
-          className="sa-button sa-primary"
+          className="sa-button"
           onClick={() => downloadPurchaseQuote(quote)}
         >
           <ArrowDownToLine size={16} />
           요청서 다운로드
         </button>
-      </div>
+      } />
       <div className="qh-detail-grid">
         <CustomerOfferPanel quoteId={quote.id} manager={session.user.customerRole === 'MANAGER'} owner={`${session.user.id}/${session.user.customerId}`} />
         <Items data={quote} />
@@ -96,6 +87,7 @@ function Detail({ quote, back, session }: { quote: PurchaseQuote; back: () => vo
           <h3>요청 정보</h3>
           <dl>
             {[
+              ['견적 요청일', new Date(quote.createdAt).toLocaleString('ko-KR')],
               ['고객사', quote.company],
               ['담당자', quote.contactName],
               ['연락처', quote.phone],
@@ -407,7 +399,8 @@ export default function CustomerQuotes({
   })
   if (selected)
     return (
-      <div className="customer-quotes">
+      <div className="customer-quotes customer-history">
+        {!detail.data && <HistoryHeader kind="quotes" detail="구매 견적 상세" onBack={() => select(null)} />}
         {detail.error && (
           <p className="customer-error" role="alert">
             {detail.error.message}
@@ -417,17 +410,14 @@ export default function CustomerQuotes({
           <Detail quote={detail.data} back={() => select(null)} session={session} />
         ) : (
           <>
-            <button className="sa-button" onClick={() => select(null)}>
-              <ArrowLeft size={16} />
-              목록으로
-            </button>
             {detail.isPending && <p role="status">요청서를 불러오는 중...</p>}
           </>
         )}
       </div>
     )
   return (
-    <section className="qh-list customer-quotes" aria-label="구매 견적 내역">
+    <section className="qh-list customer-quotes customer-history" aria-label="구매 견적 내역">
+      <HistoryHeader kind="quotes" />
       <form
         className="customer-quote-search"
         onSubmit={(event) => {
@@ -436,17 +426,18 @@ export default function CustomerQuotes({
           setPage(1)
         }}
       >
-        <input
+        <label>견적 검색<input
           aria-label="구매 견적 검색"
           placeholder="견적번호 · 담당자 · 상품명"
           maxLength={160}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-        />
-        <button className="sa-button">
+        /></label>
+        <button className="sa-button sa-primary">
           <Search size={16} />
           검색
         </button>
+        <button className="sa-button" type="button" onClick={() => { setSearch(''); setQuery(''); setPage(1) }}>초기화</button>
         <button
           className="sa-icon"
           type="button"
@@ -466,6 +457,7 @@ export default function CustomerQuotes({
         <p role="status">견적 내역을 불러오는 중...</p>
       ) : (
         <>
+          {list.data && <div className="history-results"><span>견적 내역 <strong>{list.data.total.toLocaleString()}</strong>건</span><span>고객사 전체 내역</span></div>}
           <div className="sa-table-scroll">
             <table className="sa-table">
               <thead>
@@ -476,7 +468,8 @@ export default function CustomerQuotes({
                     '요청자',
                     '예상 상품 금액',
                     '희망 납기',
-                    '상태'
+                    '요청 상태',
+                    '상세'
                   ].map((label) => (
                     <th key={label}>{label}</th>
                   ))}
@@ -487,7 +480,7 @@ export default function CustomerQuotes({
                   <tr key={quote.id}>
                     <td>
                       <button
-                        className="sa-asset-link"
+                        className="history-record-link"
                         onClick={() => select(quote.id)}
                       >
                         {quote.code}
@@ -499,35 +492,37 @@ export default function CustomerQuotes({
                     <td>{quote.contactName}</td>
                     <td>{appraisalMoney(quote.total)}</td>
                     <td>{quote.deliveryDate ?? '-'}</td>
-                    <td>접수 완료</td>
+                    <td><HistoryStatus>접수 완료</HistoryStatus></td>
+                    <td><button className="history-view" aria-label={`${quote.code} 견적 상세보기`} onClick={() => select(quote.id)}>상세보기<ChevronRight size={14} /></button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           {list.data?.total === 0 && (
-            <div className="sa-empty">
-              <FileText size={28} />
-              <h2>견적 요청 내역이 없습니다</h2>
-            </div>
+            <HistoryEmpty kind="quotes" filtered={!!query} />
           )}
           <div className="customer-pagination">
             <button
-              className="sa-button"
+              className="sa-icon"
+              title="이전 페이지"
+              aria-label="이전 견적 페이지"
               disabled={page <= 1}
               onClick={() => setPage(page - 1)}
             >
-              이전
+              <ChevronLeft size={20} />
             </button>
             <span>
               {page} / {Math.max(1, Math.ceil((list.data?.total ?? 0) / 20))}
             </span>
             <button
-              className="sa-button"
+              className="sa-icon"
+              title="다음 페이지"
+              aria-label="다음 견적 페이지"
               disabled={page * 20 >= (list.data?.total ?? 0)}
               onClick={() => setPage(page + 1)}
             >
-              다음
+              <ChevronRight size={20} />
             </button>
           </div>
         </>

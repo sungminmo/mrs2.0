@@ -29,6 +29,7 @@ import {
   type Order,
 } from './outboundApi'
 import './OutboundWorkspace.css'
+import { HistoryEmpty, HistoryHeader, HistoryStatus } from './CustomerHistory'
 
 export function OutboundAction({
   admin = false,
@@ -294,17 +295,19 @@ export function OrderSummary({
   admin = false,
   onChanged,
   actions,
+  heading,
 }: {
   order: Order
   manager?: boolean
   admin?: boolean
   onChanged: () => void
   actions?: React.ReactNode
+  heading?: string
 }) {
   return (
     <section className="outbound-order">
       <div className="outbound-heading">
-        <h2>{order.code}</h2>
+        <h2>{heading ?? order.code}</h2>
         <span className="outbound-status">{outboundLabels[order.state]}</span>
         <small>승인 {outboundDate(order.approvedAt)}</small>
       </div>
@@ -350,8 +353,8 @@ export function OrderSummary({
         />
       )}
       {actions}
-      <h3>출고 내역</h3>
-      {!order.shipments.length && <p>확정된 출고 내역이 없습니다.</p>}
+      <h3>{admin ? '출고 내역' : '배송별 진행 상황'}</h3>
+      {!order.shipments.length && <p>{admin ? '확정된 출고 내역이 없습니다.' : '아직 출고된 자재가 없습니다. 출고가 확정되면 배송 정보가 표시됩니다.'}</p>}
       {order.shipments.map((shipment) => (
         <article className="outbound-shipment" key={shipment.id}>
           <div className="outbound-heading">
@@ -537,7 +540,7 @@ export function CustomerOfferPanel({
   return (
     <div className="outbound-workspace">
       <div className="outbound-heading">
-        <h2>견적 회신·출고</h2>
+        <h2>회신된 견적과 진행 상황</h2>
         <button
           className="sa-icon"
           title="회신 새로고침"
@@ -555,7 +558,7 @@ export function CustomerOfferPanel({
       )}
       {query.data && (
         <>
-          {!query.data.offers.length && <p>회신 대기</p>}
+          {!query.data.offers.length && <p className="history-waiting">견적을 검토하고 있습니다. 회신이 도착하면 상품 가격과 배송 조건을 확인할 수 있습니다.</p>}
           {query.data.order && (
             <OrderSummary
               order={query.data.order}
@@ -641,20 +644,22 @@ export function OrdersPage({
   })
   const button = admin ? 'adm-button' : 'sa-button'
   return (
-    <div className="outbound-workspace">
+    <div className={`outbound-workspace ${admin ? '' : 'customer-history'}`}>
+      {!admin && <HistoryHeader kind="orders" detail={selected ? detail.data?.order.code ?? '주문 상세' : undefined} onBack={selected ? () => setSelected(null) : undefined} status={selected && detail.data ? outboundLabels[detail.data.order.state] : undefined} actions={selected ? <button className="sa-icon" title="주문 상세 새로고침" aria-label="주문 상세 새로고침" disabled={detail.isFetching} onClick={() => { void detail.refetch() }}><RefreshCw size={16} /></button> : undefined} />}
       {selected ? (
         <>
-          <button className={button} onClick={() => setSelected(null)}>
+          {admin && <><button className={button} onClick={() => setSelected(null)}>
             <ArrowLeft size={16} />
             목록으로
           </button>
-          <button className={button} title="거래 상세 새로고침" aria-label="거래 상세 새로고침" disabled={detail.isFetching} onClick={() => { void detail.refetch() }}><RefreshCw size={16} /></button>
+          <button className={button} title="거래 상세 새로고침" aria-label="거래 상세 새로고침" disabled={detail.isFetching} onClick={() => { void detail.refetch() }}><RefreshCw size={16} /></button></>}
           {detail.data && (
             <>
               <OfferSummary offer={detail.data.order.offer} />
               <OrderSummary
                 key={detail.data.order.version}
                 order={detail.data.order}
+                heading={admin ? undefined : '출고·배송 현황'}
                 admin={admin}
                 manager={manager}
                 onChanged={() => {
@@ -678,18 +683,20 @@ export function OrdersPage({
             }}
           >
             <label>
-              거래 검색
+              {admin ? '거래 검색' : '주문 검색'}
               <input
                 type="search"
+                placeholder={admin ? undefined : '주문번호 · 담당자'}
                 maxLength={160}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
             </label>
-            <button className={button}>
+            <button className={`${button} ${admin ? '' : 'sa-primary'}`}>
               <Search size={16} />
               검색
             </button>
+            {!admin && <button className="sa-button" type="button" onClick={() => { setSearch(''); setQuery(''); setPage(1) }}>초기화</button>}
             <button
               className={button}
               type="button"
@@ -702,11 +709,12 @@ export function OrdersPage({
               <RefreshCw size={16} />
             </button>
           </form>
+          {!admin && list.data && <div className="history-results"><span>주문 내역 <strong>{list.data.total.toLocaleString()}</strong>건</span><span>고객사 전체 내역</span></div>}
           <div className="outbound-table" tabIndex={0}>
             <table>
               <thead>
                 <tr>
-                  <th>거래번호</th>
+                  <th>{admin ? '거래번호' : '주문번호'}</th>
                   <th>담당자</th>
                   <th>승인일</th>
                   <th>확정 금액</th>
@@ -717,17 +725,18 @@ export function OrdersPage({
               <tbody>
                 {list.data?.records.map((order) => (
                   <tr key={order.id}>
-                    <td>{order.code}</td>
+                    <td>{admin ? order.code : <button className="history-record-link" onClick={() => setSelected(order.id)}>{order.code}</button>}</td>
                     <td>{order.offer.contactName}</td>
                     <td>{outboundDate(order.approvedAt)}</td>
                     <td>{appraisalMoney(order.offer.grandTotal)}</td>
-                    <td>{outboundLabels[order.state]}</td>
+                    <td>{admin ? outboundLabels[order.state] : <HistoryStatus>{outboundLabels[order.state]}</HistoryStatus>}</td>
                     <td>
                       <button
-                        className={button}
+                        className={admin ? button : 'history-view'}
+                        aria-label={`${order.code} ${admin ? '거래' : '주문'} 상세보기`}
                         onClick={() => setSelected(order.id)}
                       >
-                        상세
+                        {admin ? '상세' : <>상세보기<ChevronRight size={14} /></>}
                       </button>
                     </td>
                   </tr>
@@ -736,11 +745,12 @@ export function OrdersPage({
             </table>
           </div>
           {list.data && !list.data.records.length && (
-            <p>승인된 거래가 없습니다.</p>
+            admin ? <p>승인된 거래가 없습니다.</p> : <HistoryEmpty kind="orders" filtered={!!query} />
           )}
-          <div className="outbound-actions">
+          <div className={admin ? 'outbound-actions' : 'customer-pagination'}>
             <button
-              className={button}
+              className={admin ? button : 'sa-icon'}
+              title="이전 페이지"
               disabled={page === 1}
               aria-label="이전 페이지"
               onClick={() => setPage(page - 1)}
@@ -751,7 +761,8 @@ export function OrdersPage({
               {page} / {Math.max(1, Math.ceil((list.data?.total ?? 0) / 20))}
             </span>
             <button
-              className={button}
+              className={admin ? button : 'sa-icon'}
+              title="다음 페이지"
               disabled={page * 20 >= (list.data?.total ?? 0)}
               aria-label="다음 페이지"
               onClick={() => setPage(page + 1)}
