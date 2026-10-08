@@ -29,7 +29,7 @@ export const inspectionRow = z.object({
 }).strict()
 export const inspectionWrite = inspectionVersion.extend({ rows: z.array(inspectionRow).max(1000), reason: inspectionReason, skipInvalidRowIds: z.array(z.uuid()).max(1000).default([]) })
 export const receiveInput = z.object({ receivedAt: z.iso.datetime({ offset: true }).refine((value) => new Date(value).getTime() <= Date.now(), '미래 입고일은 사용할 수 없습니다.'), reason: inspectionReason }).strict()
-export const inspectionListQuery = z.object({ page: z.coerce.number().int().min(1).max(100000).default(1), size: z.coerce.number().int().min(1).max(100).default(20), q: z.string().trim().max(160).default('') }).strict()
+export const inspectionListQuery = z.object({ page: z.coerce.number().int().min(1).max(100000).default(1), size: z.coerce.number().int().min(1).max(100).default(20), q: z.string().trim().max(160).default(''), status: z.enum(['AWAITING_ACKNOWLEDGEMENT', 'COMPLETED']).optional(), disposal: z.enum(['NONE', 'REQUIRED', 'CONSENTED']).optional() }).strict()
 type Row = z.infer<typeof inspectionRow>
 type Write = z.infer<typeof inspectionWrite>
 type Tx = Prisma.TransactionClient
@@ -121,9 +121,18 @@ export function createInspectionRepository(client: PrismaClient) {
       return payload(current, !customerId)
     },
     list: async (customerId: string, query: z.infer<typeof inspectionListQuery>) => {
-      const where: Prisma.InspectionWhereInput = { receiving: { customerId }, status: { not: 'PENDING' }, ...(query.q ? { OR: [{ id: { contains: query.q } }, { receiving: { siteName: { contains: query.q } } }] } : {}) }
-      const [data, totalElements] = await client.$transaction([client.inspection.findMany({ where, include: { receiving: true, disposal: true }, skip: (query.page - 1) * query.size, take: query.size, orderBy: [{ inspectedAt: 'desc' }, { id: 'asc' }] }), client.inspection.count({ where })])
-      return { data: data.map((entry) => ({ id: entry.id, receivingId: entry.receivingId, siteName: entry.receiving.siteName, receivedAt: entry.receiving.receivedAt, status: entry.status, consentedAt: entry.disposal?.consentedAt ?? null })), meta: { page: query.page, size: query.size, totalElements, totalPages: Math.ceil(totalElements / query.size) } }
+      const scope: Prisma.InspectionWhereInput = { receiving: { customerId }, status: { not: 'PENDING' }, ...(query.q ? { OR: [{ id: { contains: query.q } }, { receiving: { siteName: { contains: query.q } } }] } : {}) }
+      const targets: Prisma.InspectionWhereInput = { items: { some: { disposalQuantity: { gt: 0 } } } }
+      const disposalFilters: Record<string, Prisma.InspectionWhereInput> = { NONE: { items: { none: { disposalQuantity: { gt: 0 } } } }, REQUIRED: { ...targets, disposal: { is: { consentRequired: true, consentedAt: null } } }, CONSENTED: { ...targets, disposal: { is: { consentedAt: { not: null } } } } }
+      const where: Prisma.InspectionWhereInput = { AND: [scope, ...(query.status ? [{ status: query.status }] : []), ...(query.disposal ? [disposalFilters[query.disposal]!] : [])] }
+      return client.$transaction(async transaction => {
+        const [data, totalElements, unacknowledged, acknowledged, none, required, consented] = await Promise.all([
+          transaction.inspection.findMany({ where, include: { receiving: true, disposal: true, _count: { select: { items: { where: { disposalQuantity: { gt: 0 } } } } } }, skip: (query.page - 1) * query.size, take: query.size, orderBy: [{ inspectedAt: 'desc' }, { id: 'asc' }] }), transaction.inspection.count({ where }),
+          transaction.inspection.count({ where: { AND: [scope, { acknowledgedAt: null }] } }), transaction.inspection.count({ where: { AND: [scope, { acknowledgedAt: { not: null } }] } }),
+          ...['NONE', 'REQUIRED', 'CONSENTED'].map(state => transaction.inspection.count({ where: { AND: [scope, disposalFilters[state]!] } })),
+        ])
+        return { data: data.map(entry => ({ id: entry.id, receivingId: entry.receivingId, siteName: entry.receiving.siteName, receivedAt: entry.receiving.receivedAt, status: entry.status, acknowledgedAt: entry.acknowledgedAt, consentedAt: entry.disposal?.consentedAt ?? null, hasDisposalTargets: entry._count.items > 0, disposalTargetCount: entry._count.items, consentRequired: entry._count.items > 0 && !!entry.disposal?.consentRequired && !entry.disposal.consentedAt, canConsent: entry._count.items > 0 && !!entry.disposal?.consentRequired && !entry.disposal.consentedAt && !!entry.acknowledgedAt })), meta: { page: query.page, size: query.size, totalElements, totalPages: Math.ceil(totalElements / query.size) }, summary: { acknowledgement: { PENDING: unacknowledged, COMPLETED: acknowledged }, disposal: { NONE: none!, REQUIRED: required!, CONSENTED: consented! } } }
+      }, { isolationLevel: 'RepeatableRead' })
     },
     draft: (id: string, input: Write, user: AuthUser) => customerTransaction(client, async (tx) => {
       await administrator(tx, user)

@@ -23,6 +23,10 @@ export function HistoryStatus({ children }: { children: ReactNode }) {
   return <span className="history-status">{children}</span>
 }
 
+export function HistorySummary({ counts, labels, title = '상태별 건수' }: { counts: Record<string, number>; labels: Record<string, string>; title?: string }) {
+  return <dl className="history-summary" aria-label={title}>{Object.entries(labels).map(([status, label]) => <div key={status}><dt>{label}</dt><dd>{(counts[status] ?? 0).toLocaleString()}건</dd></div>)}</dl>
+}
+
 export function HistoryEmpty({ kind, filtered = false }: { kind: HistoryKind; filtered?: boolean }) {
   return <div className="history-empty"><FileSearch size={28} aria-hidden="true" /><h3>{filtered ? '검색 결과가 없습니다' : content[kind].empty}</h3><p>{filtered ? '검색어나 조건을 바꾸어 다시 검색해 주세요.' : content[kind].note}</p></div>
 }

@@ -1275,6 +1275,9 @@ export function createOutboundRepository(client: PrismaClient) {
               }
             : {}),
         }
+        const search = `%${query.q.replace(/[\\%_]/g, '\\$&')}%`
+        const grouped = await transaction.$queryRaw<Array<{ state: string; count: bigint }>>(Prisma.sql`SELECT COALESCE(o.closure, CASE WHEN EXISTS (SELECT 1 FROM order_cancellations c WHERE c.orderId = o.id AND c.status = 'PENDING') THEN 'CANCELLATION_PENDING' WHEN EXISTS (SELECT 1 FROM purchase_order_items i WHERE i.orderId = o.id AND i.quantity > i.shippedQuantity + i.cancelledQuantity) THEN CASE WHEN EXISTS (SELECT 1 FROM purchase_order_items i WHERE i.orderId = o.id AND i.shippedQuantity > 0) THEN 'PARTIALLY_SHIPPED' ELSE 'PREPARING' END WHEN EXISTS (SELECT 1 FROM shipments s WHERE s.orderId = o.id AND s.status = 'DISPATCHED') THEN 'IN_DELIVERY' ELSE 'COMPLETED' END) AS state, COUNT(*) AS count FROM purchase_orders o JOIN purchase_quotes q ON q.id = o.quoteId JOIN quote_offers f ON f.id = o.offerId WHERE 1 = 1 ${actor.role === 'CUSTOMER' ? Prisma.sql`AND o.customerId = ${actor.customerId!}` : Prisma.empty} ${query.q ? Prisma.sql`AND (o.code LIKE ${search} OR q.code LIKE ${search} OR f.contactName LIKE ${search})` : Prisma.empty} GROUP BY state`)
+        const summary = Object.fromEntries(['PREPARING', 'PARTIALLY_SHIPPED', 'IN_DELIVERY', 'CANCELLATION_PENDING', 'COMPLETED', 'CANCELLED', 'CLOSED_PARTIAL_CANCELLED'].map(state => [state, Number(grouped.find(entry => entry.state === state)?.count ?? 0)]))
         const [records, total] = await Promise.all([
           transaction.purchaseOrder.findMany({
             where,
@@ -1286,6 +1289,7 @@ export function createOutboundRepository(client: PrismaClient) {
           transaction.purchaseOrder.count({ where }),
         ])
         return {
+          summary,
           records: records.map((order) =>
             orderPayload(order, actor.role === 'ADMIN'),
           ),

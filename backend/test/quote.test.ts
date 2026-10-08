@@ -3,7 +3,8 @@ import { test } from 'node:test'
 import { SignJWT } from 'jose'
 import { createApp } from '../src/app.js'
 import type { AuthUser, AuthRepository } from '../src/auth.js'
-import { quoteCreateInput, quotePreviewInput, validateQuoteDate, type QuoteRepository } from '../src/quote.js'
+import { quoteCreateInput, quoteListQuery, quotePreviewInput, validateQuoteDate, type QuoteRepository } from '../src/quote.js'
+import { inspectionListQuery } from '../src/inspection.js'
 import { outboundAction, outboundOffer, outboundShipment, type OutboundRepository } from '../src/outbound.js'
 
 test('purchase quote requests reject duplicate products, owner injection and invalid cart sources', () => {
@@ -20,6 +21,13 @@ test('purchase quote delivery dates use actual calendar dates and Korean today',
   assert.doesNotThrow(() => validateQuoteDate(null))
   assert.doesNotThrow(() => validateQuoteDate('2099-12-31'))
   for (const date of ['2020-01-01', '2099-02-30', '2099-13-01']) assert.throws(() => validateQuoteDate(date), /실제 날짜/)
+})
+
+test('history list filters reject invalid states and injected ownership', () => {
+  assert.equal(quoteListQuery.parse({ responseStatus: 'EXPIRED', q: ' 견적 ' }).q, '견적')
+  for (const input of [{ responseStatus: 'DRAFT' }, { customerId: 'OTHER' }, { size: 101 }]) assert.equal(quoteListQuery.safeParse(input).success, false)
+  assert.equal(inspectionListQuery.safeParse({ status: 'COMPLETED', disposal: 'REQUIRED' }).success, true)
+  for (const input of [{ status: 'PENDING' }, { disposal: 'INVALID' }, { customerId: 'OTHER' }]) assert.equal(inspectionListQuery.safeParse(input).success, false)
 })
 
 test('outbound schemas reject owner injection, duplicate lines and invalid amounts', () => {
@@ -70,7 +78,7 @@ test('quote API authenticates customers, protects prices and exposes reconfirmat
   const actor: AuthUser = { id: crypto.randomUUID(), email: 'quote@example.test', passwordHash: 'unused', companyName: '회사', managerName: '담당자', role: 'CUSTOMER', status: 'ACTIVE', sessionVersion: 0, customerId: 'CUS-TEST', customer: { id: 'CUS-TEST', name: '회사', businessNumber: null, representativeName: '', address: '', phone: '', status: 'ACTIVE', accessVersion: 0 } }
   const calls: AuthUser[] = []
   const preview = { company: '회사', items: [], total: '24000', originalTotal: '24000', snapshot: 'b'.repeat(64) }
-  const repository: QuoteRepository = { preview: async user => { calls.push(user); return preview }, create: async user => { calls.push(user); return { changed: preview } }, list: async user => { calls.push(user); return { records: [], page: 1, size: 20, total: 0 } }, detail: async () => { throw new Error('unused') } }
+  const repository: QuoteRepository = { preview: async user => { calls.push(user); return preview }, create: async user => { calls.push(user); return { changed: preview } }, list: async user => { calls.push(user); return { records: [], page: 1, size: 20, total: 0, summary: {} } }, detail: async () => { throw new Error('unused') } }
   const auth: AuthRepository = { findById: async () => actor, findByEmail: async () => actor, createRegistration: async () => actor, listMembers: async () => [], approveMember: async () => null }
   const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { repository: auth, secret, expiresIn: '1h' }, quotes: repository })
   const token = await new SignJWT({ email: actor.email, sessionVersion: 0, customerVersion: 0 }).setProtectedHeader({ alg: 'HS256' }).setSubject(actor.id).setAudience('customer').setExpirationTime('1h').sign(new TextEncoder().encode(secret))

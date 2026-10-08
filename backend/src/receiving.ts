@@ -68,12 +68,15 @@ export function createReceivingRepository(client: PrismaClient) {
       return receiving
     }),
     list: async (customerId: string, query: Query) => {
-      const where = { customerId, ...(query.status ? { status: query.status } : {}), ...(query.q ? { OR: [{ id: { contains: query.q } }, { siteName: { contains: query.q } }, { managerName: { contains: query.q } }] } : {}) }
-      const [records, totalElements] = await client.$transaction([
+      const scope = { customerId, ...(query.q ? { OR: [{ id: { contains: query.q } }, { siteName: { contains: query.q } }, { managerName: { contains: query.q } }] } : {}) }
+      const where = { ...scope, ...(query.status ? { status: query.status } : {}) }
+      const [records, totalElements, grouped] = await client.$transaction([
         client.receiving.findMany({ where, skip: (query.page - 1) * query.size, take: query.size, orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }] }),
         client.receiving.count({ where }),
-      ])
-      return { records, totalElements }
+        client.receiving.groupBy({ by: ['status'], where: scope, _count: true }),
+      ], { isolationLevel: 'RepeatableRead' })
+      const summary = Object.fromEntries(['REQUESTED', 'APPROVED', 'RECEIVED', 'REJECTED', 'CANCELLED'].map(status => [status, grouped.find(entry => entry.status === status)?._count ?? 0]))
+      return { records, totalElements, summary }
     },
     detail: (customerId: string, id: string) => client.receiving.findFirst({ where: { id, customerId }, include: imageInclude }),
   }
@@ -98,8 +101,8 @@ export function receivingHandlers(repository: ReceivingRepository, storage?: Ima
     list: async (context: Context) => {
       const user = owner(context)
       const query = receivingQuery.parse(context.req.query())
-      const { records, totalElements } = await repository.list(user.customerId, query)
-      return context.json({ data: records, meta: { page: query.page, size: query.size, totalElements, totalPages: Math.ceil(totalElements / query.size) } })
+      const { records, totalElements, summary } = await repository.list(user.customerId, query)
+      return context.json({ data: records, meta: { page: query.page, size: query.size, totalElements, totalPages: Math.ceil(totalElements / query.size) }, summary })
     },
     detail: async (context: Context) => {
       const user = owner(context)

@@ -1,3 +1,20 @@
+.history-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+.history-summary > div {
+  display: flex;
+  gap: 6px;
+}
+
+.history-summary dd {
+  margin: 0;
+  font-weight: 600;
+}
 .customer-history { min-width: 0; color: #303630; }
 .history-header { margin-bottom: 24px; }
 .history-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }

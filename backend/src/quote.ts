@@ -14,7 +14,7 @@ export const quotePreviewInput = z.object({ source: z.enum(['cart', 'product']),
   for (const item of input.items) if (input.source === 'cart' ? !item.cartItemId || item.expectedVersion === undefined : item.cartItemId !== undefined || item.expectedVersion !== undefined) context.addIssue({ code: 'custom', message: '장바구니 항목과 버전을 확인해 주세요.' })
 })
 export const quoteCreateInput = quotePreviewInput.extend({ operationId: z.uuid(), expectedSnapshot: z.string().regex(/^[a-f0-9]{64}$/), contact: z.object({ name: z.string().trim().min(1).max(80), phone: z.string().trim().min(1).max(40), email: z.union([z.literal(''), z.email().max(254)]).default('') }).strict(), address: z.string().trim().max(300).default(''), deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null), note: z.string().trim().max(1000).default('') })
-export const quoteListQuery = z.object({ page: z.coerce.number().int().min(1).max(100000).default(1), size: z.coerce.number().int().min(1).max(100).default(20), q: z.string().max(160).default('') })
+export const quoteListQuery = z.object({ page: z.coerce.number().int().min(1).max(100000).default(1), size: z.coerce.number().int().min(1).max(100).default(20), q: z.string().trim().max(160).default(''), responseStatus: z.enum(['WAITING', 'SENT', 'EXPIRED', 'DECLINED', 'WITHDRAWN', 'ACCEPTED', 'SUPERSEDED']).optional() }).strict()
 export type QuotePreviewInput = z.infer<typeof quotePreviewInput>
 export type QuoteCreateInput = z.infer<typeof quoteCreateInput>
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -83,9 +83,20 @@ export function createQuoteRepository(client: PrismaClient) {
     }),
     list: (actor: AuthUser, query: z.infer<typeof quoteListQuery>) => transact(async transaction => {
       await owner(transaction, actor)
-      const where: Prisma.PurchaseQuoteWhereInput = { customerId: actor.customerId!, ...(query.q ? { OR: [{ code: { contains: query.q } }, { contactName: { contains: query.q } }, { items: { some: { name: { contains: query.q } } } }] } : {}) }
-      const [records, total] = await Promise.all([transaction.purchaseQuote.findMany({ where, skip: (query.page - 1) * query.size, take: query.size, include: { items: { orderBy: { sortOrder: 'asc' }, take: 1 } }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] }), transaction.purchaseQuote.count({ where })])
-      return { records: records.map(quotePayload), page: query.page, size: query.size, total }
+      const now = new Date()
+      const search = `%${query.q.replace(/[\\%_]/g, '\\$&')}%`
+      const scope = Prisma.sql`FROM purchase_quotes q LEFT JOIN quote_offers o ON o.quoteId = q.id AND o.status <> 'DRAFT' AND o.sentAt IS NOT NULL AND NOT EXISTS (SELECT 1 FROM quote_offers newer WHERE newer.quoteId = q.id AND newer.status <> 'DRAFT' AND newer.sentAt IS NOT NULL AND newer.revision > o.revision) WHERE q.customerId = ${actor.customerId!} ${query.q ? Prisma.sql`AND (q.code LIKE ${search} OR q.contactName LIKE ${search} OR EXISTS (SELECT 1 FROM purchase_quote_items i WHERE i.quoteId = q.id AND i.name LIKE ${search}))` : Prisma.empty}`
+      const state = Prisma.sql`CASE WHEN o.id IS NULL THEN 'WAITING' WHEN o.status = 'SENT' AND o.expiresAt IS NOT NULL AND o.expiresAt <= ${now} THEN 'EXPIRED' ELSE o.status END`
+      const grouped = await transaction.$queryRaw<Array<{ status: string; count: bigint }>>(Prisma.sql`SELECT ${state} AS status, COUNT(*) AS count ${scope} GROUP BY status`)
+      const summary = Object.fromEntries(['WAITING', 'SENT', 'EXPIRED', 'DECLINED', 'WITHDRAWN', 'ACCEPTED', 'SUPERSEDED'].map(status => [status, Number(grouped.find(entry => entry.status === status)?.count ?? 0)]))
+      const total = query.responseStatus ? summary[query.responseStatus]! : Object.values(summary).reduce((sum, count) => sum + count, 0)
+      const ids = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT q.id ${scope} ${query.responseStatus ? Prisma.sql`AND ${state} = ${query.responseStatus}` : Prisma.empty} ORDER BY q.createdAt DESC, q.id ASC LIMIT ${query.size} OFFSET ${(query.page - 1) * query.size}`)
+      const records = await transaction.purchaseQuote.findMany({ where: { id: { in: ids.map(entry => entry.id) }, customerId: actor.customerId! }, include: { items: { orderBy: { sortOrder: 'asc' }, take: 1 }, offers: { where: { status: { not: 'DRAFT' }, sentAt: { not: null } }, orderBy: { revision: 'desc' }, take: 1, select: { id: true, revision: true, status: true, expiresAt: true, sentAt: true } }, order: { select: { id: true, code: true } } } })
+      return { records: ids.map(entry => {
+        const { offers, order, ...quote } = records.find(record => record.id === entry.id)!
+        const latest = offers[0]
+        return { ...quotePayload(quote), responseStatus: latest ? latest.status === 'SENT' && latest.expiresAt && latest.expiresAt <= now ? 'EXPIRED' : latest.status : 'WAITING', latestOffer: latest ? { ...latest, expiresAt: latest.expiresAt?.toISOString() ?? null, sentAt: latest.sentAt?.toISOString() ?? null } : null, order }
+      }), page: query.page, size: query.size, total, summary }
     }),
     detail: (actor: AuthUser, id: string) => transact(async transaction => { await owner(transaction, actor); const quote = await transaction.purchaseQuote.findFirst({ where: { id, customerId: actor.customerId! }, include: quoteInclude }); if (!quote) throw new AppError(404, ErrorCode.NOT_FOUND, '견적 요청을 찾을 수 없습니다.'); return quotePayload(quote) })
   }

@@ -3,9 +3,9 @@ import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { authenticatedFetch } from './authSession'
 import { accountRequest } from './customerAccounts'
 import { receivingStatusLabels, receivingVolumeLabels, type ReceivingRecord } from './receivings'
-import { HistoryEmpty, HistoryHeader, HistoryStatus } from './CustomerHistory'
+import { HistoryEmpty, HistoryHeader, HistoryStatus, HistorySummary } from './CustomerHistory'
 
-type Page = { data: ReceivingRecord[]; meta: { page: number; size: number; totalElements: number; totalPages: number } }
+type Page = { data: ReceivingRecord[]; meta: { page: number; size: number; totalElements: number; totalPages: number }; summary: Record<string, number> }
 const date = (value: string | null) => value ? new Date(value).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '미정'
 
 export default function CustomerReceivings({ revision, parameters, setParameters, selected, select }: { revision: number; parameters: Record<string, string>; setParameters: (parameters: Record<string, string>) => void; selected: string | null; select: (id: string | null) => void; back?: () => void }) {
@@ -37,6 +37,7 @@ export default function CustomerReceivings({ revision, parameters, setParameters
     <HistoryHeader kind="receivings" detail={selected ? detail?.siteName ?? '입고 신청 상세' : undefined} onBack={selected ? () => select(null) : undefined} status={detail ? receivingStatusLabels[detail.status] ?? detail.status : undefined} />
     {loading && <p role="status">신청 내역을 불러오는 중...</p>}
     {!loading && result?.error && <p className="customer-error" role="alert">{result.error}</p>}
+    {!selected && page && <HistorySummary counts={page.summary} labels={receivingStatusLabels} title="검색 범위 전체 입고 상태별 건수" />}
     {detail && <><section className="customer-section"><h3>신청 정보</h3><dl className="customer-data">{[['신청번호', detail.id], ['현장명 또는 상호', detail.siteName], ['담당자', detail.managerName], ['연락처', detail.managerPhone], ['예상 물량', receivingVolumeLabels[detail.volume] ?? detail.volume], ['신청일', date(detail.requestedAt)], ['입고 예정일', date(detail.scheduledAt)], ['요청 메모', detail.note || '없음'], ['폐기 규정 동의일', date(detail.termsAgreedAt)]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section><section className="customer-section"><h3>첨부한 자재 사진</h3><div className="customer-photos">{detail.images?.length ? detail.images.map((image) => <figure key={image.id}><a href={image.url} target="_blank" rel="noreferrer"><img src={image.url} alt={image.name} /></a><figcaption>{image.name}</figcaption></figure>) : <p>첨부된 사진이 없습니다.</p>}</div></section></>}
     {detail?.decision && <section className="customer-section" aria-label="입고 신청 처리 결과"><h2>입고 신청 처리 결과</h2><dl className="customer-data"><div><dt>결과</dt><dd>{receivingStatusLabels[detail.decision.status] ?? detail.decision.status}</dd></div><div><dt>처리일시</dt><dd>{date(detail.decision.at)}</dd></div><div><dt>처리 사유</dt><dd>{detail.decision.reason}</dd></div></dl></section>}
     {!selected && <><form key={new URLSearchParams(parameters).toString()} className="customer-filters" onSubmit={search}><label className="customer-search">검색<input name="q" defaultValue={parameters.q} maxLength={160} placeholder="신청번호 · 현장명 · 담당자" /></label><label>상태<select name="status" defaultValue={parameters.status ?? ''}><option value="">전체</option>{Object.entries(receivingStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><div className="customer-filter-actions"><button className="sa-button sa-primary"><Search size={16} />검색</button><button type="button" className="sa-button" onClick={() => setParameters({ page: '1', size: '20' })}>초기화</button></div></form>

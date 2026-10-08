@@ -25,7 +25,7 @@ import {
 import './QuoteHistory.css'
 import './CustomerQuotes.css'
 import { CustomerOfferPanel } from './OutboundWorkspace'
-import { HistoryEmpty, HistoryHeader, HistoryStatus } from './CustomerHistory'
+import { HistoryEmpty, HistoryHeader, HistoryStatus, HistorySummary } from './CustomerHistory'
 
 function Items({ data }: { data: QuotePreview | PurchaseQuote }) {
   return (
@@ -355,6 +355,8 @@ export default function CustomerQuotes({
   select: (id: string | null) => void
   initial?: PurchaseQuote | null
 }) {
+  const responseLabels: Record<string, string> = { WAITING: '회신 대기', SENT: '승인 가능', EXPIRED: '회신 만료', DECLINED: '회신 거절', WITHDRAWN: '회신 철회', ACCEPTED: '승인·주문 생성', SUPERSEDED: '회신 대체' }
+  const [responseStatus, setResponseStatus] = useState('')
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
@@ -368,16 +370,17 @@ export default function CustomerQuotes({
     [client, owner, session.user.id]
   )
   const list = useQuery({
-    queryKey: ['purchase-quotes', owner, page, query],
+    queryKey: ['purchase-quotes', owner, page, query, responseStatus],
     enabled: !selected,
     queryFn: ({ signal }) =>
       quoteRequest<{
-        records: PurchaseQuote[]
+        records: (PurchaseQuote & { responseStatus: string; latestOffer: { expiresAt: string | null } | null; order: { id: string; code: string } | null })[]
         page: number
         size: number
         total: number
+        summary: Record<string, number>
       }>(
-        `/api/customer/quotes?page=${page}&size=20&q=${encodeURIComponent(query)}`,
+        `/api/customer/quotes?page=${page}&size=20&q=${encodeURIComponent(query)}${responseStatus ? `&responseStatus=${responseStatus}` : ''}`,
         session.accessToken,
         undefined,
         signal
@@ -433,11 +436,12 @@ export default function CustomerQuotes({
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         /></label>
+        <label>회신 상태<select value={responseStatus} onChange={(event) => { setResponseStatus(event.target.value); setPage(1) }}><option value="">전체</option>{Object.entries(responseLabels).map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label>
         <button className="sa-button sa-primary">
           <Search size={16} />
           검색
         </button>
-        <button className="sa-button" type="button" onClick={() => { setSearch(''); setQuery(''); setPage(1) }}>초기화</button>
+        <button className="sa-button" type="button" onClick={() => { setSearch(''); setQuery(''); setResponseStatus(''); setPage(1) }}>초기화</button>
         <button
           className="sa-icon"
           type="button"
@@ -458,6 +462,7 @@ export default function CustomerQuotes({
       ) : (
         <>
           {list.data && <div className="history-results"><span>견적 내역 <strong>{list.data.total.toLocaleString()}</strong>건</span><span>고객사 전체 내역</span></div>}
+          {list.data && <HistorySummary counts={list.data.summary} labels={responseLabels} title="검색 범위 전체 회신 상태별 건수" />}
           <div className="sa-table-scroll">
             <table className="sa-table">
               <thead>
@@ -469,6 +474,8 @@ export default function CustomerQuotes({
                     '예상 상품 금액',
                     '희망 납기',
                     '요청 상태',
+                    '회신 상태 / 만료',
+                    '승인 주문',
                     '상세'
                   ].map((label) => (
                     <th key={label}>{label}</th>
@@ -493,6 +500,8 @@ export default function CustomerQuotes({
                     <td>{appraisalMoney(quote.total)}</td>
                     <td>{quote.deliveryDate ?? '-'}</td>
                     <td><HistoryStatus>접수 완료</HistoryStatus></td>
+                    <td><HistoryStatus>{responseLabels[quote.responseStatus] ?? quote.responseStatus}</HistoryStatus>{quote.latestOffer && <small style={{ display: 'block' }}>{quote.latestOffer.expiresAt ? new Date(quote.latestOffer.expiresAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '만료 없음'}</small>}</td>
+                    <td>{quote.order ? <button className="history-record-link" onClick={() => select(quote.id)} aria-label={`${quote.order.code} 주문 연결 견적 상세`}>{quote.order.code}</button> : '-'}</td>
                     <td><button className="history-view" aria-label={`${quote.code} 견적 상세보기`} onClick={() => select(quote.id)}>상세보기<ChevronRight size={14} /></button></td>
                   </tr>
                 ))}
@@ -500,7 +509,7 @@ export default function CustomerQuotes({
             </table>
           </div>
           {list.data?.total === 0 && (
-            <HistoryEmpty kind="quotes" filtered={!!query} />
+            <HistoryEmpty kind="quotes" filtered={!!(query || responseStatus)} />
           )}
           <div className="customer-pagination">
             <button

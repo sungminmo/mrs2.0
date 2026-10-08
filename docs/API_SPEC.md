@@ -10,6 +10,10 @@
 
 `POST /api/customer/quotes/preview`, `POST /api/customer/quotes`, `GET /api/customer/quotes`, `GET /api/customer/quotes/{id}`를 제공한다. 고객사 공유 내역, 서버 가격 재검증·변경 재확인, 멱등 접수와 선택 장바구니 삭제, 관리자 `scope=quotes` 조회 계약은 [PURCHASE_QUOTES.md](PURCHASE_QUOTES.md)를 참고한다. 접수는 재고 예약이나 확정 견적을 의미하지 않는다.
 
+### 이용 내역 목록·집계
+
+고객의 `/api/customer/receivings`, `/api/customer/inspections`, `/api/customer/quotes`, `/api/customer/orders` 목록은 고객사·검색어에 맞는 전체 상태별 `summary`를 제공한다. 페이지 제한과 상태 선택은 집계에 적용하지 않으며 목록 총건수에는 상태 필터를 적용한다. 입고·검수는 기존 `{data,meta,summary}`, 견적·주문은 성공 응답의 `data={records,page,size,total,summary}` 구조다. 검수의 확인·폐기 필터와 독립 집계, 견적 `responseStatus`·최신 공개 `latestOffer`·승인 `order` 계약은 [이용 내역 API 적용](CUSTOMER_MANAGEMENT.md)을 참고한다. 폐기 실처리·비용 청구·배송사 실시간 조회·자동 통지는 제공하지 않는다.
+
 ### 판매 승인 및 마켓 진열
 
 견적 회신·승인·분할 출고·잔여 취소·배송 완료 API는 실행 OpenAPI의 `Outbound` 태그에 등록했다. [출고 정책](OUTBOUND_POLICY.md)과 [요청·응답·버전·만료 계약](OUTBOUND_SCHEMA.md)을 참고한다. `/api/admin/quotes/{id}/offers`, `/api/admin/offers/{id}/send`, `/api/customer/offers/{id}/accept`, 양쪽 `/api/{scope}/orders`, `/api/admin/shipments/{id}/dispatch` 등으로 처리한다. 고객 VIEWER·MANAGER 모두 회신 직후부터 만료 전까지 승인·출고 요청할 수 있고 전체 예약·거래가 생성된다. 거절·잔여 취소 요청은 MANAGER만 가능하다. 관리자 출고 확정 시 판매자 수량 차감이며 기존 견적 접수는 미예약·불변이다. 결제 API는 제공하지 않고 외부 적용·배포는 별도 승인한다.

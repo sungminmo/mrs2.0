@@ -29,7 +29,7 @@ import {
   type Order,
 } from './outboundApi'
 import './OutboundWorkspace.css'
-import { HistoryEmpty, HistoryHeader, HistoryStatus } from './CustomerHistory'
+import { HistoryEmpty, HistoryHeader, HistoryStatus, HistorySummary } from './CustomerHistory'
 
 export function OutboundAction({
   admin = false,
@@ -536,6 +536,8 @@ export function CustomerOfferPanel({
   )
   const refresh = () => {
     void client.invalidateQueries({ queryKey })
+    void client.invalidateQueries({ queryKey: ['purchase-quotes', owner] })
+    void client.invalidateQueries({ queryKey: ['outbound-orders'] })
   }
   return (
     <div className="outbound-workspace">
@@ -623,7 +625,7 @@ export function OrdersPage({
   const list = useQuery({
     queryKey: ['outbound-orders', scope, owner, page, query],
     queryFn: ({ signal }) =>
-      outboundRequest<{ records: Order[]; total: number }>(
+      outboundRequest<{ records: Order[]; total: number; summary: Record<string, number> }>(
         admin,
         `/api/${scope}/orders?page=${page}&q=${encodeURIComponent(query)}`,
         { signal },
@@ -710,6 +712,7 @@ export function OrdersPage({
             </button>
           </form>
           {!admin && list.data && <div className="history-results"><span>주문 내역 <strong>{list.data.total.toLocaleString()}</strong>건</span><span>고객사 전체 내역</span></div>}
+          {!admin && list.data && <HistorySummary counts={list.data.summary} labels={Object.fromEntries(['PREPARING', 'PARTIALLY_SHIPPED', 'IN_DELIVERY', 'CANCELLATION_PENDING', 'COMPLETED', 'CANCELLED', 'CLOSED_PARTIAL_CANCELLED'].map(state => [state, outboundLabels[state as Order['state']]]))} title="검색 범위 전체 주문 상태별 건수" />}
           <div className="outbound-table" tabIndex={0}>
             <table>
               <thead>
