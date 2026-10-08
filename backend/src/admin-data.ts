@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { customerTransaction } from './customer.js'
+import { emitNotification } from './notification.js'
 import { publicImageUrl } from './admin-images.js'
 import { receivingDecisionSummary } from './receiving.js'
 import { campaignInclude, campaignPayload, enabledMarketCategoryIds } from './campaign.js'
@@ -182,6 +183,7 @@ export function createAdminDataRepository(client: PrismaClient) {
       if (changed.count !== 1) throw new AppError(409, ErrorCode.CONFLICT, '상세 검수 상태가 변경되었습니다.')
       await transaction.assetChange.create({ data: { id: randomUUID(), assetId: asset.id, reason: '판매 요청 상세 검수 완료', changes: [['상세 검수 상태', '상세 검수 대기', '상세 검수 완료']] } })
       await transaction.customerChange.create({ data: { actorUserId: actor.id, customerId: asset.customerId, action: 'sale.inspection.complete', reason: '판매 요청 상세 검수 완료', changes: { requestId: id, assetId: asset.id, quantity: request.quantity.toString(), appraisal: asset.appraisal.toString(), before: 'PENDING', after: 'COMPLETED' } } })
+      await emitNotification(transaction, { customerId: asset.customerId, kind: 'sale.inspected', sourceId: id, targetType: 'ASSET', targetId: asset.id, description: `${asset.name} 판매용 상세 검수가 완료되었습니다.` })
       return { id, inspection: 'COMPLETED' }
     }),
     approveSale: (id: string, input: z.output<typeof saleApprovalInput>, user: { id: string; sessionVersion?: number }) => customerTransaction(client, async (transaction) => {
@@ -199,6 +201,7 @@ export function createAdminDataRepository(client: PrismaClient) {
       await transaction.assetChange.create({ data: { id: randomUUID(), assetId: asset.id, reason: input.reason, changes: [['판매 요청 승인 상태', '승인 대기', '승인 완료'], ['판매 상태', '판매대기', '판매중'], ['마켓 상품', '미등록', product.id]] } })
       await transaction.marketChange.create({ data: { id: randomUUID(), entityType: 'PRODUCT', entityId: product.id, actorUserId: actor.id, reason: input.reason, changes: { requestId: id, status: { before: null, after: 'AVAILABLE' }, unitPrice: input.unitPrice, listedQuantity: request.quantity.toString() } } })
       await transaction.customerChange.create({ data: { actorUserId: actor.id, customerId: asset.customerId, action: 'sale.approve', reason: input.reason, changes: { requestId: id, productId: product.id, before: 'PENDING', after: 'APPROVED' } } })
+      await emitNotification(transaction, { customerId: asset.customerId, kind: 'sale.approved', sourceId: id, targetType: 'ASSET', targetId: asset.id, description: `${asset.name} 자산이 마켓에 판매 등록되었습니다.` })
       return { id, status: 'APPROVED', productId: product.id }
     }),
     saveCategory: (category: AdminCategoryInput) => client.$transaction(async (transaction) => {

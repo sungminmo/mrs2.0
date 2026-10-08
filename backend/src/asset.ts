@@ -1,6 +1,7 @@
 import { publicImageUrl } from './admin-images.js'
 import { randomUUID } from 'node:crypto'
 import { customerTransaction } from './customer.js'
+import { emitNotification } from './notification.js'
 import { createRoute, z } from '@hono/zod-openapi'
 import type { Context } from 'hono'
 import type { AuthUser } from './auth.js'
@@ -396,6 +397,7 @@ export function createAssetRepository(client: PrismaClient): AssetRepository {
       const request = await transaction.saleRequest.create({ data: { id: randomUUID(), assetId: id, actorUserId: actor.id, quantity: asset.quantity, desiredAmount: input.desiredAmount } })
       await transaction.assetChange.create({ data: { id: randomUUID(), assetId: id, reason: '고객 마켓 판매 등록 요청', changes: [['판매 요청', '요청 없음', request.id]] } })
       await transaction.customerChange.create({ data: { customerId: actor.customerId, actorUserId: actor.id, action: 'sale.request', reason: '고객 마켓 판매 등록 요청', changes: { requestId: request.id, assetId: id, quantity: request.quantity.toString(), desiredAmount: request.desiredAmount.toString(), status: request.status, inspection: request.inspection } } })
+      await emitNotification(transaction, { customerId: actor.customerId, kind: 'sale.requested', sourceId: request.id, targetType: 'ASSET', targetId: id, description: `${asset.name} 판매 요청이 접수되었습니다.` })
       return { id: request.id }
     }),
     summary: async (customerId) => {

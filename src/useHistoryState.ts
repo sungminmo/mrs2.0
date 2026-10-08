@@ -2,6 +2,13 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 
 const historyKey = 'mrsViewState'
 
+export function pushHistoryValues(values: Record<string, unknown>) {
+  const state = window.history.state && typeof window.history.state === 'object' ? window.history.state : {}
+  const current = state[historyKey] && typeof state[historyKey] === 'object' ? state[historyKey] : {}
+  window.history.pushState({ ...state, [historyKey]: { ...current, ...values } }, '', window.location.href)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
 function readHistoryValue<T>(key: string, fallback: T): T {
   const state = window.history.state
   if (!state || typeof state !== 'object') return fallback

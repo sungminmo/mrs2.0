@@ -5,6 +5,7 @@ import { bodyLimit } from 'hono/body-limit'
 import type { AuthUser } from './auth.js'
 import { Prisma, type PrismaClient } from './generated/prisma/client.js'
 import { customerTransaction } from './customer.js'
+import { emitNotification, type NotificationKind } from './notification.js'
 import { cartQuantity } from './cart.js'
 import { enabledMarketCategoryIds } from './campaign.js'
 import { publicImageUrl } from './admin-images.js'
@@ -1047,6 +1048,7 @@ export function createOutboundRepository(client: PrismaClient) {
             where: { id: item.id },
             data: { shippedQuantity: { increment: entry.quantity } },
           })
+          await emitNotification(transaction, { customerId: asset.customerId, kind: 'seller.asset.dispatched', sourceId: `${input.operationId}:${asset.id}`, targetType: 'ASSET', targetId: asset.id, description: `${asset.name}: 출고 ${entry.quantity.toString()} ${item.offerItem.unit}, 잔여 ${nextQuantity.toString()} ${item.offerItem.unit}` })
           await transaction.assetChange.create({
             data: {
               id: randomUUID(),
@@ -1197,6 +1199,13 @@ export function createOutboundRepository(client: PrismaClient) {
         changes: JSON.parse(JSON.stringify({ before, after, input, result })),
       },
     })
+    const notificationKinds: Record<string, NotificationKind> = { send: 'offer.sent', withdraw: 'offer.withdrawn', decline: 'offer.declined', accept: 'order.created', dispatch: 'shipment.dispatched', deliver: 'shipment.delivered', 'request-cancellation': 'cancellation.requested', 'approve-cancellation': 'cancellation.approved', 'reject-cancellation': 'cancellation.rejected', 'cancel-order': 'cancellation.direct' }
+    const notificationKind = notificationKinds[action]
+    if (notificationKind) {
+      const quote = await transaction.purchaseQuote.findUniqueOrThrow({ where: { id: quoteId } })
+      const order = orderId ? await transaction.purchaseOrder.findUniqueOrThrow({ where: { id: orderId } }) : null
+      await emitNotification(transaction, { customerId: quote.customerId, kind: notificationKind, sourceId: input.operationId, targetType: order ? 'ORDER' : 'QUOTE', targetId: order?.id ?? quote.id, resourceCode: order?.code ?? quote.code })
+    }
     await transaction.fulfillmentOperation.create({
       data: {
         operationId: input.operationId,

@@ -48,6 +48,8 @@ model User {
   disposalComments DisposalComment[]
   receivingChanges ReceivingChange[]
   cart Cart?
+  /// 개인별 알림 읽음 기록. 회사 변경 시 이전 회사 알림은 조회하지 않는다.
+  notificationReads NotificationRead[]
   /// 계정이 제출한 구매 견적 요청. 조회는 고객사 단위로 공유한다.
   purchaseQuotes PurchaseQuote[]
   /// 확정 견적 작성 행위.

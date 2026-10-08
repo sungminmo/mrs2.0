@@ -4,6 +4,7 @@ import type { Context } from 'hono'
 import type { PrismaClient } from './generated/prisma/client.js'
 import type { AuthUser } from './auth.js'
 import { customerTransaction } from './customer.js'
+import { emitNotification } from './notification.js'
 import { imageOrigin, prepareImage, type ImageStorage } from './admin-images.js'
 import { AppError, ErrorCode, success } from './http.js'
 
@@ -54,6 +55,7 @@ export function createReceivingRepository(client: PrismaClient) {
       const changed = await transaction.receiving.updateMany({ where: { id, status: 'REQUESTED' }, data: { status } })
       if (changed.count !== 1) throw new AppError(409, ErrorCode.CONFLICT, '다른 관리자가 먼저 처리했습니다. 최신 상태를 확인해 주세요.')
       await transaction.receivingChange.create({ data: { receivingId: id, stage: 'RECEIVING', actorUserId: actor.id, reason: input.reason, changes: { status: { before: previous.status, after: status } } } })
+      await emitNotification(transaction, { customerId: previous.customerId, kind: input.action === 'approve' ? 'receiving.approved' : 'receiving.rejected', sourceId: id, targetType: 'RECEIVING', targetId: id, description: `${previous.siteName} 입고 신청의 처리 상태가 변경되었습니다.` })
       return transaction.receiving.findUniqueOrThrow({ where: { id }, include: imageInclude })
     }),
     create: (user: AuthUser, input: Input, images: Image[]) => customerTransaction(client, async (transaction) => {
@@ -65,6 +67,7 @@ export function createReceivingRepository(client: PrismaClient) {
         include: imageInclude,
       })
       await transaction.receivingChange.create({ data: { receivingId: receiving.id, stage: 'RECEIVING', actorUserId: user.id, reason: '고객 포털 입고 신청 접수', changes: { status: { before: null, after: 'REQUESTED' }, siteName: input.siteName, termsVersion: receivingTerms.version, imageCount: images.length } } })
+      await emitNotification(transaction, { customerId: current.customerId, kind: 'receiving.created', sourceId: receiving.id, targetType: 'RECEIVING', targetId: receiving.id, description: `${receiving.siteName} 입고 신청이 접수되었습니다.` })
       return receiving
     }),
     list: async (customerId: string, query: Query) => {

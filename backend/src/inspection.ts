@@ -6,6 +6,7 @@ import { Prisma, ItemUnit } from './generated/prisma/client.js'
 import type { PrismaClient } from './generated/prisma/client.js'
 import type { AuthUser } from './auth.js'
 import { customerTransaction } from './customer.js'
+import { emitNotification } from './notification.js'
 import { publicImageUrl } from './admin-images.js'
 import { AppError, ErrorCode, success } from './http.js'
 
@@ -113,6 +114,7 @@ export function createInspectionRepository(client: PrismaClient) {
       if (changed.count !== 1) throw conflict()
       const created = await tx.inspection.create({ data: { id: `RCV-${randomBytes(8).toString('hex')}`, receivingId: id }, include })
       await tx.receivingChange.create({ data: { receivingId: id, actorUserId: user.id, stage: 'RECEIVING', reason: input.reason, changes: { status: { before: 'APPROVED', after: 'RECEIVED' }, receivedAt: input.receivedAt, inspectionId: created.id } } })
+      await emitNotification(tx, { customerId: created.receiving.customerId, kind: 'receiving.received', sourceId: id, targetType: 'RECEIVING', targetId: id, description: `${created.receiving.siteName} 자재 입고가 완료되었습니다.` })
       return payload(created, true)
     }),
     detail: async (id: string, customerId?: string) => {
@@ -195,6 +197,7 @@ export function createInspectionRepository(client: PrismaClient) {
       if (targets.length) await tx.disposal.create({ data: { inspectionId: id, items: { create: targets.map((entry) => ({ inspectionItemId: entry.id })) } } })
       await tx.inspection.update({ where: { id }, data: { status: 'AWAITING_ACKNOWLEDGEMENT', inspectorUserId: user.id, inspectedAt: new Date(), draftData: Prisma.DbNull, version: { increment: 1 } } })
       await audit(tx, current, user.id, input.reason, amend ? 'inspection.amend' : 'inspection.confirm', { before: rows(current), after: input.rows, skippedRows, removedAssets: current.items.flatMap((entry) => entry.asset && !input.rows.some((value) => value.id === entry.id && new Prisma.Decimal(value.usable).gt(0)) ? [baseline(entry.asset)] : []) })
+      await emitNotification(tx, { customerId: current.receiving.customerId, kind: amend ? 'inspection.amended' : 'inspection.confirmed', sourceId: `${id}:${current.version + 1}`, targetType: 'INSPECTION', targetId: id, description: targets.length ? `${current.receiving.siteName} 검수 결과에 폐기 대상 ${targets.length}개 항목이 포함되어 있습니다.` : `${current.receiving.siteName} 검수 결과를 확인해 주세요.` })
       return { ...payload(await tx.inspection.findUniqueOrThrow({ where: { id }, include }), true), skippedRows }
     }, { timeout: 120_000 }),
     customerAction: (id: string, version: number, user: AuthUser, consent: boolean) => customerTransaction(client, async (tx) => {
@@ -213,6 +216,7 @@ export function createInspectionRepository(client: PrismaClient) {
       }
       await tx.inspection.update({ where: { id }, data: { version: { increment: 1 } } })
       await audit(tx, current, user.id, consent ? '고객 폐기 대상 동의' : '고객 검수 결과 확인', consent ? 'disposal.consent' : 'inspection.acknowledge', consent ? { text: disposalConsentText, termsVersion: 'disposal-material-only-2026-10-02', targets: rows(current).filter((entry) => new Prisma.Decimal(entry.disposal).gt(0)) } : { status: 'COMPLETED' })
+      await emitNotification(tx, { customerId: actor.customerId, kind: consent ? 'disposal.consented' : 'inspection.acknowledged', sourceId: `${id}:${current.version + 1}`, targetType: 'INSPECTION', targetId: id })
       return payload(await tx.inspection.findUniqueOrThrow({ where: { id }, include }), false)
     }),
   }

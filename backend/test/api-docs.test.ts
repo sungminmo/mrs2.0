@@ -15,13 +15,14 @@ import { createCartRepository } from '../src/cart.js'
 import { createQuoteRepository } from '../src/quote.js'
 import { createCampaignRepository } from '../src/campaign.js'
 import { createOutboundRepository } from '../src/outbound.js'
+import { createNotificationRepository } from '../src/notification.js'
 import { responseSchemas } from '../src/api-schemas.js'
 
 test('Scalar documents cover live domain routes, separate audiences and resolve all schemas without DB access', async context => {
   const database = createDatabase({ host: '127.0.0.1', port: 1, name: 'unused', user: 'unused', password: '', poolMax: 1, timeoutMs: 100 })
   context.after(() => database.close())
   const client = database.client
-  const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 100, auth: { repository: createAuthRepository(client), secret: 'docs-test-secret-long-enough', expiresIn: '1h' }, assets: createAssetRepository(client), customers: createCustomerRepository(client), adminData: createAdminDataRepository(client), adminAccounts: createAdminAccountRepository(client), adminImages: createAdminImageRepository(client), imageStorage: createImageStorage(), receivings: createReceivingRepository(client), inspections: createInspectionRepository(client), locations: createLocationRepository(client), market: createMarketRepository(client), cart: createCartRepository(client), quotes: createQuoteRepository(client), campaigns: createCampaignRepository(client), outbound: createOutboundRepository(client), banners: { list: async () => [], findByIds: async () => [], replace: async () => { throw new Error('unused') } } })
+  const app = createApp({ notifications: createNotificationRepository(client), checkDatabase: async () => {}, readinessTimeoutMs: 100, auth: { repository: createAuthRepository(client), secret: 'docs-test-secret-long-enough', expiresIn: '1h' }, assets: createAssetRepository(client), customers: createCustomerRepository(client), adminData: createAdminDataRepository(client), adminAccounts: createAdminAccountRepository(client), adminImages: createAdminImageRepository(client), imageStorage: createImageStorage(), receivings: createReceivingRepository(client), inspections: createInspectionRepository(client), locations: createLocationRepository(client), market: createMarketRepository(client), cart: createCartRepository(client), quotes: createQuoteRepository(client), campaigns: createCampaignRepository(client), outbound: createOutboundRepository(client), banners: { list: async () => [], findByIds: async () => [], replace: async () => { throw new Error('unused') } } })
   const all = await (await app.request('/api/openapi.json')).json()
   for (const route of app.routes) {
     if (!route.path.startsWith('/api/') || route.path.includes('*') || route.path.startsWith('/api/docs') || route.path.startsWith('/api/openapi')) continue

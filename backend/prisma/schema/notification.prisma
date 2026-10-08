@@ -1,0 +1,53 @@
+/// 고객사 구성원이 공유하는 업무 알림. 도입 이후 성공한 업무에서만 생성한다.
+model Notification {
+  /// 안정적인 정렬용 번호. API에서는 정밀도 손실 없이 문자열로 반환한다.
+  id           BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  /// 서버가 원 업무에서 결정한 수신 고객사.
+  customerId   String   @db.VarChar(20)
+  /// 고객 공개 알림 종류. API의 허용 목록으로 검증한다.
+  kind         String   @db.VarChar(60)
+  /// 업무 전이·버전·작업 번호 기반의 중복 방지 키.
+  sourceKey    String   @unique @db.VarChar(191)
+  /// 상세 이동 대상 종류. 임의 URL을 저장하지 않는다.
+  targetType   String   @db.VarChar(20)
+  /// 원 업무 식별자. 원본 수정·삭제를 막지 않도록 별도 업무 FK는 없다.
+  targetId     String   @db.VarChar(36)
+  /// 발생 당시의 고객 공개 제목.
+  title        String   @db.VarChar(160)
+  /// 개인정보·관리자 메모를 제외한 고객 공개 설명.
+  description  String   @db.VarChar(500)
+  /// 목록에 표시할 원 업무 번호.
+  resourceCode String   @db.VarChar(80)
+  /// 업무 변경 시각. 수동 입력된 과거 입고일과 구분한다.
+  occurredAt   DateTime @default(now()) @db.DateTime(3)
+  /// 최근 90일 조회 범위 기준인 알림 생성 시각.
+  createdAt    DateTime @default(now()) @db.DateTime(3)
+  /// 현재 소속 회사 범위로 접근하며 알림 때문에 고객사를 삭제하지 않는다.
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// 실제 읽은 사용자에게만 생성되는 기록.
+  reads        NotificationRead[]
+
+  /// 고객사별 최근 기간 조회와 동일 시각 알림 정렬.
+  @@index([customerId, createdAt, id])
+  @@map("notifications")
+}
+
+/// 직원 개인별 알림 읽음 기록. 업무 확인·승인과는 별개이다.
+model NotificationRead {
+  /// 읽은 직원 계정. VIEWER와 MANAGER 모두 개인 읽음이 가능하다.
+  userId         String       @db.VarChar(36)
+  /// 읽은 공유 알림 번호.
+  notificationId BigInt       @db.UnsignedBigInt
+  /// 최초 읽음 처리 시각. 중복 호출에서 덮어쓰지 않는다.
+  readAt         DateTime     @default(now()) @db.DateTime(3)
+  /// 사용자 삭제는 기존 계정 보존 정책을 따른다.
+  user           User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  /// 알림 정리 시에만 읽음 기록도 정리한다. 이번 구현에는 삭제 기능이 없다.
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  /// 개인별 읽음 처리의 멱등성과 사용자 기준 조인.
+  @@id([userId, notificationId])
+  /// 알림의 역방향 FK 조회.
+  @@index([notificationId])
+  @@map("notification_reads")
+}

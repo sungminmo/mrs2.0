@@ -16,7 +16,7 @@ export default function AdminShell({ navigation, search, children, className = '
       {search}
       <div className="sa-topbar-actions">
         {!isGuest && !readOnly && <ReceivingRequestButton />}
-        {!isGuest && notifications && <button type="button" className="sa-icon sa-notification-button" title="알림" aria-label={`알림${notifications.unread ? `, 읽지 않은 알림 ${notifications.unread}건` : ''}`} aria-current={notifications.active ? 'page' : undefined} onClick={() => { setMenuOpen(false); notifications.onOpen() }}><Bell size={20} />{notifications.unread > 0 && <span className="sa-notification-count" aria-hidden="true">{notifications.unread > 99 ? '99+' : notifications.unread}</span>}</button>}
+        {!isGuest && notifications && <button type="button" className="sa-icon sa-notification-button" title={notifications.error ? '알림 조회 실패' : '알림'} aria-label={`알림${notifications.error ? ', 조회 실패' : notifications.unread === null ? ', 조회 중' : `, 읽지 않은 알림 ${notifications.unread}건`}`} aria-current={notifications.active ? 'page' : undefined} onClick={() => { setMenuOpen(false); notifications.onOpen() }}><Bell size={20} />{notifications.unread !== null && notifications.unread > 0 && <span className="sa-notification-count" aria-hidden="true">{notifications.unread > 99 ? '99+' : notifications.unread}</span>}</button>}
         <div className="sa-account"><span className="sa-avatar">{isGuest ? 'G' : customerName?.slice(0, 2) ?? 'HC'}</span><b>{isGuest ? '비회원' : customerName ?? '현대건설(주)'}</b></div>
         {!isGuest && <button type="button" className="sa-icon" title="로그아웃" aria-label="로그아웃" onClick={() => signOut()}><LogOut size={19} /></button>}
       </div>

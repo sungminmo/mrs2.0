@@ -20,6 +20,7 @@ import { cartAdd, cartSync, cartUpdate, cartRemove, cartHandlers, type CartRepos
 import { quoteHandlers, quoteCreateInput, quotePreviewInput, quoteListQuery, type QuoteRepository } from './quote.js'
 import { campaignHandlers, campaignInput, campaignUpdate, campaignProductQuery, type CampaignRepository } from './campaign.js'
 import { registerOutbound, type OutboundRepository } from './outbound.js'
+import { registerNotifications, type NotificationRepository } from './notification.js'
 
 type Dependencies = {
   checkDatabase: () => Promise<void>
@@ -40,9 +41,10 @@ type Dependencies = {
   quotes?: QuoteRepository
   campaigns?: CampaignRepository
   outbound?: OutboundRepository
+  notifications?: NotificationRepository
 }
 
-export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations, market, cart, quotes, campaigns, outbound }: Dependencies) {
+export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, banners, adminData, customers, adminAccounts, imageStorage, adminImages, receivings, inspections, locations, market, cart, quotes, campaigns, outbound, notifications }: Dependencies) {
   const app = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (result.success) return
@@ -64,6 +66,10 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
 
   if (auth) {
     const customerAuth = requireAuth(auth.repository, auth.secret, 'CUSTOMER')
+    if (notifications) {
+      app.use('/api/customer/notifications/*', bodyLimit({ maxSize: 8192, onError: context => failure(context, 413, ErrorCode.VALIDATION_ERROR, '알림 요청이 너무 큽니다.') }))
+      registerNotifications(app, customerAuth, notifications)
+    }
     app.patch('/api/auth/me', customerAuth, bodyLimit({ maxSize: 8192 }), updateOwnProfile(auth.repository, auth.secret, auth.expiresIn))
     app.openAPIRegistry.registerPath({ method: 'patch', path: '/api/auth/me', tags: ['Auth'], summary: '본인 회원정보 수정 및 세션 갱신 (이메일 변경은 현재 비밀번호 확인)', security: [{ BearerAuth: [] }], request: { body: { required: true, content: { 'application/json': { schema: memberProfileSchema } } } }, responses: { 200: { description: '갱신된 고객 세션·회원정보' }, 400: { description: '입력 또는 현재 비밀번호 오류' }, 401: { description: '고객 인증 필요' }, 403: { description: '활성 계정·고객사 필요' }, 409: { description: '중복 이메일 또는 동시 수정' } } })
     if (quotes) {

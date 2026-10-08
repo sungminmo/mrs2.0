@@ -9,8 +9,10 @@ import { HistoryEmpty, HistoryHeader, HistoryStatus, HistorySummary } from './Cu
 type Entry = Pick<InspectionReport, 'id' | 'receivingId' | 'siteName' | 'receivedAt' | 'status' | 'consentedAt' | 'acknowledgedAt'> & { hasDisposalTargets: boolean; consentRequired: boolean; canConsent: boolean; disposalTargetCount: number }
 type Page = { data: Entry[]; meta: { page: number; size: number; totalElements: number; totalPages: number }; summary: { acknowledgement: Record<string, number>; disposal: Record<string, number> } }
 const disposalLabels = { NONE: '대상 없음', REQUIRED: '동의 필요', CONSENTED: '동의 완료' }
-export default function CustomerInspections({ manager, historyKey, revision, onAsset }: { manager: boolean; historyKey: string; revision: number; onAsset: (id: string) => void }) {
-  const [id, select] = useHistoryState<string | null>(`inspection-id:${historyKey}`, null)
+export default function CustomerInspections({ manager, historyKey, revision, onAsset, selected, onSelect }: { manager: boolean; historyKey: string; revision: number; onAsset: (id: string) => void; selected?: string | null; onSelect?: (id: string | null) => void }) {
+  const [historyId, historySelect] = useHistoryState<string | null>(`inspection-id:${historyKey}`, null)
+  const id = selected === undefined ? historyId : selected
+  const select = onSelect ?? historySelect
   const [parameters, setParameters] = useHistoryState<Record<string, string>>(`inspection-query:${historyKey}`, { page: '1', size: '20' })
   const [page, setPage] = useState<Page | null>(null), [loadedReport, setReport] = useState<InspectionReport | null>(null), [error, setError] = useState(''), [loadedKey, setLoadedKey] = useState(''), [localRevision, setRevision] = useState(0)
   const [busy, setBusy] = useState(false), [confirming, setConfirming] = useState(false), [agreed, setAgreed] = useState(false)

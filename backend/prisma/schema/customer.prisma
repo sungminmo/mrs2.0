@@ -34,6 +34,8 @@ model Customer {
   receivings   Receiving[]
   applications CustomerApplication[]
   changes      CustomerChange[]
+  /// 고객사 구성원이 공유하는 업무 알림.
+  notifications Notification[]
   /// 고객사 구성원이 공유하는 구매 견적 요청 내역.
   purchaseQuotes PurchaseQuote[]
   /// 구매 고객사의 승인 거래.

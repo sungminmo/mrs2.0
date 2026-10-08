@@ -4,6 +4,7 @@ import type { Context } from 'hono'
 import type { AuthUser } from './auth.js'
 import { Prisma, type PrismaClient } from './generated/prisma/client.js'
 import { customerTransaction } from './customer.js'
+import { emitNotification } from './notification.js'
 import { publicImageUrl } from './admin-images.js'
 import { cartQuantity } from './cart.js'
 import { AppError, ErrorCode, success } from './http.js'
@@ -79,6 +80,7 @@ export function createQuoteRepository(client: PrismaClient) {
         for (const item of input.items) if ((await transaction.cartItem.deleteMany({ where: { id: item.cartItemId, cartId: cart.id, version: item.expectedVersion, quantity: item.quantity } })).count !== 1) throw conflict('장바구니 수량이 변경되었습니다.', 'CART_CHANGED')
         await transaction.cart.update({ where: { id: cart.id }, data: { version: { increment: 1 } } })
       }
+      await emitNotification(transaction, { customerId: quote.customerId, kind: 'quote.created', sourceId: quote.id, targetType: 'QUOTE', targetId: quote.id, resourceCode: quote.code })
       return { quote: quotePayload(quote), replayed: false }
     }),
     list: (actor: AuthUser, query: z.infer<typeof quoteListQuery>) => transact(async transaction => {

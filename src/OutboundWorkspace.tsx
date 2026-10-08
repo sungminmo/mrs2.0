@@ -604,12 +604,18 @@ export function OrdersPage({
   admin = false,
   manager = false,
   tools,
+  selected: controlledSelected,
+  onSelect,
 }: {
   admin?: boolean
   manager?: boolean
   tools?: (order: Order, refresh: () => void) => React.ReactNode
+  selected?: string | null
+  onSelect?: (id: string | null) => void
 }) {
-  const [selected, setSelected] = useState<string | null>(null)
+  const [localSelected, setLocalSelected] = useState<string | null>(null)
+  const selected = controlledSelected === undefined ? localSelected : controlledSelected
+  const setSelected = onSelect ?? setLocalSelected
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
