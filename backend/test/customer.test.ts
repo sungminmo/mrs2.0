@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { SignJWT } from 'jose'
 import { createApp } from '../src/app.js'
-import { hashPassword, registrationSchema, type AuthUser } from '../src/auth.js'
+import { hashPassword, registrationSchema, memberProfileSchema, type AuthUser } from '../src/auth.js'
 import { businessNumberSchema, type CustomerRepository } from '../src/customer.js'
 import { adminAccountCreate, adminAccountUpdate, type AdminAccountRepository } from '../src/admin-accounts.js'
 
@@ -38,6 +38,39 @@ test('company suspension, role changes and reassignment invalidate sessions with
   assert.equal((await app.request('/api/auth/me', { headers: freshHeaders })).status, 401)
   user.customerId = 'CUS-B'
   assert.equal((await login()).status, 403)
+})
+
+test('member profile edits require customer auth, strict fields and password for email changes and rotate sessions', async () => {
+  let user: AuthUser = { id: '11111111-1111-4111-8111-111111111111', email: 'profile@example.test', passwordHash: await hashPassword('password123'), companyName: 'A', managerName: '담당자', managerPhone: '01012345678', role: 'CUSTOMER', customerRole: 'VIEWER', status: 'ACTIVE', sessionVersion: 0, customerId: 'CUS-A', customer: { id: 'CUS-A', name: 'A', businessNumber: '2208162517', representativeName: 'Owner', address: 'Seoul', phone: '0212345678', status: 'ACTIVE', accessVersion: 0 } }
+  let calls = 0
+  const app = createApp({ checkDatabase: async () => {}, readinessTimeoutMs: 50, auth: { secret: 'test-secret-at-least-32-characters', expiresIn: '1h', repository: { findByEmail: async email => email === user.email ? user : null, findById: async () => user, createRegistration: async () => user, listMembers: async () => [], approveMember: async () => null, updateProfile: async (actor, input) => { calls += 1; assert.equal(actor.id, user.id); user = { ...user, email: input.email, managerName: input.managerName, managerPhone: input.managerPhone, sessionVersion: user.sessionVersion! + 1 }; return user } } } })
+  const input = { managerName: '새 담당자', managerPhone: '010-9876-5432', email: ' NEW@EXAMPLE.TEST ', version: 0 }
+  for (const extra of [{ id: 'other' }, { customerId: 'OTHER' }, { role: 'ADMIN' }, { customerRole: 'MANAGER' }, { status: 'ACTIVE' }, { passwordHash: 'forged' }]) assert.equal(memberProfileSchema.safeParse({ ...input, ...extra }).success, false)
+  for (const invalid of [{ ...input, managerName: ' ' }, { ...input, managerPhone: 'abc' }, { ...input, email: 'bad' }, { ...input, version: -1 }]) assert.equal(memberProfileSchema.safeParse(invalid).success, false)
+  assert.equal((await app.request('/api/auth/me', { method: 'PATCH', body: JSON.stringify(input) })).status, 401)
+  const login = await app.request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email, password: 'password123' }) })
+  const { data } = await login.json() as { data: { accessToken: string } }
+  const headers = { Authorization: `Bearer ${data.accessToken}`, 'Content-Type': 'application/json' }
+  for (const rejected of [input, { ...input, currentPassword: 'incorrect123' }, { ...input, role: 'ADMIN' }]) assert.equal((await app.request('/api/auth/me', { method: 'PATCH', headers, body: JSON.stringify(rejected) })).status, 400)
+  assert.equal(calls, 0)
+  const saved = await app.request('/api/auth/me', { method: 'PATCH', headers, body: JSON.stringify({ ...input, currentPassword: 'password123' }) })
+  assert.equal(saved.status, 200)
+  assert.equal(saved.headers.get('cache-control'), 'no-store')
+  const next = await saved.json() as { data: { accessToken: string; user: Record<string, unknown> } }
+  assert.equal(next.data.user.email, 'new@example.test')
+  assert.equal(next.data.user.sessionVersion, 1)
+  assert.equal(next.data.user.customerRole, 'VIEWER')
+  assert.equal('passwordHash' in next.data.user, false)
+  assert.equal((await app.request('/api/auth/me', { headers })).status, 401)
+  const freshHeaders = { ...headers, Authorization: `Bearer ${next.data.accessToken}` }
+  assert.equal((await app.request('/api/auth/me', { headers: freshHeaders })).status, 200)
+  const contactOnly = await app.request('/api/auth/me', { method: 'PATCH', headers: freshHeaders, body: JSON.stringify({ ...input, email: user.email, version: 1 }) })
+  assert.equal(contactOnly.status, 200)
+  assert.equal(calls, 2)
+  const adminToken = await new SignJWT({ email: user.email, sessionVersion: 2 }).setSubject(user.id).setAudience('admin').setProtectedHeader({ alg: 'HS256' }).setExpirationTime('1h').sign(new TextEncoder().encode('test-secret-at-least-32-characters'))
+  assert.equal((await app.request('/api/auth/me', { method: 'PATCH', headers: { ...headers, Authorization: `Bearer ${adminToken}` }, body: JSON.stringify(input) })).status, 401)
+  const spec = await (await app.request('/api/openapi.json')).json() as { paths: Record<string, { patch?: unknown }> }
+  assert.ok(spec.paths['/api/auth/me']!.patch)
 })
 
 test('repository outages do not masquerade as expired authentication', async () => {

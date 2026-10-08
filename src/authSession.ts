@@ -11,6 +11,7 @@ export type AuthSession = {
     managerPhone?: string
     customerId?: string | null
     customerRole?: 'VIEWER' | 'MANAGER'
+    sessionVersion?: number
     customer?: { id: string; name: string; businessNumber: string | null; representativeName: string; address: string; phone: string; status: string } | null
   }
 }
@@ -65,6 +66,20 @@ export async function authenticatedFetch(path: string, init: RequestInit = {}) {
     window.dispatchEvent(new Event('mrs-auth-expired'))
   }
   return response
+}
+
+export async function updateMemberProfile(input: { managerName: string; managerPhone?: string; email: string; version: number; currentPassword?: string }) {
+  const session = readAuthSession()
+  if (!session) throw new Error('로그인이 필요합니다.')
+  const response = await authenticatedFetch('/api/auth/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) })
+  const body: unknown = await response.json().catch(() => null)
+  if (readAuthSession()?.accessToken !== session.accessToken) throw new Error('로그인 계정이 변경되었습니다. 다시 확인해 주세요.')
+  if (!response.ok || !body || typeof body !== 'object' || !('success' in body) || body.success !== true || !('data' in body) || !isSession(body.data) || body.data.user.id !== session.user.id) {
+    const message = body && typeof body === 'object' && 'error' in body && body.error && typeof body.error === 'object' && 'message' in body.error && typeof body.error.message === 'string' ? body.error.message : '회원정보 저장에 실패했습니다.'
+    throw new Error(message)
+  }
+  window.sessionStorage.setItem(sessionKey, JSON.stringify(body.data))
+  return body.data
 }
 
 export function signOut(destination = '/mrs2.0/', force = false) {

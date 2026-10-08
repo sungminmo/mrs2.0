@@ -1,3 +1,7 @@
+### 본인 회원정보 수정
+
+`PATCH /api/auth/me`는 활성 고객 VIEWER·MANAGER의 본인 담당자명·연락처·이메일만 저장한다. `{managerName,managerPhone,email,version,currentPassword?}`를 받으며 `version`은 조회 응답의 `sessionVersion`이다. 이메일 변경 시 현재 비밀번호 확인이 필요하고 중복 이메일·동시 수정은409다. 성공 시 `{accessToken,tokenType,user}`를 반환해 현재 세션을 갱신하고 기존 토큰을 폐기한다. 고객사·소속·권한·비밀번호 변경은 허용하지 않는다. 입력·보안·감사 계약은 [고객 관리](CUSTOMER_MANAGEMENT.md)를 참고한다.
+
 ### 개인 장바구니
 
 `GET /api/cart`, `POST /api/cart/items`, `PATCH /api/cart/items/{id}`, 단일·선택 `DELETE /api/cart/items`, `POST /api/cart/sync`는 활성 고객 회원의 개인 계정별 장바구니 API다. [요청·응답 및 동기화 계약](CART_API.md)을 참고한다. 비회원은 가격 없는 localStorage 데이터만 편집하며 로그인 시 수량을 합산한다. 최신 가격·재고·판매 상태를 매 조회마다 검증하지만 장바구니 자체는 재고를 예약하지 않는다. 선택 상품의 구매 견적 요청은 아래 별도 API를 사용하며 결제는 제공하지 않는다.

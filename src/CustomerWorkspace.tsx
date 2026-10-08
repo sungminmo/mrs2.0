@@ -3,7 +3,7 @@ import { Archive, ArrowDownToLine, ArrowLeft, Box, ChevronLeft, ChevronRight, La
 import AdminShell from './AdminShell'
 import LoginPage from './LoginPage'
 import PublicMarket from './PublicMarket'
-import { authenticatedFetch, readAuthSession, signIn, type AuthSession } from './authSession'
+import { authenticatedFetch, readAuthSession, signIn, updateMemberProfile, type AuthSession } from './authSession'
 import { accountRequest } from './customerAccounts'
 import { useHistoryState } from './useHistoryState'
 import { ReceivingRequestButton, ReceivingRequestProvider } from './ReceivingRequest'
@@ -41,6 +41,7 @@ function CustomerWorkspaceContent() {
   const [guest, setGuest] = useState(false)
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
+  const [profileMessage, setProfileMessage] = useState('')
   useEffect(() => {
     const controller = new AbortController()
     const expired = () => { setSession(null); setChecking(false); setError('로그인 상태가 만료되었거나 접근 권한이 변경되었습니다.') }
@@ -56,7 +57,11 @@ function CustomerWorkspaceContent() {
     return () => { controller.abort(); window.removeEventListener('mrs-auth-expired', expired) }
   }, [revision])
   if (checking) return <main className="customer-session" role="status">계정 확인 중...</main>
-  if (session) return <CartProvider key={`${session.user.id}/${session.user.customerId}/${session.accessToken}`} session={session}><MemberWorkspace session={session} /></CartProvider>
+  if (session) return <CartProvider key={`${session.user.id}/${session.user.customerId}/${session.accessToken}`} session={session}><MemberWorkspace session={session} profileMessage={profileMessage} onProfileSave={async (profile, currentPassword) => {
+    const next = await updateMemberProfile({ ...profile, version: session.user.sessionVersion ?? 0, currentPassword })
+    setProfileMessage('회원정보를 저장했습니다.')
+    setSession(next)
+  }} /></CartProvider>
   if (guest) return <CartProvider session={null}><AdminShell navigation={<button className="nav-button" onClick={() => setGuest(false)}><UserRound />로그인</button>} customerName="게스트" isGuest readOnly className="customer-workspace sm-market"><main className="sa-main"><PublicMarket onLogin={() => setGuest(false)} /></main><Cart onLogin={() => setGuest(false)} /></AdminShell></CartProvider>
   return <>{error && <div className="customer-session" role="alert">{error}<button className="sa-button" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={16} />다시 확인</button></div>}<LoginPage onLogin={async (email, password) => {
     const next = await signIn(email, password)
@@ -65,9 +70,9 @@ function CustomerWorkspaceContent() {
   }} onBrowse={() => setGuest(true)} onCustomerAccess={() => setRevision((value) => value + 1)} /></>
 }
 
-function MemberWorkspace({ session }: { session: AuthSession }) {
+function MemberWorkspace({ session, onProfileSave, profileMessage }: { session: AuthSession; onProfileSave: (profile: MemberProfile, currentPassword?: string) => Promise<void>; profileMessage: string }) {
   const [view, setView] = useHistoryState<'overview' | 'assets' | 'profile' | 'market' | 'receivings' | 'inspections' | 'quotes' | 'orders'>(`company-view:${session.user.id}:${session.user.customerId}`, 'overview')
-  const [profile, setProfile] = useState<MemberProfile>(() => ({ managerName: session.user.managerName, managerPhone: session.user.managerPhone, email: session.user.email }))
+  const profile: MemberProfile = { managerName: session.user.managerName, managerPhone: session.user.managerPhone, email: session.user.email }
   const isMyPage = ['profile', 'receivings', 'inspections', 'quotes', 'orders'].includes(view)
   const [quoteDraft, setQuoteDraft] = useState<QuoteDraft | null>(null)
   const [completedQuote, setCompletedQuote] = useState<PurchaseQuote | null>(null)
@@ -116,7 +121,7 @@ function MemberWorkspace({ session }: { session: AuthSession }) {
     {!quoteDraft && !selectedId && view !== 'market' && <div className="sa-heading"><div><div className="sa-breadcrumb">{company?.name ?? session.user.companyName}</div><h1>{isMyPage ? '마이페이지' : view === 'overview' ? '자산 현황' : '자산 목록'}</h1></div>{(!isMyPage || view === 'receivings' || view === 'inspections') && <div className="customer-heading-actions"><ReceivingRequestButton /><button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div>}</div>}
     {!quoteDraft && !isMyPage && error && <p className="customer-error" role="alert">{error}</p>}
     {!quoteDraft && !isMyPage && loading && <p role="status">불러오는 중...</p>}
-    {quoteDraft ? <CustomerQuoteRequest session={session} draft={quoteDraft} onBack={() => setQuoteDraft(null)} onDone={quote => { setCompletedQuote(quote); setQuoteDraft(null); selectQuote(quote.id); setView('quotes') }} /> : isMyPage ? <CustomerMyPage view={view as MyPageView} onNavigate={navigate} user={session.user} profile={profile} onProfileChange={setProfile}>
+    {quoteDraft ? <CustomerQuoteRequest session={session} draft={quoteDraft} onBack={() => setQuoteDraft(null)} onDone={quote => { setCompletedQuote(quote); setQuoteDraft(null); selectQuote(quote.id); setView('quotes') }} /> : isMyPage ? <CustomerMyPage view={view as MyPageView} onNavigate={navigate} user={session.user} profile={profile} onProfileChange={onProfileSave} savedMessage={profileMessage}>
       {view === 'orders' ? <OrdersPage manager={session.user.customerRole === 'MANAGER'} /> : view === 'quotes' ? <CustomerQuotes session={session} selected={quoteId} select={selectQuote} initial={completedQuote} /> : view === 'inspections' ? <CustomerInspections historyKey={`${session.user.id}:${session.user.customerId}`} manager={session.user.customerRole === 'MANAGER'} revision={revision} onAsset={(id) => { setView('assets'); selectId(id) }} /> : view === 'receivings' ? <CustomerReceivings revision={revision} parameters={receivingParameters} setParameters={setReceivingParameters} selected={receivingId} select={selectReceiving} back={backReceiving} /> : null}
     </CustomerMyPage> : selectedId ? <>{(loading || !detail) && <div className="customer-heading-actions"><button className="sa-button" onClick={back}><ArrowLeft size={16} />목록으로</button><button className="sa-icon" aria-label="새로고침" title="새로고침" onClick={() => setRevision((value) => value + 1)}><RefreshCw size={18} /></button></div>}{!loading && detail && <AssetDetails key={detail.id} asset={detail} records={loadedPage?.data ?? []} onBack={back} onNavigate={selectId} onRefresh={() => setRevision((value) => value + 1)} />}</>
         : view === 'market' ? <div className="sm-market"><PublicMarket member onRequestQuote={setQuoteDraft} /></div>

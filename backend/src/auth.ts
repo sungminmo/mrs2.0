@@ -52,7 +52,17 @@ export type AuthRepository = {
   countMembers?: (query: AdminListQuery) => Promise<number>
   approveMember: (id: string, approvedAt: Date, decision?: MemberDecision, actor?: string) => Promise<AuthUser | null>
   changeMember?: (id: string, decision: MemberDecision, actor: string) => Promise<AuthUser | null>
+  updateProfile?: (actor: AuthUser, input: MemberProfileInput) => Promise<AuthUser>
 }
+
+export const memberProfileSchema = z.object({
+  managerName: z.string().trim().min(1).max(80),
+  managerPhone: z.string().trim().regex(/^\+?[0-9][0-9()\-\s]{6,17}[0-9]$/, '연락처를 확인해 주세요.'),
+  email: z.string().trim().max(254).pipe(z.email()).transform(value => value.toLowerCase()),
+  version: z.number().int().nonnegative(),
+  currentPassword: z.string().min(8).max(128).optional(),
+}).strict()
+export type MemberProfileInput = z.infer<typeof memberProfileSchema>
 
 export const loginSchema = z.object({
   email: z.string().trim().pipe(z.email()).transform((value) => value.toLowerCase()),
@@ -215,6 +225,19 @@ export function approveMember(repository: AuthRepository) {
 export function currentUser(context: Context) {
   const user = context.get('authUser') as AuthUser
   return success(context, { user: memberProfile(user) })
+}
+
+export function updateOwnProfile(repository: AuthRepository, secret: string, expiresIn: string) {
+  return async (context: Context) => {
+    if (!repository.updateProfile) throw new AppError(503, ErrorCode.SERVICE_UNAVAILABLE, '회원정보 수정을 사용할 수 없습니다.')
+    const actor = context.get('authUser') as AuthUser
+    const input = memberProfileSchema.parse(await context.req.json())
+    if (input.email !== actor.email && (!input.currentPassword || !(await verifyPassword(input.currentPassword, actor.passwordHash)))) {
+      throw new AppError(400, ErrorCode.VALIDATION_ERROR, '이메일 변경 시 현재 비밀번호를 확인해 주세요.')
+    }
+    const user = await repository.updateProfile(actor, input)
+    return success(context, { accessToken: await issueToken(user, secret, expiresIn), tokenType: 'Bearer', user: memberProfile(user) })
+  }
 }
 
 export function updateMember(repository: AuthRepository) {

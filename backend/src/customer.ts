@@ -136,6 +136,19 @@ export function createAuthRepository(client: PrismaClient): AuthRepository {
     findById: (id) => client.user.findUnique({ where: { id }, include }),
     listMembers: (query = adminListQuery.parse({})) => client.user.findMany({ where: where(query), ...listPaging(query), orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], include }),
     countMembers: (query) => client.user.count({ where: where(query) }),
+    updateProfile: (actor, input) => customerTransaction(client, async transaction => {
+      const before = await transaction.user.findUnique({ where: { id: actor.id }, include })
+      if (!before || before.role !== 'CUSTOMER' || before.status !== 'ACTIVE' || !before.customer || before.customer.status !== 'ACTIVE' || before.customerId !== actor.customerId || before.customer.accessVersion !== actor.customer?.accessVersion || before.sessionVersion !== (actor.sessionVersion ?? 0)) {
+        throw new AppError(403, ErrorCode.FORBIDDEN, '활성 계정과 고객사 접근 권한을 확인해 주세요.')
+      }
+      if (before.sessionVersion !== input.version) throw conflict()
+      const duplicate = await transaction.user.findUnique({ where: { email: input.email } })
+      if (duplicate && duplicate.id !== before.id) throw new AppError(409, ErrorCode.CONFLICT, '이미 사용 중인 이메일입니다.')
+      const fields = { managerName: input.managerName, managerPhone: input.managerPhone, email: input.email }
+      const after = await transaction.user.update({ where: { id: before.id, sessionVersion: input.version }, data: { ...fields, sessionVersion: { increment: 1 } }, include })
+      await audit(transaction, before.id, before.customerId, 'member.profile', '본인 회원정보 수정', { before: { managerName: before.managerName, managerPhone: before.managerPhone, email: before.email }, after: fields }, before.id)
+      return after
+    }),
     createRegistration: (input: RegistrationInput) => customerTransaction(client, async (transaction) => {
       const { customerType, customerId, customer: fields, ...user } = input
       if (customerType === 'existing') {

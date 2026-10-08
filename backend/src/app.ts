@@ -1,7 +1,7 @@
 import { OpenAPIHono, z } from '@hono/zod-openapi'
 import { Scalar } from '@scalar/hono-api-reference'
 import { assetDetail, assetDetailRoute, assetSummary, assetSummaryRoute, assetListRoute, listAssets, requestAssetSale, saleRequestRoute, type AssetRepository } from './asset.js'
-import { adminLogin, adminLoginSchema, approveMember, currentUser, customerLogin, listMembers, register, registrationSchema, requireAdmin, requireAuth, updateMember, type AuthRepository } from './auth.js'
+import { adminLogin, adminLoginSchema, approveMember, currentUser, customerLogin, listMembers, register, registrationSchema, requireAdmin, requireAuth, updateMember, updateOwnProfile, memberProfileSchema, type AuthRepository } from './auth.js'
 import { businessNumberSchema, customerFieldsSchema, customerHandlers, decisionSchema, memberDecisionSchema, type CustomerRepository } from './customer.js'
 import { getConnInfo } from '@hono/node-server/conninfo'
 import { listAdminBanners, listPublicBanners, saveBanner, type BannerRepository } from './banner.js'
@@ -63,6 +63,8 @@ export function createApp({ checkDatabase, readinessTimeoutMs, auth, assets, ban
 
   if (auth) {
     const customerAuth = requireAuth(auth.repository, auth.secret, 'CUSTOMER')
+    app.patch('/api/auth/me', customerAuth, bodyLimit({ maxSize: 8192 }), updateOwnProfile(auth.repository, auth.secret, auth.expiresIn))
+    app.openAPIRegistry.registerPath({ method: 'patch', path: '/api/auth/me', tags: ['Auth'], summary: '본인 회원정보 수정 및 세션 갱신 (이메일 변경은 현재 비밀번호 확인)', security: [{ BearerAuth: [] }], request: { body: { required: true, content: { 'application/json': { schema: memberProfileSchema } } } }, responses: { 200: { description: '갱신된 고객 세션·회원정보' }, 400: { description: '입력 또는 현재 비밀번호 오류' }, 401: { description: '고객 인증 필요' }, 403: { description: '활성 계정·고객사 필요' }, 409: { description: '중복 이메일 또는 동시 수정' } } })
     if (quotes) {
       const handlers = quoteHandlers(quotes)
       app.use('/api/customer/quotes/*', bodyLimit({ maxSize: 65536, onError: context => failure(context, 413, ErrorCode.VALIDATION_ERROR, '견적 요청이 너무 큽니다.') }))
